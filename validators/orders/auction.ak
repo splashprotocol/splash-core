@@ -11,15 +11,23 @@ use whalepools/plutus.{Asset, VerificationKeyHash}
 use whalepools/rational.{Rational}
 
 type Config {
+  // What we swap.
   base: Asset,
+  // What we receive.
   quote: Asset,
+  // Initial price of the auction (Quote/Base).
   price_start: Rational,
+  // Start time of the auction.
   start_time: Int,
+  // Length of each step in auction in seconds.
   step_len: Int,
+  // Total number of steps in auction.
   steps: Int,
-  decay_step: Int,
+  // Numerator of the negative part of price decay.
+  price_dacay_num: Int,
+  // Fee per one unit of quote asset.
   fee_per_quote: Rational,
-  fee_reserved: Int,
+  // Redeemer PK.
   redeemer: VerificationKeyHash,
 }
 
@@ -28,6 +36,8 @@ type Action {
   Exec { span_ix: Int, successor_ix: Int }
   Cancel
 }
+
+const price_dacay_denom = 1000
 
 validator {
   fn auction(conf: Config, action: Action, ctx: ScriptContext) -> Bool {
@@ -46,7 +56,7 @@ validator {
             validity_interval,
             span_low,
           ) && interval.is_entirely_before(validity_interval, span_high)
-        let current_price_num = conf.price_start.num - conf.decay_step * span_ix
+
         let self = self_input.output
         expect Some(successor) = list.at(transaction.outputs, successor_ix)
 
@@ -84,8 +94,21 @@ validator {
             lovelace_of(self.value) - lovelace_of(successor.value) <= fee
           }
         let valid_exchange = quote_added > 0
-        let valid_execution_price =
-          quote_added * conf.price_start.denom == base_subtracted * current_price_num
+        let exp = list.range(0, span_ix)
+        let price_num =
+          list.reduce(
+            exp,
+            conf.price_start.num,
+            fn(acc, _x) { acc * conf.price_dacay_num },
+          )
+        let price_denom =
+          list.reduce(
+            exp,
+            conf.price_start.denom,
+            fn(acc, _x) { acc * price_dacay_denom },
+          )
+        let valid_execution =
+          quote_added * price_denom == base_subtracted * price_num
 
         // Validate successor
         let valid_successor =
@@ -95,7 +118,7 @@ validator {
             ScriptCredential(_) -> self.address == successor.address
           }
 
-        valid_span && valid_successor && valid_exchange && valid_execution_price && valid_fee
+        valid_span && valid_successor && valid_exchange && valid_execution && valid_fee
       }
       Cancel -> must_be_signed_by(ctx.transaction, conf.redeemer)
     }
