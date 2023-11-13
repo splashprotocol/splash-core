@@ -4,7 +4,7 @@
 
 use aiken/interval
 use aiken/list
-use aiken/transaction.{ScriptContext, Spend, Transaction, find_input}
+use aiken/transaction.{ScriptContext, Spend, find_input}
 use aiken/transaction/credential.{ScriptCredential, VerificationKeyCredential}
 use aiken/transaction/value.{ada_policy_id, lovelace_of, quantity_of}
 use whalepools/plutus.{Asset, VerificationKeyHash}
@@ -120,11 +120,7 @@ validator {
 
         valid_span && valid_successor && valid_exchange && valid_execution && valid_fee
       }
-      Cancel -> must_be_signed_by(ctx.transaction, conf.redeemer)
+      Cancel -> list.has(ctx.transaction.extra_signatories, conf.redeemer)
     }
   }
-}
-
-fn must_be_signed_by(transaction: Transaction, vk: VerificationKeyHash) {
-  list.has(transaction.extra_signatories, vk)
 }
