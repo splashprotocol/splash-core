@@ -1,0 +1,174 @@
+cabal-version: 3.0
+name:          plutarch-validators
+version:       0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+license:       CC0-1.0
+license-files: LICENSE
+author:        ErgoLabs
+maintainer:    ilya.arcadich@gmail.com
+
+-- A copyright notice.
+-- copyright:
+-- category:
+-- extra-source-files: CHANGELOG.md
+
+common lang
+  default-language:   Haskell2010
+  default-extensions:
+    NoStarIsType
+    BangPatterns
+    BinaryLiterals
+    ConstrainedClassMethods
+    ConstraintKinds
+    DataKinds
+    DeriveAnyClass
+    DeriveDataTypeable
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    DoAndIfThenElse
+    EmptyCase
+    EmptyDataDecls
+    EmptyDataDeriving
+    ExistentialQuantification
+    ExplicitForAll
+    FlexibleContexts
+    FlexibleInstances
+    ForeignFunctionInterface
+    GADTSyntax
+    GeneralisedNewtypeDeriving
+    HexFloatLiterals
+    ImplicitPrelude
+    InstanceSigs
+    KindSignatures
+    LambdaCase
+    MonomorphismRestriction
+    MultiParamTypeClasses
+    NamedFieldPuns
+    NamedWildCards
+    NumericUnderscores
+    OverloadedStrings
+    PartialTypeSignatures
+    PatternGuards
+    PolyKinds
+    PostfixOperators
+    RankNTypes
+    RecordWildCards
+    RelaxedPolyRec
+    ScopedTypeVariables
+    StandaloneDeriving
+    StandaloneKindSignatures
+    TraditionalRecordSyntax
+    TupleSections
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    TypeSynonymInstances
+    ViewPatterns
+
+  ghc-options:
+    -Wall -Wcompat -Wincomplete-uni-patterns -Wno-unused-do-bind
+    -Wno-partial-type-signatures -Wunused-foralls
+    -fprint-explicit-foralls -fprint-explicit-kinds
+
+library
+  import:          lang
+  exposed-modules:
+    WhalePoolsDex.Contracts.Proxy.Deposit
+    WhalePoolsDex.Contracts.Proxy.Swap
+    WhalePoolsDex.Contracts.Proxy.Order
+    WhalePoolsDex.Contracts.Proxy.Redeem
+    WhalePoolsDex.Contracts.Pool
+    WhalePoolsDex.PContracts.PApi
+    WhalePoolsDex.PContracts.PAssets
+    WhalePoolsDex.PContracts.PDeposit
+    WhalePoolsDex.PContracts.POrder
+    WhalePoolsDex.PContracts.PPool
+    WhalePoolsDex.PContracts.PRedeem
+    WhalePoolsDex.PContracts.PSwap
+    WhalePoolsDex.PContracts.PSimpleStaking
+    WhalePoolsDex.PContracts.PStakingWithPkhLock
+    WhalePoolsDex.PStakingValidators
+    WhalePoolsDex.PMintingValidators
+    WhalePoolsDex.PValidators
+    WhalePoolsDex.PConstants
+    PExtra.Ada
+    PExtra.API
+    PExtra.Integer
+    PExtra.List
+    PExtra.Maybe
+    PExtra.Monadic
+    PExtra.Num
+    PExtra.Pair
+    PExtra.PTriple
+
+  build-depends:
+    , aeson
+    , base
+    , bytestring
+    , containers
+    , generics-sop
+    , plutarch
+    , plutus-ledger-api
+    , plutarch-extra
+    , plutus-tx
+    , text
+    , transformers
+    , base16-bytestring
+
+test-suite plutarch-validators-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs: test
+  other-modules:
+    Gen.Models
+    Gen.FeeSwitchGen
+    Gen.DepositGen
+    Gen.PoolGen
+    Gen.SwapGen
+    Gen.RedeemGen
+    Gen.DestroyGen
+    Gen.Utils
+    Tests.Deposit
+    Tests.Pool
+    Tests.Swap
+    Tests.Redeem
+    Tests.Staking
+    Tests.StakeMinting
+    Tests.FeeSwitch
+    Tests.Api
+    Eval
+  build-depends:
+    , base
+    , HUnit
+    , text
+    , base16-bytestring
+    , bytestring
+    , plutus-ledger-api
+    , random
+    , plutus-tx
+    , plutarch-validators
+    , containers
+    , random-strings
+    , plutarch
+    , hedgehog
+    , rio
+    , tasty-hunit
+    , tasty
+    , tasty-hedgehog
+    , plutus-core
+    , serialise
+    , hw-hedgehog
