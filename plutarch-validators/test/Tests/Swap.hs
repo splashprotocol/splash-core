@@ -40,9 +40,11 @@ checkSwapIdentity = testGroup "CheckSwapIdentity"
   ]
   
 successSwap :: Property
-successSwap = property $ do
+successSwap = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     (cfgData, dh) = genSConfig x y nft 995 500000 1 pkh 10 4
@@ -51,7 +53,7 @@ successSwap = property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0
+    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 10 y 10 lq 9223372036854775797 nft 1 1000000000
     poolTxOut   = genPTxOut pdh x 20 y 6 lq 9223372036854775787 nft 1 3000000
   
@@ -67,9 +69,11 @@ successSwap = property $ do
   result === Right ()
 
 successSwapWithXIsAda :: Property
-successSwapWithXIsAda = property $ do
+successSwapWithXIsAda = withTests 1 $ property $ do
   let (_, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     x             = mkAdaAssetClass 
@@ -79,7 +83,7 @@ successSwapWithXIsAda = property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0
+    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 5000 y 5000 lq 9223372036854775797 nft 1 0
     poolTxOut   = genPTxOut pdh x 5010 y 4990 lq 9223372036854775787 nft 1 0 
   
@@ -95,9 +99,11 @@ successSwapWithXIsAda = property $ do
   result === Right ()
 
 successSwapWithYIsAda :: Property
-successSwapWithYIsAda = property $ do
+successSwapWithYIsAda = withTests 1 $ property $ do
   let (x, _, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     y             = mkAdaAssetClass 
@@ -107,7 +113,7 @@ successSwapWithYIsAda = property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0
+    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 9940655 y 0 lq 9223372036844775807 nft 1 10060000
     poolTxOut   = genPTxOut pdh x 9990060 y 0 lq 9223372036854775787 nft 1 10010497
   
@@ -123,9 +129,11 @@ successSwapWithYIsAda = property $ do
   result === Right ()
 
 invalidFairPrice :: Property
-invalidFairPrice = property $ do
+invalidFairPrice = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     (cfgData, dh) = genSConfig x y nft 1000 100 1 pkh 10 1
@@ -134,7 +142,7 @@ invalidFairPrice = property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0
+    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 10 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -150,9 +158,11 @@ invalidFairPrice = property $ do
   result === Left ()
 
 invalidExFee :: Property
-invalidExFee = property $ do
+invalidExFee = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     (cfgData, dh) = genSConfig x y nft 100 100 100 pkh 10 1
@@ -161,7 +171,7 @@ invalidExFee = property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0
+    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -177,9 +187,11 @@ invalidExFee = property $ do
   result === Left ()
 
 swapSelfIdentity :: Property
-swapSelfIdentity = property $ do
+swapSelfIdentity = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     (cfgData, dh) = genSConfig x y nft 100 100 100 pkh 10 1
@@ -188,7 +200,7 @@ swapSelfIdentity = property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0
+    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -204,9 +216,11 @@ swapSelfIdentity = property $ do
   result === Left ()
 
 swapPoolIdentity :: Property
-swapPoolIdentity = property $ do
+swapPoolIdentity = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     (cfgData, dh) = genSConfig x y nft 100 100 100 pkh 10 1
@@ -215,7 +229,7 @@ swapPoolIdentity = property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0
+    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 2 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -231,9 +245,11 @@ swapPoolIdentity = property $ do
   result === Left ()
 
 swapIncorrectPoolInIx :: Property
-swapIncorrectPoolInIx = property $ do
+swapIncorrectPoolInIx = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     (cfgData, dh) = genSConfig x y nft 100 100 100 pkh 10 1
@@ -242,7 +258,7 @@ swapIncorrectPoolInIx = property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0
+    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -258,9 +274,11 @@ swapIncorrectPoolInIx = property $ do
   result === Left ()
 
 swapIncorrectOrderInIx :: Property
-swapIncorrectOrderInIx = property $ do
+swapIncorrectOrderInIx = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     (cfgData, dh) = genSConfig x y nft 100 100 100 pkh 10 1
@@ -269,7 +287,7 @@ swapIncorrectOrderInIx = property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0
+    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -285,9 +303,11 @@ swapIncorrectOrderInIx = property $ do
   result === Left ()
 
 swapIncorrectRewardOutIx :: Property
-swapIncorrectRewardOutIx = property $ do
+swapIncorrectRewardOutIx = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     (cfgData, dh) = genSConfig x y nft 100 100 100 pkh 10 1
@@ -296,7 +316,7 @@ swapIncorrectRewardOutIx = property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0
+    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   

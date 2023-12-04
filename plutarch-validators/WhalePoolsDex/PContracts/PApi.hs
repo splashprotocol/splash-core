@@ -12,6 +12,7 @@ module WhalePoolsDex.PContracts.PApi (
     maxLqCap,
     burnLqInitial,
     feeDen,
+    treasuryFeeDen
 ) where
 
 import Plutarch
@@ -40,6 +41,9 @@ burnLqInitial = pconstant P.burnLqInitial
 
 feeDen :: Term s PInteger
 feeDen = pconstant 1000
+
+treasuryFeeDen :: Term s PInteger
+treasuryFeeDen = pconstant 10000
 
 zero :: Term s PInteger
 zero = pconstant 0

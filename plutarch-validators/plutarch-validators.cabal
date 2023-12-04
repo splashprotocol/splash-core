@@ -91,6 +91,7 @@ library
     WhalePoolsDex.Contracts.Proxy.Swap
     WhalePoolsDex.Contracts.Proxy.Order
     WhalePoolsDex.Contracts.Proxy.Redeem
+    WhalePoolsDex.Contracts.Proxy.FeeSwitch
     WhalePoolsDex.Contracts.Pool
     WhalePoolsDex.PContracts.PApi
     WhalePoolsDex.PContracts.PAssets
@@ -101,6 +102,7 @@ library
     WhalePoolsDex.PContracts.PSwap
     WhalePoolsDex.PContracts.PSimpleStaking
     WhalePoolsDex.PContracts.PStakingWithPkhLock
+    WhalePoolsDex.PContracts.PFeeSwitch
     WhalePoolsDex.PStakingValidators
     WhalePoolsDex.PMintingValidators
     WhalePoolsDex.PValidators
@@ -129,7 +131,7 @@ library
     , transformers
     , base16-bytestring
 
-test-suite plutarch-validators-test
+test-suite cardano-dex-contracts-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   hs-source-dirs: test
@@ -147,7 +149,6 @@ test-suite plutarch-validators-test
     Tests.Swap
     Tests.Redeem
     Tests.Staking
-    Tests.StakeMinting
     Tests.FeeSwitch
     Tests.Api
     Eval

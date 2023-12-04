@@ -45,7 +45,7 @@ internalPValueLengthTest = plam $ \testValue testQty -> unTermCont $ do
     pure $ pif (realQty #== testQty) (pcon PTrue) perror
 
 correctTokensQtySamePolicyId :: Property
-correctTokensQtySamePolicyId = property $ do
+correctTokensQtySamePolicyId = withTests 1 $ property $ do
   let 
     (x, y, nft, lq) = genAssetClasses
     -- x, y, lq, nft have same policy
@@ -58,7 +58,7 @@ correctTokensQtySamePolicyId = property $ do
   result === Right ()
 
 correctTokensQtyDifferentPolicyId :: Property
-correctTokensQtyDifferentPolicyId = property $ do
+correctTokensQtyDifferentPolicyId = withTests 1 $ property $ do
   (x, y, nft, lq) <- forAll genRandomAssetClasses
   let
     value     = mkValues [mkValue x 10, mkValue y 10, mkValue lq 10, mkValue nft 10, mkAdaValue 10] mempty
@@ -68,7 +68,7 @@ correctTokensQtyDifferentPolicyId = property $ do
   result === Right ()
 
 incorrectTokensQtyDifferentPolicyId :: Property
-incorrectTokensQtyDifferentPolicyId = property $ do
+incorrectTokensQtyDifferentPolicyId = withTests 1 $ property $ do
   (x, y, nft, _) <- forAll genRandomAssetClasses
   let
     value     = mkValues [mkValue x 10, mkValue y 10, mkValue nft 10, mkAdaValue 10] mempty

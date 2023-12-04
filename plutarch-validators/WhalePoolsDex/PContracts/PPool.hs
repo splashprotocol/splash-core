@@ -30,8 +30,10 @@ import PExtra.List                  (pelemAt)
 import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
 
 import qualified WhalePoolsDex.Contracts.Pool     as P
-import           WhalePoolsDex.PContracts.PApi    (burnLqInitial, feeDen, maxLqCap, tletUnwrap, zero, containsSignature)
+import           WhalePoolsDex.PContracts.PApi    (burnLqInitial, feeDen, treasuryFeeDen, maxLqCap, tletUnwrap, zero, containsSignature)
 import           WhalePoolsDex.PConstants
+
+import Plutarch.Trace
 
 newtype Flip f a b = Flip (f b a) deriving stock (Plutarch.Prelude.Generic)
 
@@ -157,25 +159,89 @@ instance DerivePlutusType PoolDiff where type DPTStrat _ = PlutusTypeData
 readPoolState :: Term s (PoolConfig :--> PTxOut :--> PoolState)
 readPoolState = phoistAcyclic $
     plam $ \conf' out -> unTermCont $ do
-        conf  <- pletFieldsC @'["poolX", "poolY", "poolLq"] conf'
+        conf  <- pletFieldsC @'["poolX", "poolY", "poolLq", "treasuryX", "treasuryY"] conf'
         let
             poolX  = getField @"poolX"  conf
             poolY  = getField @"poolY"  conf
             poolLq = getField @"poolLq" conf
 
+            poolXTreasury = getField @"treasuryX" conf
+            poolYTreasury = getField @"treasuryY" conf
+
         value <- tletField @"value" out
         
         let 
-            x = pdata $ assetClassValueOf # value # poolX
-            y = pdata $ assetClassValueOf # value # poolY
+            x = assetClassValueOf # value # poolX
+            y = assetClassValueOf # value # poolY
             negLq = assetClassValueOf # value # poolLq
             lq = pdata $ maxLqCap - negLq
         tcon $
             PoolState $
-                pdcons @"reservesX" @PInteger # x
-                    #$ pdcons @"reservesY" @PInteger # y
+                pdcons @"reservesX" @PInteger # pdata (x - poolXTreasury)
+                    #$ pdcons @"reservesY" @PInteger # pdata (y - poolYTreasury)
                     #$ pdcons @"liquidity" @PInteger # lq
                         # pdnil
+
+correctSwapConfig :: Term s (PoolConfig :--> PoolConfig :--> PInteger :--> PInteger :--> PBool)
+correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
+  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] prevDatum
+  newConfig  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] newDatum
+  
+  let
+    prevPoolNft = getField @"poolNft"  prevConfig
+    prevPoolX   = getField @"poolX"  prevConfig
+    prevPoolY   = getField @"poolY"  prevConfig
+    prevPoolLq  = getField @"poolLq" prevConfig
+    prevFeeNum  = getField @"feeNum" prevConfig
+    prevTreasuryFee = getField @"treasuryFee" prevConfig
+    prevTreasuryX = getField @"treasuryX" prevConfig
+    prevTreasuryY = getField @"treasuryY" prevConfig
+    prevDAOPolicy = getField @"DAOPolicy" prevConfig
+    prevlqBound   = getField @"lqBound" prevConfig
+    prevtreasuryAddress = getField @"treasuryAddress" prevConfig
+
+    newPoolNft = getField @"poolNft"  newConfig
+    newPoolX   = getField @"poolX"  newConfig
+    newPoolY   = getField @"poolY"  newConfig
+    newPoolLq  = getField @"poolLq" newConfig
+    newPeeNum  = getField @"feeNum" newConfig
+    newTreasuryFee = getField @"treasuryFee" newConfig
+    newTreasuryX = getField @"treasuryX" newConfig
+    newTreasuryY = getField @"treasuryY" newConfig
+    newDAOPolicy = getField @"DAOPolicy" newConfig
+    newLqBound   = getField @"lqBound" newConfig
+    newTreasuryAddress = getField @"treasuryAddress" newConfig
+
+    dt = (newTreasuryY - prevTreasuryY)
+
+    c1 = prevFeeNum * treasuryFeeDen
+
+    c2 = 
+      pif
+        (zero #< dx)
+        (-dy * prevTreasuryFee * (feeDen - prevFeeNum))
+        (-dx * prevTreasuryFee * (feeDen - prevFeeNum))
+
+    validTreasuryChange = (c1 * dt #<= c2) #&& (c2 #< c1 * (dt + 1))
+
+    anotherTokenTreasuryCorrect =
+      pif
+        (zero #< dx)
+        (prevTreasuryX #== newTreasuryX)
+        (prevTreasuryY #== newTreasuryY)
+
+    validConfig =
+        prevPoolNft #== newPoolNft #&&
+        prevPoolX   #== newPoolX #&&
+        prevPoolY   #== newPoolY #&&
+        prevPoolLq  #== newPoolLq #&&
+        prevFeeNum  #== newPeeNum #&&
+        prevTreasuryFee #== newTreasuryFee #&&
+        prevDAOPolicy #== newDAOPolicy #&&
+        prevlqBound   #== newLqBound #&&
+        prevtreasuryAddress #== newTreasuryAddress
+
+  pure $ validConfig #&& validTreasuryChange #&& anotherTokenTreasuryCorrect
 
 -- Guarantees preservation of pool NFT
 findPoolOutput :: Term s (PAssetClass :--> PBuiltinList PTxOut :--> PTxOut)
@@ -198,6 +264,11 @@ validDAOAction = plam $ \cfg txInfo -> unTermCont $ do
       policyCS = pfromData $ phead # policies
       mintedAc = assetClass # policyCS # poolStakeChangeMintTokenNameP
   pure $ assetClassValueOf # valueMint # mintedAc #== 1
+
+parseDatum :: ClosedTerm (PDatum :--> PoolConfig)
+parseDatum = plam $ \newDatum -> unTermCont $ do
+  PDatum poolDatum <- pmatchC newDatum
+  tletUnwrap $ ptryFromData @(PoolConfig) $ poolDatum
 
 poolValidatorT :: ClosedTerm (PoolConfig :--> PoolRedeemer :--> PScriptContext :--> PBool)
 poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
@@ -280,14 +351,18 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                             feeNum  <- tletField @"feeNum" conf
                             feeDen' <- tlet feeDen
                             let
+                                newConfig = parseDatum # succD
+                                validTreasury = correctSwapConfig # conf # newConfig # dx # dy
+
                                 dxf = dx * feeNum
                                 dyf = dy * feeNum
                                 validSwap =
                                     pif
                                         (zero #< dx)
                                         (-dy * (rx0 * feeDen' + dxf) #<= ry0 * dxf)
-                                        (-dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)                            
-                            pure $ noMoreTokens #&& swapAllowed #&& confPreserved #&& scriptPreserved #&& dlq #== 0 #&& validSwap -- liquidity left intact and swap is performed properly
+                                        (-dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
+                            ptraceC $ pshow validSwap
+                            pure $ noMoreTokens #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
                         DAOAction -> validDAOAction # conf # txinfo'
                         _ -> 
                             let

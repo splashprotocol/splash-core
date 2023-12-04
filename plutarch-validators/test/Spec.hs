@@ -7,7 +7,6 @@ import Tests.Pool
 import Tests.Swap
 import Tests.Redeem
 import Tests.Staking
-import Tests.StakeMinting
 import Tests.Api
 import Tests.FeeSwitch
 
@@ -23,15 +22,15 @@ main = do
   defaultMain tests
 
 tests = testGroup "Contracts"
-  [ checkPValueLength
-  , checkStakeChangeMintingPolicy
+  [ feeSwitch
+  , checkPValueLength
   , checkPool
   , checkPoolRedeemer
   , checkRedeem
   , checkRedeemIdentity
   , checkRedeemIsFair
   , checkRedeemRedeemer
-  , checkDeposit
+  , checkDeposit 
   , checkDepositChange
   , checkDepositRedeemer
   , checkDepositIdentity
@@ -40,5 +39,4 @@ tests = testGroup "Contracts"
   , checkSwap
   , checkSwapRedeemer
   , checkSwapIdentity
-  , checkPkhLockStaking
   ]

@@ -4,12 +4,13 @@ module Gen.Models
   ( genTokenName
   , genTxId
   , genTxOutRef
-  , genCurrencySymbol
+  , genCSRandom
   , random16bs
   , random28bs
   , random32bs
   , mkAdaAssetClass
   , genAssetClass
+  , genValidatorHash
   , mkAssetClass
   , mkValue
   , mkAdaValue
@@ -69,7 +70,7 @@ import qualified WhalePoolsDex.Contracts.Proxy.Order   as O
 import PlutusTx.Builtins as Builtins
 
 genBuiltinByteString :: MonadGen f => Int -> f BuiltinByteString
-genBuiltinByteString s = bytes (Range.linear 0 s) <&> BuiltinByteString
+genBuiltinByteString s = BuiltinByteString <$> Gen.bytes (Range.singleton s)
 
 random32bs :: MonadGen f => f BuiltinByteString
 random32bs = genBuiltinByteString 32
@@ -81,7 +82,7 @@ random16bs :: MonadGen f => f BuiltinByteString
 random16bs = genBuiltinByteString 16
 
 genTxId :: MonadGen f => f TxId
-genTxId = prune $ random32bs <&> TxId
+genTxId = prune $ (genBuiltinByteString idSize) <&> TxId
 
 genTxOutRef :: MonadGen f => f TxOutRef
 genTxOutRef = do
@@ -94,19 +95,29 @@ genTokenName = do
   bs <- random32bs
   return $ TokenName bs
 
-genCurrencySymbol :: MonadGen f => f CurrencySymbol
-genCurrencySymbol = do
-  bs <- random32bs
-  return $ CurrencySymbol bs
-
 mkAssetClass :: CurrencySymbol -> TokenName -> AssetClass
 mkAssetClass cs tn = AssetClass (cs, tn)
 
+pkhSize = 28
+validatorHashSize = 28
+csSize = 28
+tnSize = 16
+idSize = 32
+
+genTNRandom :: MonadGen f => f TokenName
+genTNRandom = (genBuiltinByteString tnSize) <&> TokenName
+
+genCSRandom :: MonadGen f => f CurrencySymbol
+genCSRandom = (genBuiltinByteString csSize) <&> CurrencySymbol
+
 genAssetClass :: MonadGen f => f AssetClass
 genAssetClass = do
-  tn <- genTokenName
-  cs <- genCurrencySymbol
-  return $ AssetClass (cs, tn)
+  cs <- genCSRandom
+  tn <- genTNRandom
+  pure $ AssetClass (cs, tn)
+
+genValidatorHash :: MonadGen f => f ValidatorHash
+genValidatorHash = (genBuiltinByteString pkhSize) <&> ValidatorHash
 
 mkAdaAssetClass :: AssetClass
 mkAdaAssetClass = mkAssetClass adaSymbol adaToken
@@ -121,8 +132,9 @@ mkValues :: [Value] -> Value -> Value
 mkValues (x:xs) acc = mkValues xs (x <> acc)
 mkValues [] acc = acc
 
-mkPoolConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> [CurrencySymbol] -> Integer -> P.PoolConfig
-mkPoolConfig nft x y lq fee stakeAdminCS lqBound = undefined -- P.PoolConfig nft x y lq fee stakeAdminCS lqBound
+mkPoolConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> P.PoolConfig
+mkPoolConfig nft x y lq fee treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress = 
+  P.PoolConfig nft x y lq fee treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress
 
 mkDepositConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> PubKeyHash -> Integer -> D.DepositConfig
 mkDepositConfig nft x y lq fee pkh cFee = D.DepositConfig nft x y lq fee pkh Nothing cFee
@@ -222,6 +234,7 @@ mkPoolTxInfo :: TxInInfo -> TxOut -> TxInfo
 mkPoolTxInfo pIn pOut =
   TxInfo
     { txInfoInputs = [pIn]
+    , txInfoReferenceInputs = []
     , txInfoOutputs = [pOut]
     , txInfoFee = mempty
     , txInfoMint = mempty
@@ -229,6 +242,7 @@ mkPoolTxInfo pIn pOut =
     , txInfoWdrl = fromList []
     , txInfoValidRange = Interval.always
     , txInfoSignatories = mempty
+    , txInfoRedeemers = fromList []
     , txInfoData = fromList []
     , txInfoId = "b0"
     }
@@ -237,6 +251,7 @@ mkTxInfo :: TxInInfo -> TxInInfo -> TxOut -> TxOut -> TxInfo
 mkTxInfo pIn oIn pOut oOut =
   TxInfo
     { txInfoInputs = [pIn, oIn]
+    , txInfoReferenceInputs = []
     , txInfoOutputs = [pOut, oOut]
     , txInfoFee = mempty
     , txInfoMint = mempty
@@ -244,6 +259,7 @@ mkTxInfo pIn oIn pOut oOut =
     , txInfoWdrl = fromList []
     , txInfoValidRange = Interval.always
     , txInfoSignatories = mempty
+    , txInfoRedeemers = fromList []
     , txInfoData = fromList []
     , txInfoId = "b0"
     }
@@ -252,6 +268,7 @@ mkTxInfoWithSignatures :: [TxInInfo] -> [TxOut] -> [PubKeyHash] -> TxInfo
 mkTxInfoWithSignatures pIns pOuts sigs =
   TxInfo
     { txInfoInputs = pIns
+    , txInfoReferenceInputs = []
     , txInfoOutputs = pOuts
     , txInfoFee = mempty
     , txInfoMint = mempty
@@ -259,6 +276,7 @@ mkTxInfoWithSignatures pIns pOuts sigs =
     , txInfoWdrl = fromList []
     , txInfoValidRange = Interval.always
     , txInfoSignatories = sigs
+    , txInfoRedeemers = fromList []
     , txInfoData = fromList []
     , txInfoId = "b0"
     }
@@ -267,6 +285,7 @@ mkTxInfoWithSignaturesAndMinting :: [TxInInfo] -> TxOut -> [PubKeyHash] -> Value
 mkTxInfoWithSignaturesAndMinting pIn pOut sigs mintValue =
   TxInfo
     { txInfoInputs = pIn
+    , txInfoReferenceInputs = []
     , txInfoOutputs = [pOut]
     , txInfoFee = mempty
     , txInfoMint = mintValue
@@ -274,6 +293,7 @@ mkTxInfoWithSignaturesAndMinting pIn pOut sigs mintValue =
     , txInfoWdrl = fromList []
     , txInfoValidRange = Interval.always
     , txInfoSignatories = sigs
+    , txInfoRedeemers = fromList []
     , txInfoData = fromList []
     , txInfoId = "b0"
     }
@@ -282,6 +302,7 @@ mkTxInfoOnlyWithSignatures :: [PubKeyHash] -> TxInfo
 mkTxInfoOnlyWithSignatures sigs =
   TxInfo
     { txInfoInputs = []
+    , txInfoReferenceInputs = []
     , txInfoOutputs = []
     , txInfoFee = mempty
     , txInfoMint = mempty
@@ -289,6 +310,7 @@ mkTxInfoOnlyWithSignatures sigs =
     , txInfoWdrl = fromList []
     , txInfoValidRange = Interval.always
     , txInfoSignatories = sigs
+    , txInfoRedeemers = fromList []
     , txInfoData = fromList []
     , txInfoId = "b0"
     }
