@@ -51,7 +51,7 @@ A n^n \sum x_i + D = D A n^n + \frac{D^{n + 1}}{n^n \prod x_i}
 ```
 
 Parameters $n$ and $A$ are constants, thus, set of variables involved in the
-invariant calculation is $(\{x_i\}_{i = 1}^{n}, D)$.
+invariant calculation is $((x_i)_{i = 1}^{n}, D)$.
 However, analytically calculate the value of one of them when the values of all others are known
 is possible only for $n = 2$.
 When pool consists of $n = 3$ assets and more the only way to calculate target values of the

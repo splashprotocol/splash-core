@@ -79,3 +79,27 @@ pub type SwapData {
     min_expected_quote_amount: Int,
   }
 }
+
+pub type PoolAction {
+  /// Change pool state.
+  PoolAction { treasury_in_ix: Int, treasury_out_ix: Int, successor_ix: Int }
+}
+
+pub type DepositAction {
+  /// Execute deposit order.
+  ExecDeposit { pool_in_ix: Int, successor_ix: Int }
+  CancelDeposit
+}
+
+pub type RedeemAction {
+
+  /// Execute redeem order
+  ExecRedeem { pool_in_ix: Int, successor_ix: Int }
+  CancelRedeem
+}
+
+pub type SwapAction {
+  /// Execute swap order
+  ExecSwap { pool_in_ix: Int, successor_ix: Int }
+  CancelSwap
+}

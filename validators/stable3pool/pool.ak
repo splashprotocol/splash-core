@@ -1,20 +1,28 @@
 use aiken/list
 use aiken/transaction.{ScriptContext, Spend, find_input}
 use aiken/transaction/value.{quantity_of}
-use whalepools/stable3pool/types.{PoolData}
+use whalepools/stable3pool/types.{PoolAction, PoolData}
 use whalepools/stable3pool/utils.{check_invariant_extremum, convert_pool_datum}
 
+// Constants:
+const lp_emission = 9223372036854775807
+
+const nn = 27
+
+// Pool Validator:
 validator {
-  fn stable3_pool(datum: PoolData, ctx: ScriptContext) -> Bool {
+  fn stable3_pool(
+    datum: PoolData,
+    action: PoolAction,
+    ctx: ScriptContext,
+  ) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
     expect Spend(spent_utxo_reference) = purpose
-    // Constants:
-    let lp_emission = 9223372036854775807
-    let nn = 27
     // Input data:
     expect Some(self_input) =
       find_input(transaction.inputs, spent_utxo_reference)
-    expect Some(treasury_input) = list.at(transaction.inputs, 1)
+    expect Some(treasury_input) =
+      list.at(transaction.inputs, action.treasury_in_ix)
 
     let self = self_input.output
     let treasury0 = treasury_input.output
@@ -44,11 +52,11 @@ validator {
     let inv0 = datum.inv
 
     // Output data:
-    expect Some(successor) = list.at(transaction.outputs, 0)
-    expect Some(treasury1) = list.at(transaction.outputs, 1)
+    expect Some(successor) = list.at(transaction.outputs, action.successor_ix)
+    expect Some(treasury1) =
+      list.at(transaction.outputs, action.treasury_out_ix)
 
     let datum_successor: PoolData = convert_pool_datum(successor.datum)
-
     let script1 = successor.reference_script
 
     let treasury_nft1 = datum_successor.treasury_nft
