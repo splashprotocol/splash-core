@@ -212,7 +212,11 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     newLqBound   = getField @"lqBound" newConfig
     newTreasuryAddress = getField @"treasuryAddress" newConfig
 
-    dt = (newTreasuryY - prevTreasuryY)
+    dt = 
+      pif
+        (zero #< dx)
+        (newTreasuryY - prevTreasuryY)
+        (newTreasuryX - prevTreasuryX)
 
     c1 = prevFeeNum * treasuryFeeDen
 
