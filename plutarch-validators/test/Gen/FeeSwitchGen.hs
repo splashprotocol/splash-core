@@ -84,6 +84,15 @@ instance ToTxInfo Pool where
       , txInInfoResolved = txOut
       }
 
+treasuryFeeNumLowerLimit = 1
+treasuryFeeNumUpperLimit = 500
+
+poolFeeNumLowerLimit = 3000
+poolFeeNumUpperLimit = 9999
+
+treasuryFeeDen = 10000
+poolFeeNumDen  = 10000
+
 genPool :: MonadGen f => [PubKeyHash] -> Integer -> f Pool
 genPool adminsPkhs threshold = do
   (x, y, lq, nft) <- tuple4 genAssetClass
@@ -183,9 +192,8 @@ changeStakePartOfAddress =
 changeTreasuryFee :: MonadGen m => TestAction m -- Pool -> m Pool
 changeTreasuryFee = 
   let
-    -- less than common pool fee
     action prevPool@Pool{..} = do
-      newCorrectTreasuryFee <- integral (Range.constant (poolFeeNum config) 1000)
+      newCorrectTreasuryFee <- integral (Range.constant treasuryFeeNumLowerLimit treasuryFeeNumUpperLimit)
       let
         newConfig = config {
           treasuryFee = newCorrectTreasuryFee
@@ -194,6 +202,20 @@ changeTreasuryFee =
         config = newConfig
       } []
   in TestAction "Change treasury fee" action
+
+incorrectTreasuryFee :: MonadGen m => TestAction m -- Pool -> m Pool
+incorrectTreasuryFee = 
+  let
+    action prevPool@Pool{..} = do
+      newIncorrectTreasuryFee <- integral (Range.constant (treasuryFeeNumUpperLimit + 1) treasuryFeeDen)
+      let
+        newConfig = config {
+          treasuryFee = newIncorrectTreasuryFee
+        }
+      pure $ ActionResult prevPool {
+        config = newConfig
+      } []
+  in TestAction "Incorrect treasury fee" action
 
 changePoolConfigTokenToNew :: MonadGen m => (AssetClass -> Pool -> Pool) -> Pool -> m Pool
 changePoolConfigTokenToNew tokenUpdater prevPool = do
@@ -247,6 +269,34 @@ withdrawTreasury =
           }
       pure $ ActionResult newPool [toTxOut treasury]
   in TestAction "Correct treasury withdraw" testAction
+
+changePoolFee :: MonadGen m => TestAction m
+changePoolFee = 
+  let
+    action prevPool@Pool{..} = do
+      newPoolFee <- integral (Range.constant poolFeeNumLowerLimit poolFeeNumUpperLimit)
+      let
+        newConfig = config {
+          poolFeeNum = newPoolFee
+        }
+      pure $ ActionResult prevPool {
+        config = newConfig
+      } []
+  in TestAction "Change pool fee" action
+
+incorrectChangePoolFee :: MonadGen m => TestAction m
+incorrectChangePoolFee = 
+  let
+    action prevPool@Pool{..} = do
+      incorrectPoolFee <- integral (Range.constant (poolFeeNumUpperLimit + 1) poolFeeNumDen)
+      let
+        newConfig = config {
+          poolFeeNum = incorrectPoolFee
+        }
+      pure $ ActionResult prevPool {
+        config = newConfig
+      } []
+  in TestAction "Incorrect pool fee" action
 
 incorrectWithdrawValueTreasury :: MonadGen m => TestAction m
 incorrectWithdrawValueTreasury = 

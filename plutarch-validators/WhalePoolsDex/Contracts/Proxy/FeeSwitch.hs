@@ -10,7 +10,7 @@ import qualified PlutusTx
 import PlutusTx.Builtins
 import PlutusTx.IsData.Class
 
-data DAOAction = WithdrawTreasury | ChangeStakePart | ChangeTreasuryFee | ChangeTreasuryAddress | ChangeAdminAddress
+data DAOAction = WithdrawTreasury | ChangeStakePart | ChangeTreasuryFee | ChangeTreasuryAddress | ChangeAdminAddress | ChangePoolFee
     deriving (Show)
 
 instance FromData DAOAction where
@@ -23,6 +23,7 @@ instance FromData DAOAction where
             | i == 2 = Just ChangeTreasuryFee
             | i == 3 = Just ChangeTreasuryAddress
             | i == 4 = Just ChangeAdminAddress
+            | i == 5 = Just ChangePoolFee
             | otherwise = Nothing
 
 instance UnsafeFromData DAOAction where
@@ -37,6 +38,7 @@ instance ToData DAOAction where
         ChangeTreasuryFee -> 2
         ChangeTreasuryAddress -> 3
         ChangeAdminAddress -> 4
+        ChangePoolFee -> 5
 
 data DAORedeemer = DAORedeemer
     { action    :: DAOAction

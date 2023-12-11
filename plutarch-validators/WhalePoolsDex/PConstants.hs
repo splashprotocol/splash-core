@@ -18,7 +18,7 @@ import qualified Data.Text.Encoding      as E
 import qualified Data.Text as T
 
 poolValidatorHashValue :: String
-poolValidatorHashValue = "92f68e0d80f2ca17daca7e47020824f9c72bcd458a828f8a5bfcd231"
+poolValidatorHashValue = "5d3bf37447d1274e601e946c246d827c8d5a013d50e0d1eb43a7e78c"
 
 poolValidatorHash :: Plutus.ValidatorHash
 poolValidatorHash = Plutus.ValidatorHash $ BuiltinByteString . mkByteString $ T.pack poolValidatorHashValue

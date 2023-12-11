@@ -39,7 +39,7 @@ import Data.Char
 import Debug.Trace
 
 feeSwitch = testGroup "FeeSwitchV1"
-  (genTests `map` [daoSwitchTests , treasuryFeeTests,  treasuryAddressTests, stakeAddressTests, treasuryWithdrawTests])
+  (genTests `map` [daoSwitchTests , treasuryFeeTests,  treasuryAddressTests, stakeAddressTests, treasuryWithdrawTests, poolFeeTests])
 
 genTests TestGroup{..} = 
   let
@@ -84,6 +84,7 @@ treasuryFeeTests = TestGroup
     , changeTreasuryAddress
     , changeStakePartOfAddress
     , withdrawTreasury
+    , incorrectTreasuryFee
     ]
   }
 
@@ -131,6 +132,23 @@ treasuryWithdrawTests = TestGroup
     , changeTreasuryAddress
     , incorrectWithdrawValueTreasury
     , incorrectWithdrawAddressTreasury
+    ]
+  }
+
+poolFeeTests = TestGroup
+  { name = "Pool fee tests"
+  , contractAction = ChangePoolFee
+  , validAction = changePoolFee
+  , invalidActions = 
+    [ changePoolTreasury
+    , changeStakePartOfAddress
+    , changeDAOAdminAddress
+    , changePoolValue
+    , changePoolTokensInfo
+    , changeTreasuryFee
+    , changeTreasuryAddress
+    , withdrawTreasury
+    , incorrectChangePoolFee
     ]
   }
   

@@ -236,7 +236,7 @@ successPoolSwap = withShrinks 1 $ withTests 1 $ property $ do
   prevPoolY       <- forAll $ integral (Range.constant 10000 100000000)
   xToSwap         <- forAll $ integral (Range.constant 1 (prevPoolY - 1))
   let
-    (cfgData, dh) = genSConfig x y nft 995 500000 1 pkh 10 4
+    (cfgData, dh) = genSConfig x y nft 9950 500000 1 pkh 10 4
     orderTxIn     = genSTxIn orderTxRef dh x 10 3813762
     orderTxOut    = genSTxOut dh y 4 1813762 pkh
   
@@ -250,8 +250,8 @@ successPoolSwap = withShrinks 1 $ withTests 1 $ property $ do
     lqFee = calculateLqFee prevPoolX prevPoolY xToSwap
     treasuryYFee = calculateLqFeeXtoYSwap prevPoolX prevPoolY xToSwap
 
-    (pcfg, pdh)       = genPConfig x y nft lq 995 [] 0 treasuryAddress
-    (newPcfg, newPdh) = genPConfigWithUpdatedTreasury x y nft lq 995 0 treasuryYFee [] 0 treasuryAddress
+    (pcfg, pdh)       = genPConfig x y nft lq 9950 [] 0 treasuryAddress
+    (newPcfg, newPdh) = genPConfigWithUpdatedTreasury x y nft lq 9950 0 treasuryYFee [] 0 treasuryAddress
 
     poolTxIn  = genPTxIn poolTxRef pdh x prevPoolX y prevPoolY lq 9223372036854775797 nft 1 1000000000
     poolTxOut = genPTxOut newPdh x newPoolX y newPoolY lq 9223372036854775797 nft 1 3000000
@@ -276,7 +276,7 @@ incorrectPoolYTreasury = withShrinks 1 $ withTests 1 $ property $ do
   prevPoolY       <- forAll $ integral (Range.constant 10000 100000000)
   xToSwap         <- forAll $ integral (Range.constant 1 (prevPoolY - 1))
   let
-    (cfgData, dh) = genSConfig x y nft 995 500000 1 pkh 10 4
+    (cfgData, dh) = genSConfig x y nft 9950 500000 1 pkh 10 4
     orderTxIn     = genSTxIn orderTxRef dh x 10 3813762
     orderTxOut    = genSTxOut dh y 4 1813762 pkh
     (newPoolX, newPoolY) = calculateXtoYSwap prevPoolX prevPoolY xToSwap
@@ -285,10 +285,10 @@ incorrectPoolYTreasury = withShrinks 1 $ withTests 1 $ property $ do
   incorrectYTreasury <- forAll $ integral (Range.constant 9 newPoolY)
   let
   
-    (pcfg, pdh)       = genPConfig x y nft lq 995 [] 0 treasuryAddress
+    (pcfg, pdh)       = genPConfig x y nft lq 9950 [] 0 treasuryAddress
 
     --incorrect value of treasuryY
-    (newPcfg, newPdh) = genPConfigWithUpdatedTreasury x y nft lq 995 0 incorrectYTreasury [] 0 treasuryAddress
+    (newPcfg, newPdh) = genPConfigWithUpdatedTreasury x y nft lq 9950 0 incorrectYTreasury [] 0 treasuryAddress
 
     poolTxIn  = genPTxIn poolTxRef pdh x prevPoolX y prevPoolY lq 9223372036854775797 nft 1 1000000000
     poolTxOut = genPTxOut newPdh x newPoolX y newPoolY lq 9223372036854775797 nft 1 3000000
@@ -315,7 +315,7 @@ incorrectPoolSwapDatum = withShrinks 1 $ withTests 1 $ property $ do
   prevPoolY       <- forAll $ integral (Range.constant 10000 100000000)
   xToSwap         <- forAll $ integral (Range.constant 1 (prevPoolY - 1))
   let
-    (cfgData, dh) = genSConfig x y nft 995 500000 1 pkh 10 4
+    (cfgData, dh) = genSConfig x y nft 9950 500000 1 pkh 10 4
     orderTxIn     = genSTxIn orderTxRef dh x 10 3813762
     orderTxOut    = genSTxOut dh y 4 1813762 pkh
   
@@ -329,8 +329,8 @@ incorrectPoolSwapDatum = withShrinks 1 $ withTests 1 $ property $ do
     lqFee = calculateLqFee prevPoolX prevPoolY xToSwap
     treasuryYFee = calculateLqFeeXtoYSwap prevPoolX prevPoolY xToSwap
 
-    (pcfg, pdh)       = genPConfig x y nft lq 995 [] 0 treasuryAddress
-    (newPcfg, newPdh) = genPConfigWithUpdatedTreasury x1 y1 nft1 lq1 995 0 treasuryYFee [] 0 treasuryAddress
+    (pcfg, pdh)       = genPConfig x y nft lq 9950 [] 0 treasuryAddress
+    (newPcfg, newPdh) = genPConfigWithUpdatedTreasury x1 y1 nft1 lq1 9950 0 treasuryYFee [] 0 treasuryAddress
 
     poolTxIn  = genPTxIn poolTxRef pdh x prevPoolX y prevPoolY lq 9223372036854775797 nft 1 1000000000
     poolTxOut = genPTxOut newPdh x newPoolX y newPoolY lq 9223372036854775797 nft 1 3000000
@@ -354,13 +354,13 @@ incorrectPoolTokensQtyInFinalValue = withShrinks 1 $ withTests 100 $ property $ 
   treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
-    (cfgData, dh) = genSConfig x y nft 995 500000 1 pkh 10 4
+    (cfgData, dh) = genSConfig x y nft 9950 500000 1 pkh 10 4
     orderTxIn     = genSTxIn orderTxRef dh x 10 3813762
     orderTxOut    = genSTxOut dh y 4 1813762 pkh
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 995 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 10 y 10 lq 9223372036854775797 nft 1 1000000000
     poolTxOut   = genPTxOutWithIncorrectTokensQty pdh fakeToken 100 x 20 y 6 lq 9223372036854775797 nft 1 3000000
   
@@ -384,13 +384,13 @@ incorrectPoolSwapAdditionalTokens = withTests 1 $ property $ do
   orderTxRef      <- forAll genTxOutRef
 
   let
-    (cfgData, dh) = genSConfig x y nft 995 500000 1 pkh 10 4
+    (cfgData, dh) = genSConfig x y nft 9950 500000 1 pkh 10 4
     orderTxIn     = genSTxIn orderTxRef dh x 10 3813762
     orderTxOut    = genSTxOut dh y 4 1813762 pkh
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 995 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 10 y 10 lq 9223372036854775797 nft 1 1000000000
     poolTxOut   = genPTxOutWithAdditionalTokens pdh x 20 y 6 lq 9223372036854775797 nft 1 3000000 tokenA 10
   
@@ -412,13 +412,13 @@ poolSwapInsufficientLiqudityForBound = withTests 1 $ property $ do
   treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
-    (cfgData, dh) = genSConfig x y nft 995 500000 1 pkh 10 4
+    (cfgData, dh) = genSConfig x y nft 9950 500000 1 pkh 10 4
     orderTxIn     = genSTxIn orderTxRef dh x 10 3813762
     orderTxOut    = genSTxOut dh y 4 1813762 pkh
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 995 [] 21 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 [] 21 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 10 y 10 lq 9223372036854775797 nft 1 1000000000
     poolTxOut   = genPTxOut pdh x 20 y 6 lq 9223372036854775797 nft 1 3000000
   

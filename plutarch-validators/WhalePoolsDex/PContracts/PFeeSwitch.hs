@@ -1,6 +1,6 @@
 module WhalePoolsDex.PContracts.PFeeSwitch where
 
-import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature)
+import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit)
 import PExtra.API (assetClassValueOf, ptryFromData, PAssetClass(..))
 import PExtra.Monadic
 import Plutarch
@@ -44,7 +44,7 @@ findOutput =
                 )
                 (const $ ptraceError "User output not found")
 
-data DAOAction (s :: S) = WithdrawTreasury | ChangeStakePart | ChangeTreasuryFee | ChangeTreasuryAddress | ChangeAdminAddress
+data DAOAction (s :: S) = WithdrawTreasury | ChangeStakePart | ChangeTreasuryFee | ChangeTreasuryAddress | ChangeAdminAddress | ChangePoolFee
 
 instance PIsData DAOAction where
     pfromDataImpl tx =
@@ -60,6 +60,7 @@ instance PlutusType DAOAction where
     pcon' ChangeTreasuryFee = 2
     pcon' ChangeTreasuryAddress = 3
     pcon' ChangeAdminAddress = 4
+    pcon' ChangePoolFee = 5
 
     pmatch' x f =
         pif
@@ -71,12 +72,16 @@ instance PlutusType DAOAction where
                 ( pif
                     (x #== 2)
                     (f ChangeTreasuryFee)
-                    (pif (x #== 3) (f ChangeTreasuryAddress) (f ChangeAdminAddress))
+                    ( pif 
+                        (x #== 3) 
+                        (f ChangeTreasuryAddress)
+                        (pif (x #== 4) (f ChangeAdminAddress) (f ChangePoolFee))
+                    )
                 )
             )
 
 -- All SwitchFee actions shouldn't modify main poolConfig elements: poolNft, poolX, poolY, poolLq, lqBound, feeNum
-validateCommonFields :: PMemberFields PoolConfig '["poolNft", "poolX", "poolY", "poolLq", "lqBound", "feeNum"] s as => HRec as -> HRec as -> Term s PBool
+validateCommonFields :: PMemberFields PoolConfig '["poolNft", "poolX", "poolY", "poolLq", "lqBound"] s as => HRec as -> HRec as -> Term s PBool
 validateCommonFields prevConfig newConfig =
   let
     prevPoolNft = getField @"poolNft" prevConfig
@@ -84,22 +89,19 @@ validateCommonFields prevConfig newConfig =
     prevPoolY   = getField @"poolY"   prevConfig
     prevPoolLq  = getField @"poolLq"  prevConfig
     prevLqBound = getField @"lqBound"  prevConfig
-    prevFeeNum  = getField @"feeNum"  prevConfig
 
     newPoolNft  = getField @"poolNft" newConfig
     newPoolX    = getField @"poolX"   newConfig
     newPoolY    = getField @"poolY"   newConfig
     newPoolLq   = getField @"poolLq"  newConfig
     newLqBound  = getField @"lqBound" newConfig
-    newFeeNum   = getField @"feeNum" newConfig
 
     commonFieldsValid = 
       prevPoolNft    #== newPoolNft  #&&
       prevPoolX      #== newPoolX    #&&
       prevPoolY      #== newPoolY    #&&
       prevPoolLq     #== newPoolLq   #&&
-      prevLqBound    #== newLqBound  #&&
-      prevFeeNum     #== newFeeNum
+      prevLqBound    #== newLqBound
 
   in commonFieldsValid
 
@@ -211,8 +213,17 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
     prevTreasuryFee = getField @"treasuryFee" prevConf
     newTreasuryFee  = getField @"treasuryFee" newConf
 
+    prevPoolFeeNum  = getField @"feeNum" prevConf
+    newPoolFeeNum   = getField @"feeNum" newConf
+
     --  |              |  --
     -- \|/ Predicates \|/ --
+
+    -- Checks that new treasury fee value satisfy protocol bounds
+    updatedTreasuryFeeIsCorrect = pdelay (newTreasuryFee #<= treasuryFeeNumUpperLimit #&& treasuryFeeNumLowerLimit #<= newTreasuryFee)
+
+    -- Checks that new pool fee num value satisfy protocol bounds
+    updatedPoolFeeNumIsCorrect = pdelay (newPoolFeeNum #<= poolFeeNumUpperLimit #&& poolFeeNumLowerLimit #<= newPoolFeeNum)
     
     -- Checks that correct qty of singers present in transaction
     validThreshold = threshold #<= validSignaturesQty
@@ -226,8 +237,11 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
     -- Checks that treasury address is the same
     treasuryAddressIsTheSame = pdelay (prevTreasuryAddress #== newTreasuryAddress)
 
-    -- Checks that treasury address is the same
+    -- Checks that treasury fee is the same
     treasuryFeeIsTheSame = pdelay (prevTreasuryFee #== newTreasuryFee)
+
+    -- Checks that pool fee is the same
+    poolFeeIsTheSame = pdelay (prevPoolFeeNum #== newPoolFeeNum)
 
     -- Checks that dao policy is the same
     daoPolicyIsTheSame = pdelay (prevDAOPolicy #== newDAOPolicy)
@@ -246,13 +260,15 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
       --        * DAOPolicy
       --        * treasuryAddress
       --        * poolAddress
+      --        * feeNum
       --    2) TreasuryX, TreasuryY be modified, but not more than previous values
       WithdrawTreasury ->
         pforce treasuryFeeIsTheSame #&&
         pforce daoPolicyIsTheSame #&&
         pforce treasuryAddressIsTheSame #&&
         (poolInputAddr #== poolOutputAddr) #&&
-        (validateTreasuryWithdraw prevConf newConf) # outputs # poolInputValue # poolOutputValue
+        (validateTreasuryWithdraw prevConf newConf) # outputs # poolInputValue # poolOutputValue #&&
+        pforce poolFeeIsTheSame
 
       -- In case of changing pool staking part we should verify next conditions:
       --    1) Next fields shouldn't be modified:
@@ -262,6 +278,7 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
       --        * DAOPolicy
       --        * treasuryAddress
       --        * poolValue
+      --        * feeNum
       --        * pool address script credential
       --    2) Stake part of pool contract address can be modified
       ChangeStakePart  -> unTermCont $ do
@@ -274,7 +291,8 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
             pforce daoPolicyIsTheSame #&&
             pforce treasuryAddressIsTheSame #&&
             pforce poolValueIsTheSame #&&
-            (prevCred #== newCred)
+            (prevCred #== newCred) #&&
+            pforce poolFeeIsTheSame
 
         pure correctAction
 
@@ -285,13 +303,16 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
       --        * DAOPolicy
       --        * treasuryAddress
       --        * poolValue
+      --        * feeNum
       --        * pool address
       --    2) Treasury fee can be modified, but not more than poolFee
       ChangeTreasuryFee    ->
         treasuryIsTheSame prevConf newConf #&&
         pforce daoPolicyIsTheSame #&&
         pforce treasuryAddressIsTheSame #&&
-        pforce poolValueAndAddressAreTheSameDelayed
+        pforce poolValueAndAddressAreTheSameDelayed #&&
+        pforce poolFeeIsTheSame #&&
+        pforce updatedTreasuryFeeIsCorrect
 
       -- In case of changing treasury address we should verify next conditions:
       --    1) Next fields shouldn't be modified:
@@ -300,14 +321,15 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
       --        * treasuryY
       --        * DAOPolicy
       --        * poolValue
+      --        * feeNum
       --        * pool address
       --    2) Treasury address can be modified
       ChangeTreasuryAddress ->
         pforce treasuryFeeIsTheSame #&&
         treasuryIsTheSame prevConf newConf #&&
         pforce daoPolicyIsTheSame #&&
-        pforce poolValueAndAddressAreTheSameDelayed
-        
+        pforce poolValueAndAddressAreTheSameDelayed #&&
+        pforce poolFeeIsTheSame
 
       -- In case of changing DAO admin we should verify next conditions:
       --    1) Next fields shouldn't be modified:
@@ -315,6 +337,7 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
       --        * treasuryX
       --        * treasuryY
       --        * treasuryAddress
+      --        * feeNum
       --        * poolValue
       --        * pool address script credential
       --    2) DAO policy can be modified
@@ -322,6 +345,25 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
         pforce treasuryFeeIsTheSame #&&
         treasuryIsTheSame prevConf newConf #&&
         pforce treasuryAddressIsTheSame #&&
-        pforce poolValueAndAddressAreTheSameDelayed
+        pforce poolValueAndAddressAreTheSameDelayed #&&
+        pforce poolFeeIsTheSame
+      
+      -- In case of changing DAO admin we should verify next conditions:
+      --    1) Next fields shouldn't be modified:
+      --        * treasuryFee
+      --        * treasuryX
+      --        * treasuryY
+      --        * treasuryAddress
+      --        * DAO policy
+      --        * poolValue
+      --        * pool address script credential
+      --    2) FeeNum can be modified
+      ChangePoolFee ->
+        pforce treasuryFeeIsTheSame #&&
+        treasuryIsTheSame prevConf newConf #&&
+        pforce treasuryAddressIsTheSame #&&
+        pforce daoPolicyIsTheSame #&&
+        pforce poolValueAndAddressAreTheSameDelayed #&&
+        pforce updatedPoolFeeNumIsCorrect
 
   pure $ validCommonFields #&& validThreshold #&& validAction

@@ -22,8 +22,9 @@ import PExtra.Ada
 import PExtra.List (pelemAt)
 import PExtra.Monadic (tlet, tletField, tmatch)
 
-import WhalePoolsDex.PContracts.PApi (containsSignature, getRewardValue', maxLqCap, pmin, tletUnwrap)
-import WhalePoolsDex.PContracts.POrder (OrderAction (Apply, Refund), OrderRedeemer)
+import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap, pmin, tletUnwrap)
+import WhalePoolsDex.PContracts.POrder     (OrderAction (Apply, Refund), OrderRedeemer)
+import WhalePoolsDex.PContracts.PFeeSwitch (extractPoolConfig)
 
 import qualified WhalePoolsDex.Contracts.Proxy.Deposit as D
 
@@ -85,13 +86,19 @@ depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
 
     poolIn'   <- tlet $ pelemAt # poolInIx # inputs
     poolIn    <- pletFieldsC @'["outRef", "resolved"] poolIn'
-    poolValue <-
-        let pool = pfromData $ getField @"resolved" poolIn
-         in tletField @"value" pool
+    let pool  = getField @"resolved" poolIn
+
+    poolValue <- tletField @"value" pool
     let poolIdentity = -- operation is performed with the pool selected by the user 
             let requiredNft = pfromData $ getField @"poolNft" conf
                 nftAmount = assetClassValueOf # poolValue # requiredNft
              in nftAmount #== 1
+    
+    poolInputDatum <- tlet $ extractPoolConfig # pool
+    poolConf       <- pletFieldsC @'["treasuryX", "treasuryY"] poolInputDatum
+    let
+        treasuryX = getField @"treasuryX" poolConf
+        treasuryY = getField @"treasuryY" poolConf
 
     selfIn'   <- tlet $ pelemAt # orderInIx # inputs
     selfIn    <- pletFieldsC @'["outRef", "resolved"] selfIn'
@@ -114,8 +121,8 @@ depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
         let lqNegative = assetClassValueOf # poolValue # lq
          in tlet $ maxLqCap - lqNegative
 
-    reservesX <- tlet $ assetClassValueOf # poolValue # x
-    reservesY <- tlet $ assetClassValueOf # poolValue # y
+    reservesX <- tlet $ (assetClassValueOf # poolValue # x) - treasuryX
+    reservesY <- tlet $ (assetClassValueOf # poolValue # y) - treasuryY
 
     minRewardByX <- tlet $ minAssetReward # selfValue # x # reservesX # liquidity # exFee # collateralAda
     minRewardByY <- tlet $ minAssetReward # selfValue # y # reservesY # liquidity # exFee # collateralAda
