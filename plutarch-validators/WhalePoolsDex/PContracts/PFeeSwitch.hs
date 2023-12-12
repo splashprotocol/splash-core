@@ -198,8 +198,8 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
   poolInputAddr  <- tletField @"address" poolInputResolved
   poolOutputAddr <- tletField @"address" successor
 
-  prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] poolInputDatum
-  newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] poolOutputDatum
+  prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNumX", "feeNumY", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] poolInputDatum
+  newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNumX", "feeNumY", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] poolOutputDatum
   let
     validSignaturesQty =
       pfoldl # plam (\acc pkh -> pif (containsSignature # signatories # pkh) (acc + 1) acc) # 0 # adminsPkhs
@@ -213,8 +213,11 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
     prevTreasuryFee = getField @"treasuryFee" prevConf
     newTreasuryFee  = getField @"treasuryFee" newConf
 
-    prevPoolFeeNum  = getField @"feeNum" prevConf
-    newPoolFeeNum   = getField @"feeNum" newConf
+    prevPoolFeeNumX = getField @"feeNumX" prevConf
+    prevPoolFeeNumY = getField @"feeNumY" prevConf
+
+    newPoolFeeNumX = getField @"feeNumX" newConf
+    newPoolFeeNumY = getField @"feeNumY" newConf
 
     --  |              |  --
     -- \|/ Predicates \|/ --
@@ -223,7 +226,11 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
     updatedTreasuryFeeIsCorrect = pdelay (newTreasuryFee #<= treasuryFeeNumUpperLimit #&& treasuryFeeNumLowerLimit #<= newTreasuryFee)
 
     -- Checks that new pool fee num value satisfy protocol bounds
-    updatedPoolFeeNumIsCorrect = pdelay (newPoolFeeNum #<= poolFeeNumUpperLimit #&& poolFeeNumLowerLimit #<= newPoolFeeNum)
+    updatedPoolFeeNumIsCorrect = 
+      pdelay (
+        (newPoolFeeNumX #<= poolFeeNumUpperLimit #&& poolFeeNumLowerLimit #<= newPoolFeeNumX) #&&
+        (newPoolFeeNumY #<= poolFeeNumUpperLimit #&& poolFeeNumLowerLimit #<= newPoolFeeNumY)
+      )
     
     -- Checks that correct qty of singers present in transaction
     validThreshold = threshold #<= validSignaturesQty
@@ -241,7 +248,8 @@ daoMultisigPolicyValidatorT poolNft adminsPkhs threshold = plam $ \redeemer ctx 
     treasuryFeeIsTheSame = pdelay (prevTreasuryFee #== newTreasuryFee)
 
     -- Checks that pool fee is the same
-    poolFeeIsTheSame = pdelay (prevPoolFeeNum #== newPoolFeeNum)
+    poolFeeIsTheSame = 
+      pdelay (prevPoolFeeNumX #== newPoolFeeNumX #&& prevPoolFeeNumY #== newPoolFeeNumY)
 
     -- Checks that dao policy is the same
     daoPolicyIsTheSame = pdelay (prevDAOPolicy #== newDAOPolicy)

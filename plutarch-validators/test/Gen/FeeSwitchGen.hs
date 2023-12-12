@@ -121,7 +121,8 @@ genPool adminsPkhs threshold = do
       , poolX   = x
       , poolY   = y
       , poolLq  = lq
-      , poolFeeNum  = poolFee
+      , poolFeeNumX  = poolFee
+      , poolFeeNumY  = poolFee
       , treasuryFee = 2
       , treasuryX  = startXTreasuty
       , treasuryY  = startYTreasuty
@@ -157,7 +158,8 @@ changePoolTokensInfo =
           , poolX   = newX
           , poolY   = newY
           , poolLq  = newLq
-          , poolFeeNum  = newPoolFee
+          , poolFeeNumX  = newPoolFee
+          , poolFeeNumY  = newPoolFee
           , lqBound = newLqBound
           }
       pure $ ActionResult prevPool {
@@ -277,7 +279,8 @@ changePoolFee =
       newPoolFee <- integral (Range.constant poolFeeNumLowerLimit poolFeeNumUpperLimit)
       let
         newConfig = config {
-          poolFeeNum = newPoolFee
+          poolFeeNumX = newPoolFee,
+          poolFeeNumY = newPoolFee
         }
       pure $ ActionResult prevPool {
         config = newConfig
@@ -291,7 +294,8 @@ incorrectChangePoolFee =
       incorrectPoolFee <- integral (Range.constant (poolFeeNumUpperLimit + 1) poolFeeNumDen)
       let
         newConfig = config {
-          poolFeeNum = incorrectPoolFee
+          poolFeeNumX = incorrectPoolFee,
+          poolFeeNumY = incorrectPoolFee
         }
       pure $ ActionResult prevPool {
         config = newConfig
@@ -361,7 +365,7 @@ treasuryFeeSwitch :: MonadGen m => TestAction m -- Pool -> m Pool
 treasuryFeeSwitch =
   let
     action prevPool@Pool{..} = do
-      let currentPoolFee = 1000 - (poolFeeNum config) --todo: 1000 to constant
+      let currentPoolFee = 1000 - (poolFeeNumX config) --todo: 1000 to constant
       newTreasuryFee <- integral (Range.constant 1 currentPoolFee)
       let
         newPoolConfig = config {
