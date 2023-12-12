@@ -19,6 +19,14 @@ genPConfig x y nft lq fee daoPolicy lqBound treasuryAddress =
     od        = OutputDatum $ mkDatum config
   in (toData config, od)
 
+genPBConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
+genPBConfig x y nft lq fee daoPolicy lqBound treasuryAddress =
+  let
+    -- for tests treasury fee will be 50% of lp fee
+    config    = mkPoolBFeeConfig nft x y lq fee fee 5000 0 0 daoPolicy lqBound treasuryAddress
+    od        = OutputDatum $ mkDatum config
+  in (toData config, od)
+
 -- calculate correct value of final x/y in pool, based on input pool x/y and x from user swap
 calculateXtoYSwap :: Integer -> Integer -> Integer -> (Integer, Integer)
 calculateXtoYSwap prevXPool prevYPool xToSwap =
@@ -55,6 +63,14 @@ genPConfigWithUpdatedTreasury x y nft lq fee newTreasuryX newTreasuryY daoPolicy
   let
     -- for tests treasury fee will be 50% of lp fee
     config    = mkPoolConfig nft x y lq fee 5000 newTreasuryX newTreasuryY daoPolicy lqBound treasuryAddress
+    od        = OutputDatum $ mkDatum config
+  in (toData config, od)
+
+genPBConfigWithUpdatedTreasury :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
+genPBConfigWithUpdatedTreasury x y nft lq fee newTreasuryX newTreasuryY daoPolicy lqBound treasuryAddress =
+  let
+    -- for tests treasury fee will be 50% of lp fee
+    config    = mkPoolBFeeConfig nft x y lq fee fee 5000 newTreasuryX newTreasuryY daoPolicy lqBound treasuryAddress
     od        = OutputDatum $ mkDatum config
   in (toData config, od)
 

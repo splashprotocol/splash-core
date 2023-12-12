@@ -1,12 +1,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module WhalePoolsDex.PContracts.PPool (
+module WhalePoolsDex.PContracts.PPoolBFee (
     PoolConfig (..),
-    PoolAction (..),
-    PoolRedeemer (..),
-    PoolState(..),
-    findPoolOutput,
-    poolValidatorT
+    poolBFeeValidatorT
 ) where
 
 import qualified GHC.Generics as GHC
@@ -29,21 +25,12 @@ import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromDat
 import PExtra.List                  (pelemAt)
 import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
 
-import qualified WhalePoolsDex.Contracts.Pool     as P
-import           WhalePoolsDex.PContracts.PApi    (burnLqInitial, feeDen, treasuryFeeDen, maxLqCap, tletUnwrap, zero, containsSignature)
+import qualified WhalePoolsDex.Contracts.PoolBFee  as P
+import           WhalePoolsDex.PContracts.PPool    hiding (PoolConfig(..))
+import           WhalePoolsDex.PContracts.PApi     (burnLqInitial, feeDen, treasuryFeeDen, maxLqCap, tletUnwrap, zero, containsSignature)
 import           WhalePoolsDex.PConstants
 
 import Plutarch.Trace
-
-newtype Flip f a b = Flip (f b a) deriving stock (Plutarch.Prelude.Generic)
-
-instance PTryFrom PData (PAsData PScriptHash) where
-  type PTryFromExcess PData (PAsData PScriptHash) = Flip Term PScriptHash
-  ptryFrom' opq = runTermCont $ do
-    unwrapped <- tcont . plet $ ptryFrom @(PAsData PByteString) opq snd
-    tcont $ \f ->
-      pif (plengthBS # unwrapped #== 28) (f ()) (ptraceError "ptryFrom(PScriptHash): must be 28 bytes long")
-    pure (punsafeCoerce opq, pcon . PScriptHash $ unwrapped)
 
 newtype PoolConfig (s :: S)
     = PoolConfig
@@ -54,7 +41,8 @@ newtype PoolConfig (s :: S)
                  , "poolX"            ':= PAssetClass
                  , "poolY"            ':= PAssetClass
                  , "poolLq"           ':= PAssetClass
-                 , "feeNum"           ':= PInteger
+                 , "feeNumX"          ':= PInteger
+                 , "feeNumY"          ':= PInteger
                  , "treasuryFee"      ':= PInteger
                  , "treasuryX"        ':= PInteger
                  , "treasuryY"        ':= PInteger
@@ -75,86 +63,91 @@ deriving via (DerivePConstantViaData P.PoolConfig PoolConfig) instance (PConstan
 
 instance PTryFrom PData (PAsData PoolConfig)
 
-data PoolAction (s :: S) = Deposit | Redeem | Swap | Destroy | DAOAction
+correctSwapConfig :: Term s (PoolConfig :--> PoolConfig :--> PInteger :--> PInteger :--> PBool)
+correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
+  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNumX", "feeNumY", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] prevDatum
+  newConfig  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNumX", "feeNumY", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] newDatum
+  
+  let
+    prevPoolNft = getField @"poolNft"  prevConfig
+    prevPoolX   = getField @"poolX"   prevConfig
+    prevPoolY   = getField @"poolY"   prevConfig
+    prevPoolLq  = getField @"poolLq"  prevConfig
+    prevFeeNumX = getField @"feeNumX" prevConfig
+    prevFeeNumY = getField @"feeNumY" prevConfig
+    prevTreasuryFee = getField @"treasuryFee" prevConfig
+    prevTreasuryX = getField @"treasuryX" prevConfig
+    prevTreasuryY = getField @"treasuryY" prevConfig
+    prevDAOPolicy = getField @"DAOPolicy" prevConfig
+    prevLqBound   = getField @"lqBound" prevConfig
+    prevTreasuryAddress = getField @"treasuryAddress" prevConfig
 
-instance PIsData PoolAction where
-    pfromDataImpl tx =
-        let x = pasInt # pforgetData tx
-         in pmatch' x pcon
-    pdataImpl x = pmatch x (punsafeCoerce . pdata . pcon')
+    newPoolNft = getField @"poolNft"  newConfig
+    newPoolX   = getField @"poolX"   newConfig
+    newPoolY   = getField @"poolY"   newConfig
+    newPoolLq  = getField @"poolLq"  newConfig
+    newFeeNumX = getField @"feeNumX" newConfig
+    newFeeNumY = getField @"feeNumY" newConfig
+    newTreasuryFee = getField @"treasuryFee" newConfig
+    newTreasuryX = getField @"treasuryX" newConfig
+    newTreasuryY = getField @"treasuryY" newConfig
+    newDAOPolicy = getField @"DAOPolicy" newConfig
+    newLqBound   = getField @"lqBound" newConfig
+    newTreasuryAddress = getField @"treasuryAddress" newConfig
 
-instance PlutusType PoolAction where
-    type PInner PoolAction = PInteger
+    dt = 
+      pif
+        (zero #< dx)
+        (newTreasuryY - prevTreasuryY)
+        (newTreasuryX - prevTreasuryX)
 
-    pcon' Deposit = 0
-    pcon' Redeem = 1
-    pcon' Swap = 2
-    pcon' Destroy = 3
-    pcon' DAOAction = 4
+    c1 =
+      pif
+        (zero #< dx)
+        (prevFeeNumY * treasuryFeeDen)
+        (prevFeeNumX * treasuryFeeDen)
 
-    pmatch' x f =
-        pif
-            (x #== 0)
-            (f Deposit)
-            ( pif
-                (x #== 1)
-                (f Redeem)
-                ( pif
-                    (x #== 2)
-                    (f Swap)
-                    (pif (x #== 3) (f Destroy) (f DAOAction))
-                )
-            )
+    c2 =
+      pif
+        (zero #< dx)
+        (-dy * prevTreasuryFee * (feeDen - prevFeeNumY))
+        (-dx * prevTreasuryFee * (feeDen - prevFeeNumX))
 
-newtype PoolRedeemer (s :: S)
-    = PoolRedeemer
-        ( Term
-            s
-            ( PDataRecord
-                '[ "action" ':= PoolAction
-                 , "selfIx" ':= PInteger
-                 ]
-            )
-        )
-    deriving stock (GHC.Generic)
-    deriving
-        (PIsData, PDataFields, PlutusType)
+    validTreasuryChange = (c1 * dt #<= c2) #&& (c2 #< c1 * (dt + 1))
 
-instance DerivePlutusType PoolRedeemer where type DPTStrat _ = PlutusTypeData
+    anotherTokenTreasuryCorrect =
+      pif
+        (zero #< dx)
+        (prevTreasuryX #== newTreasuryX)
+        (prevTreasuryY #== newTreasuryY)
 
-newtype PoolState (s :: S)
-    = PoolState
-        ( Term
-            s
-            ( PDataRecord
-                '[ "reservesX"   ':= PInteger
-                 , "reservesY"   ':= PInteger
-                 , "liquidity"   ':= PInteger
-                 ]
-            )
-        )
-    deriving stock (GHC.Generic)
-    deriving
-        (PIsData, PDataFields, PlutusType)
+    validConfig =
+        prevPoolNft #== newPoolNft #&&
+        prevPoolX   #== newPoolX #&&
+        prevPoolY   #== newPoolY #&&
+        prevPoolLq  #== newPoolLq #&&
+        prevFeeNumX  #== newFeeNumX #&&
+        prevFeeNumY  #== newFeeNumY #&&
+        prevTreasuryFee #== newTreasuryFee #&&
+        prevDAOPolicy #== newDAOPolicy #&&
+        prevLqBound   #== newLqBound #&&
+        prevTreasuryAddress #== newTreasuryAddress
 
-instance DerivePlutusType PoolState where type DPTStrat _ = PlutusTypeData
+  pure $ validConfig #&& validTreasuryChange #&& anotherTokenTreasuryCorrect
 
-newtype PoolDiff (s :: S)
-    = PoolDiff
-        ( Term
-            s
-            ( PDataRecord
-                '[ "diffX" ':= PInteger
-                 , "diffY" ':= PInteger
-                 , "diffLq" ':= PInteger
-                 ]
-            )
-        )
-    deriving stock (GHC.Generic)
-    deriving
-        (PIsData, PDataFields, PlutusType)
+validDAOAction :: ClosedTerm (PoolConfig :--> PTxInfo :--> PBool)
+validDAOAction = plam $ \cfg txInfo -> unTermCont $ do
+  valueMint <- tletField @"mint" txInfo
+  policies  <- tletField @"DAOPolicy" cfg
+  let 
+      policyCS = pfromData $ phead # policies
+      mintedAc = assetClass # policyCS # poolStakeChangeMintTokenNameP
+  pure $ assetClassValueOf # valueMint # mintedAc #== 1
 
-instance DerivePlutusType PoolDiff where type DPTStrat _ = PlutusTypeData
+parseDatum :: ClosedTerm (PDatum :--> PoolConfig)
+parseDatum = plam $ \newDatum -> unTermCont $ do
+  PDatum poolDatum <- pmatchC newDatum
+  tletUnwrap $ ptryFromData @(PoolConfig) $ poolDatum
 
 readPoolState :: Term s (PoolConfig :--> PTxOut :--> PoolState)
 readPoolState = phoistAcyclic $
@@ -182,100 +175,8 @@ readPoolState = phoistAcyclic $
                     #$ pdcons @"liquidity" @PInteger # lq
                         # pdnil
 
-correctSwapConfig :: Term s (PoolConfig :--> PoolConfig :--> PInteger :--> PInteger :--> PBool)
-correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
-  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] prevDatum
-  newConfig  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] newDatum
-  
-  let
-    prevPoolNft = getField @"poolNft"  prevConfig
-    prevPoolX   = getField @"poolX"  prevConfig
-    prevPoolY   = getField @"poolY"  prevConfig
-    prevPoolLq  = getField @"poolLq" prevConfig
-    prevFeeNum  = getField @"feeNum" prevConfig
-    prevTreasuryFee = getField @"treasuryFee" prevConfig
-    prevTreasuryX = getField @"treasuryX" prevConfig
-    prevTreasuryY = getField @"treasuryY" prevConfig
-    prevDAOPolicy = getField @"DAOPolicy" prevConfig
-    prevLqBound   = getField @"lqBound" prevConfig
-    prevTreasuryAddress = getField @"treasuryAddress" prevConfig
-
-    newPoolNft = getField @"poolNft"  newConfig
-    newPoolX   = getField @"poolX"  newConfig
-    newPoolY   = getField @"poolY"  newConfig
-    newPoolLq  = getField @"poolLq" newConfig
-    newPeeNum  = getField @"feeNum" newConfig
-    newTreasuryFee = getField @"treasuryFee" newConfig
-    newTreasuryX = getField @"treasuryX" newConfig
-    newTreasuryY = getField @"treasuryY" newConfig
-    newDAOPolicy = getField @"DAOPolicy" newConfig
-    newLqBound   = getField @"lqBound" newConfig
-    newTreasuryAddress = getField @"treasuryAddress" newConfig
-
-    dt = 
-      pif
-        (zero #< dx)
-        (newTreasuryY - prevTreasuryY)
-        (newTreasuryX - prevTreasuryX)
-
-    c1 = prevFeeNum * treasuryFeeDen
-
-    c2 = 
-      pif
-        (zero #< dx)
-        (-dy * prevTreasuryFee * (feeDen - prevFeeNum))
-        (-dx * prevTreasuryFee * (feeDen - prevFeeNum))
-
-    validTreasuryChange = (c1 * dt #<= c2) #&& (c2 #< c1 * (dt + 1))
-
-    anotherTokenTreasuryCorrect =
-      pif
-        (zero #< dx)
-        (prevTreasuryX #== newTreasuryX)
-        (prevTreasuryY #== newTreasuryY)
-
-    validConfig =
-        prevPoolNft #== newPoolNft #&&
-        prevPoolX   #== newPoolX #&&
-        prevPoolY   #== newPoolY #&&
-        prevPoolLq  #== newPoolLq #&&
-        prevFeeNum  #== newPeeNum #&&
-        prevTreasuryFee #== newTreasuryFee #&&
-        prevDAOPolicy #== newDAOPolicy #&&
-        prevLqBound   #== newLqBound #&&
-        prevTreasuryAddress #== newTreasuryAddress
-
-  pure $ validConfig #&& validTreasuryChange #&& anotherTokenTreasuryCorrect
-
--- Guarantees preservation of pool NFT
-findPoolOutput :: Term s (PAssetClass :--> PBuiltinList PTxOut :--> PTxOut)
-findPoolOutput =
-    phoistAcyclic $
-        plam $ \nft ->
-            precList
-                ( \self x xs ->
-                    let value = pfield @"value" # x
-                        amt   = assetClassValueOf # value # nft
-                     in pif (amt #== 1) x (self # xs)
-                )
-                (const $ ptraceError "Pool output not found")
-
-validDAOAction :: ClosedTerm (PoolConfig :--> PTxInfo :--> PBool)
-validDAOAction = plam $ \cfg txInfo -> unTermCont $ do
-  valueMint <- tletField @"mint" txInfo
-  policies  <- tletField @"DAOPolicy" cfg
-  let 
-      policyCS = pfromData $ phead # policies
-      mintedAc = assetClass # policyCS # poolStakeChangeMintTokenNameP
-  pure $ assetClassValueOf # valueMint # mintedAc #== 1
-
-parseDatum :: ClosedTerm (PDatum :--> PoolConfig)
-parseDatum = plam $ \newDatum -> unTermCont $ do
-  PDatum poolDatum <- pmatchC newDatum
-  tletUnwrap $ ptryFromData @(PoolConfig) $ poolDatum
-
-poolValidatorT :: ClosedTerm (PoolConfig :--> PoolRedeemer :--> PScriptContext :--> PBool)
-poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
+poolBFeeValidatorT :: ClosedTerm (PoolConfig :--> PoolRedeemer :--> PScriptContext :--> PBool)
+poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
     redeemer <- pletFieldsC @'["action", "selfIx"] redeemer'
     let
         selfIx = getField @"selfIx" redeemer
@@ -344,7 +245,8 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                     scriptPreserved = succAddr #== selfAddr -- validator, staking cred preserved
                     valid = pmatch action $ \case
                         Swap -> unTermCont $ do
-                            feeNum  <- tletField @"feeNum" conf
+                            feeNumX <- tletField @"feeNumX" conf
+                            feeNumY <- tletField @"feeNumY" conf
                             feeDen' <- tlet feeDen
                             lqBound <- tletField @"lqBound" conf
                             let
@@ -353,8 +255,8 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
 
                                 swapAllowed = lqBound #<= (rx0 * 2)
 
-                                dxf = dx * feeNum
-                                dyf = dy * feeNum
+                                dxf = dx * feeNumX
+                                dyf = dy * feeNumY
 
                                 validSwap =
                                     pif
@@ -370,6 +272,6 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                             let
                               confPreserved      = selfD #== succD -- whole config preserved
                               validDepositRedeem = dlq * rx0 #<= dx * lq0 #&& dlq * ry0 #<= dy * lq0
-                            pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly                
+                            pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly
                 pure valid
             )

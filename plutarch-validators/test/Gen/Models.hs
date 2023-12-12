@@ -16,6 +16,7 @@ module Gen.Models
   , mkAdaValue
   , mkValues
   , mkPoolConfig
+  , mkPoolBFeeConfig
   , mkDepositConfig
   , mkPoolRedeemer
   , mkDepositRedeemer
@@ -65,6 +66,7 @@ import Plutarch.Api.V2 ( validatorHash, datumHash)
 
 import qualified WhalePoolsDex.PValidators             as PScripts
 import qualified WhalePoolsDex.Contracts.Pool          as P
+import qualified WhalePoolsDex.Contracts.PoolBFee      as PBFee
 import qualified WhalePoolsDex.Contracts.Proxy.Deposit as D
 import qualified WhalePoolsDex.Contracts.Proxy.Order   as O
 import PlutusTx.Builtins as Builtins
@@ -132,9 +134,14 @@ mkValues :: [Value] -> Value -> Value
 mkValues (x:xs) acc = mkValues xs (x <> acc)
 mkValues [] acc = acc
 
+-- fee will be used as feeX and feeY
 mkPoolConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> P.PoolConfig
 mkPoolConfig nft x y lq fee treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress = 
   P.PoolConfig nft x y lq fee treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress
+
+mkPoolBFeeConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> PBFee.PoolConfig
+mkPoolBFeeConfig nft x y lq feeX feeY treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress = 
+  PBFee.PoolConfig nft x y lq feeX feeY treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress
 
 mkDepositConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> PubKeyHash -> Integer -> D.DepositConfig
 mkDepositConfig nft x y lq fee pkh cFee = D.DepositConfig nft x y lq fee pkh Nothing cFee
