@@ -16,16 +16,17 @@ import PlutusLedgerApi.V1.Crypto (PubKeyHash)
 import PlutusLedgerApi.V1.Scripts (ValidatorHash)
 
 data PoolConfig = PoolConfig
-    { poolNft     :: AssetClass
-    , poolX       :: AssetClass
-    , poolY       :: AssetClass
-    , poolLq      :: AssetClass
-    , poolFeeNum  :: Integer
-    , treasuryFee :: Integer
-    , treasuryX   :: Integer
-    , treasuryY   :: Integer
-    , daoPolicy   :: [CurrencySymbol]
-    , lqBound     :: Integer
+    { poolNft      :: AssetClass
+    , poolX        :: AssetClass
+    , poolY        :: AssetClass
+    , poolLq       :: AssetClass
+    , poolFeeNumX  :: Integer
+    , poolFeeNumY  :: Integer
+    , treasuryFee  :: Integer
+    , treasuryX    :: Integer
+    , treasuryY    :: Integer
+    , daoPolicy    :: [CurrencySymbol]
+    , lqBound      :: Integer
     , treasuryAddress :: ValidatorHash
     }
     deriving stock (Show)

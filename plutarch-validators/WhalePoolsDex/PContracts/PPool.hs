@@ -54,7 +54,8 @@ newtype PoolConfig (s :: S)
                  , "poolX"            ':= PAssetClass
                  , "poolY"            ':= PAssetClass
                  , "poolLq"           ':= PAssetClass
-                 , "feeNum"           ':= PInteger
+                 , "feeNumX"          ':= PInteger
+                 , "feeNumY"          ':= PInteger
                  , "treasuryFee"      ':= PInteger
                  , "treasuryX"        ':= PInteger
                  , "treasuryY"        ':= PInteger
@@ -184,15 +185,16 @@ readPoolState = phoistAcyclic $
 
 correctSwapConfig :: Term s (PoolConfig :--> PoolConfig :--> PInteger :--> PInteger :--> PBool)
 correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
-  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] prevDatum
-  newConfig  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] newDatum
+  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNumX", "feeNumY", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] prevDatum
+  newConfig  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNumX", "feeNumY", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] newDatum
   
   let
     prevPoolNft = getField @"poolNft"  prevConfig
-    prevPoolX   = getField @"poolX"  prevConfig
-    prevPoolY   = getField @"poolY"  prevConfig
-    prevPoolLq  = getField @"poolLq" prevConfig
-    prevFeeNum  = getField @"feeNum" prevConfig
+    prevPoolX   = getField @"poolX"   prevConfig
+    prevPoolY   = getField @"poolY"   prevConfig
+    prevPoolLq  = getField @"poolLq"  prevConfig
+    prevFeeNumX = getField @"feeNumX" prevConfig
+    prevFeeNumY = getField @"feeNumY" prevConfig
     prevTreasuryFee = getField @"treasuryFee" prevConfig
     prevTreasuryX = getField @"treasuryX" prevConfig
     prevTreasuryY = getField @"treasuryY" prevConfig
@@ -201,10 +203,11 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     prevTreasuryAddress = getField @"treasuryAddress" prevConfig
 
     newPoolNft = getField @"poolNft"  newConfig
-    newPoolX   = getField @"poolX"  newConfig
-    newPoolY   = getField @"poolY"  newConfig
-    newPoolLq  = getField @"poolLq" newConfig
-    newPeeNum  = getField @"feeNum" newConfig
+    newPoolX   = getField @"poolX"   newConfig
+    newPoolY   = getField @"poolY"   newConfig
+    newPoolLq  = getField @"poolLq"  newConfig
+    newPeeNumX = getField @"feeNumX" newConfig
+    newPeeNumY = getField @"feeNumY" newConfig
     newTreasuryFee = getField @"treasuryFee" newConfig
     newTreasuryX = getField @"treasuryX" newConfig
     newTreasuryY = getField @"treasuryY" newConfig
@@ -218,13 +221,17 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
         (newTreasuryY - prevTreasuryY)
         (newTreasuryX - prevTreasuryX)
 
-    c1 = prevFeeNum * treasuryFeeDen
-
-    c2 = 
+    c1 =
       pif
         (zero #< dx)
-        (-dy * prevTreasuryFee * (feeDen - prevFeeNum))
-        (-dx * prevTreasuryFee * (feeDen - prevFeeNum))
+        (prevFeeNumY * treasuryFeeDen)
+        (prevFeeNumX * treasuryFeeDen)
+
+    c2 =
+      pif
+        (zero #< dx)
+        (-dy * prevTreasuryFee * (feeDen - prevFeeNumY))
+        (-dx * prevTreasuryFee * (feeDen - prevFeeNumX))
 
     validTreasuryChange = (c1 * dt #<= c2) #&& (c2 #< c1 * (dt + 1))
 
@@ -239,7 +246,8 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
         prevPoolX   #== newPoolX #&&
         prevPoolY   #== newPoolY #&&
         prevPoolLq  #== newPoolLq #&&
-        prevFeeNum  #== newPeeNum #&&
+        prevFeeNumX  #== newPeeNumX #&&
+        prevFeeNumY  #== newPeeNumY #&&
         prevTreasuryFee #== newTreasuryFee #&&
         prevDAOPolicy #== newDAOPolicy #&&
         prevLqBound   #== newLqBound #&&
@@ -344,7 +352,8 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                     scriptPreserved = succAddr #== selfAddr -- validator, staking cred preserved
                     valid = pmatch action $ \case
                         Swap -> unTermCont $ do
-                            feeNum  <- tletField @"feeNum" conf
+                            feeNumX <- tletField @"feeNumX" conf
+                            feeNumY <- tletField @"feeNumY" conf
                             feeDen' <- tlet feeDen
                             lqBound <- tletField @"lqBound" conf
                             let
@@ -353,8 +362,8 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
 
                                 swapAllowed = lqBound #<= (rx0 * 2)
 
-                                dxf = dx * feeNum
-                                dyf = dy * feeNum
+                                dxf = dx * feeNumX
+                                dyf = dy * feeNumY
 
                                 validSwap =
                                     pif
@@ -370,6 +379,6 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                             let
                               confPreserved      = selfD #== succD -- whole config preserved
                               validDepositRedeem = dlq * rx0 #<= dx * lq0 #&& dlq * ry0 #<= dy * lq0
-                            pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly                
+                            pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly
                 pure valid
             )
