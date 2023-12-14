@@ -197,8 +197,8 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     prevTreasuryX = getField @"treasuryX" prevConfig
     prevTreasuryY = getField @"treasuryY" prevConfig
     prevDAOPolicy = getField @"DAOPolicy" prevConfig
-    prevlqBound   = getField @"lqBound" prevConfig
-    prevtreasuryAddress = getField @"treasuryAddress" prevConfig
+    prevLqBound   = getField @"lqBound" prevConfig
+    prevTreasuryAddress = getField @"treasuryAddress" prevConfig
 
     newPoolNft = getField @"poolNft"  newConfig
     newPoolX   = getField @"poolX"  newConfig
@@ -242,8 +242,8 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
         prevFeeNum  #== newPeeNum #&&
         prevTreasuryFee #== newTreasuryFee #&&
         prevDAOPolicy #== newDAOPolicy #&&
-        prevlqBound   #== newLqBound #&&
-        prevtreasuryAddress #== newTreasuryAddress
+        prevLqBound   #== newLqBound #&&
+        prevTreasuryAddress #== newTreasuryAddress
 
   pure $ validConfig #&& validTreasuryChange #&& anotherTokenTreasuryCorrect
 
