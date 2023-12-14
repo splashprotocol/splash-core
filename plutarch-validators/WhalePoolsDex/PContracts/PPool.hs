@@ -197,8 +197,8 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     prevTreasuryX = getField @"treasuryX" prevConfig
     prevTreasuryY = getField @"treasuryY" prevConfig
     prevDAOPolicy = getField @"DAOPolicy" prevConfig
-    prevlqBound   = getField @"lqBound" prevConfig
-    prevtreasuryAddress = getField @"treasuryAddress" prevConfig
+    prevLqBound   = getField @"lqBound" prevConfig
+    prevTreasuryAddress = getField @"treasuryAddress" prevConfig
 
     newPoolNft = getField @"poolNft"  newConfig
     newPoolX   = getField @"poolX"  newConfig
@@ -242,8 +242,8 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
         prevFeeNum  #== newPeeNum #&&
         prevTreasuryFee #== newTreasuryFee #&&
         prevDAOPolicy #== newDAOPolicy #&&
-        prevlqBound   #== newLqBound #&&
-        prevtreasuryAddress #== newTreasuryAddress
+        prevLqBound   #== newLqBound #&&
+        prevTreasuryAddress #== newTreasuryAddress
 
   pure $ validConfig #&& validTreasuryChange #&& anotherTokenTreasuryCorrect
 
@@ -326,16 +326,8 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                 selfDatum <- tletUnwrap $ getField @"datum" self
                 succDatum <- tletUnwrap $ getField @"datum" successor
 
-                POutputDatum selfD' <- pmatchC selfDatum
                 POutputDatum succD' <- pmatchC succDatum
-
-                lqBound <- tletField @"lqBound" conf
-
-                selfD <- tletField @"outputDatum" selfD'
-                succD <- tletField @"outputDatum" succD'
-                let 
-                    confPreserved = selfD #== succD -- config preserved
-                    swapAllowed   = lqBound #<= (rx0 * 2)
+                succD               <- tletField @"outputDatum" succD'
 
                 selfValue     <- tletUnwrap $ getField @"value" self
                 succesorValue <- tletUnwrap $ getField @"value" successor
@@ -354,12 +346,16 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                         Swap -> unTermCont $ do
                             feeNum  <- tletField @"feeNum" conf
                             feeDen' <- tlet feeDen
+                            lqBound <- tletField @"lqBound" conf
                             let
-                                newConfig = parseDatum # succD
+                                newConfig     = parseDatum # succD
                                 validTreasury = correctSwapConfig # conf # newConfig # dx # dy
+
+                                swapAllowed = lqBound #<= (rx0 * 2)
 
                                 dxf = dx * feeNum
                                 dyf = dy * feeNum
+
                                 validSwap =
                                     pif
                                         (zero #< dx)
@@ -368,9 +364,12 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                             ptraceC $ pshow validSwap
                             pure $ noMoreTokens #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
                         DAOAction -> validDAOAction # conf # txinfo'
-                        _ -> 
+                        _ -> unTermCont $ do
+                            POutputDatum selfD' <- pmatchC selfDatum
+                            selfD               <- tletField @"outputDatum" selfD'
                             let
+                              confPreserved      = selfD #== succD -- whole config preserved
                               validDepositRedeem = dlq * rx0 #<= dx * lq0 #&& dlq * ry0 #<= dy * lq0
-                            in noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly                
+                            pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly                
                 pure valid
             )
