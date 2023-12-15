@@ -40,9 +40,6 @@ genCS = CurrencySymbol $ BuiltinByteString $ mkByteString $ T.pack "805fe1efcdea
 genTNRandom :: MonadGen f => f TokenName
 genTNRandom = random16bs <&> TokenName
 
-genCSRandom :: MonadGen f => f CurrencySymbol
-genCSRandom = random28bs <&> CurrencySymbol
-
 mkByteString :: T.Text -> BS.ByteString
 mkByteString input = unsafeFromEither (Hex.decode . E.encodeUtf8 $ input)
 

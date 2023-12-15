@@ -31,9 +31,11 @@ checkPkhLockStaking = testGroup "CheckStakingWithPkhLock"
   ]
 
 correctDelegatorChange :: Property
-correctDelegatorChange = property $ do
+correctDelegatorChange = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   orderTxRef      <- forAll genTxOutRef
   let
     sc = StakingHash (PubKeyCredential pkh)
@@ -50,7 +52,7 @@ correctDelegatorChange = property $ do
   result === Right ()
 
 correctThreshold :: Property
-correctThreshold = property $ do
+correctThreshold = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh1             <- forAll genPkh
   pkh2             <- forAll genPkh
@@ -72,9 +74,11 @@ correctThreshold = property $ do
   result === Right ()
 
 incorrectDelegatorChange :: Property
-incorrectDelegatorChange = property $ do
+incorrectDelegatorChange = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh             <- forAll genPkh
+  treasuryAddress <- forAll genValidatorHash      
+  treasuryAddress <- forAll genValidatorHash      
   incorrectPkh    <- forAll genPkh
   stakingPkh      <- forAll genPkh
   orderTxRef      <- forAll genTxOutRef
@@ -93,7 +97,7 @@ incorrectDelegatorChange = property $ do
   result === Left ()
 
 incorrectThreshold :: Property
-incorrectThreshold = property $ do
+incorrectThreshold = withTests 1 $ property $ do
   let (x, y, nft, lq) = genAssetClasses
   pkh1             <- forAll genPkh
   pkh2             <- forAll genPkh

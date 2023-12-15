@@ -77,7 +77,7 @@ newtype PAssetClass (s :: S)
             )
         )
     deriving stock (GHC.Generic)
-    deriving anyclass (PIsData, PDataFields, PlutusType, PTryFrom PData)
+    deriving anyclass (PIsData, PDataFields, PlutusType, PTryFrom PData, PShow)
 
 instance DerivePlutusType PAssetClass where type DPTStrat _ = PlutusTypeData
 

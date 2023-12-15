@@ -20,8 +20,9 @@ import PExtra.Ada     (pIsAda)
 import PExtra.Monadic (tlet, tmatch)
 import PExtra.PTriple (PTuple3, ptuple3)
 
-import WhalePoolsDex.PContracts.PApi   (containsSignature, getRewardValue', maxLqCap, zeroAsData)
-import WhalePoolsDex.PContracts.POrder (OrderAction (Apply, Refund), OrderRedeemer)
+import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap, zeroAsData)
+import WhalePoolsDex.PContracts.POrder     (OrderAction (Apply, Refund), OrderRedeemer)
+import WhalePoolsDex.PContracts.PFeeSwitch (extractPoolConfig)
 
 import qualified WhalePoolsDex.Contracts.Proxy.Redeem as R
 
@@ -80,12 +81,19 @@ redeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
     poolIn'   <- tlet $ pelemAt # poolInIx # inputs
     poolIn    <- pletFieldsC @'["outRef", "resolved"] poolIn'
     let 
-        poolValue    = pfield @"value" # (getField @"resolved" poolIn)
+        pool         = getField @"resolved" poolIn
+        poolValue    = pfield @"value" # pool
         poolIdentity = -- operation is performed with the pool selected by the user 
             let 
                 requiredNft = pfromData $ getField @"poolNft" conf
                 nftAmount   = assetClassValueOf # poolValue # requiredNft
              in nftAmount #== 1
+
+    poolInputDatum <- tlet $ extractPoolConfig # pool
+    poolConf       <- pletFieldsC @'["treasuryX", "treasuryY"] poolInputDatum
+    let
+        treasuryX = getField @"treasuryX" poolConf
+        treasuryY = getField @"treasuryY" poolConf
 
     selfIn' <- tlet $ pelemAt # orderInIx # inputs
     selfIn  <- pletFieldsC @'["outRef", "resolved"] selfIn'
@@ -117,8 +125,8 @@ redeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
     let 
         outAda = plovelaceValueOf # rewardValue
         
-        minReturnX = calcMinReturn # liquidity # inLq # poolValue # x
-        minReturnY = calcMinReturn # liquidity # inLq # poolValue # y
+        minReturnX = calcMinReturn # liquidity # inLq # poolValue # x # treasuryX
+        minReturnY = calcMinReturn # liquidity # inLq # poolValue # y # treasuryY
 
         outX  = pfromData $ pfield @"_0" # outs
         outY  = pfromData $ pfield @"_1" # outs
@@ -135,11 +143,11 @@ redeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                 let sigs = pfromData $ getField @"signatories" txInfo
                  in containsSignature # sigs # rewardPkh -- user signed the refund
 
-calcMinReturn :: Term s (PInteger :--> PInteger :--> PValue _ _:--> PAssetClass :--> PInteger)
+calcMinReturn :: Term s (PInteger :--> PInteger :--> PValue _ _:--> PAssetClass :--> PInteger :--> PInteger)
 calcMinReturn =
     phoistAcyclic $
-        plam $ \liquidity inLq poolValue ac ->
-            let reserves = assetClassValueOf # poolValue # ac
+        plam $ \liquidity inLq poolValue ac treasury->
+            let reserves = (assetClassValueOf # poolValue # ac) - treasury
              in pdiv # (inLq * reserves) # liquidity
 
 calcOutput :: Term s (PValue _ _:--> PAssetClass :--> PAssetClass :--> PInteger :--> PTuple3 PInteger PInteger PInteger)

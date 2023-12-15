@@ -22,7 +22,8 @@ import PExtra.Ada (pIsAda)
 import PExtra.Monadic (tlet, tletField, tmatch)
 
 import WhalePoolsDex.PContracts.PApi
-import WhalePoolsDex.PContracts.POrder (OrderAction (..), OrderRedeemer (..))
+import WhalePoolsDex.PContracts.POrder     (OrderAction (..), OrderRedeemer (..))
+import WhalePoolsDex.PContracts.PFeeSwitch (extractPoolConfig)
 
 import qualified WhalePoolsDex.Contracts.Proxy.Swap as S
 
@@ -88,12 +89,19 @@ swapValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
 
     poolIn'   <- tlet $ pelemAt # poolInIx # inputs
     poolIn    <- pletFieldsC @'["outRef", "resolved"] poolIn'
-    poolValue <- 
-        let pool = getField @"resolved" poolIn
-         in tletField @"value" pool
+    let pool  = getField @"resolved" poolIn
+
+    poolValue <- tletField @"value" pool
     let poolIdentity = -- operation is performed with the pool selected by the user 
             let nftAmount = assetClassValueOf # poolValue # requiredNft
              in nftAmount #== 1
+
+    poolInputDatum <- tlet $ extractPoolConfig # pool
+    poolConf       <- pletFieldsC @'["poolX", "treasuryX", "treasuryY"] poolInputDatum
+    let
+        treasuryX = getField @"treasuryX" poolConf
+        treasuryY = getField @"treasuryY" poolConf
+        poolX     = getField @"poolX" poolConf
 
     selfIn'   <- tlet $ pelemAt # orderInIx # inputs
     selfIn    <- pletFieldsC @'["outRef", "resolved"] selfIn'
@@ -126,7 +134,7 @@ swapValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
             let inputsLength = plength # inputs
              in inputsLength #== 2
         minSatisfaction = minOutput #<= quoteAmount -- configured minimal output is satisfied
-        fairPrice = validPrice # quoteAmount # poolValue # base # quote # baseAmount # feeNum
+        fairPrice = validPrice # quoteAmount # poolValue # treasuryX # treasuryY # poolX # base # quote # baseAmount # feeNum
 
     pure $
         pmatch action $ \case
@@ -170,6 +178,9 @@ validPrice ::
         s
         ( PInteger
             :--> PValue _ _
+            :--> PInteger
+            :--> PInteger
+            :--> PAssetClass
             :--> PAssetClass
             :--> PAssetClass
             :--> PInteger
@@ -177,9 +188,11 @@ validPrice ::
             :--> PBool
         )
 validPrice =
-    plam $ \quoteAmount poolValue base quote baseAmount feeNum ->
+    plam $ \quoteAmount poolValue treasuryX treasuryY poolX base quote baseAmount feeNum ->
         let relaxedOut    = quoteAmount + 1
-            reservesBase  = assetClassValueOf # poolValue # base
-            reservesQuote = assetClassValueOf # poolValue # quote
+            baseTreasury  = pif (base #== poolX) treasuryX treasuryY
+            quoteTreasury = pif (quote #== poolX) treasuryX treasuryY
+            reservesBase  = (assetClassValueOf # poolValue # base) - baseTreasury
+            reservesQuote = (assetClassValueOf # poolValue # quote) - quoteTreasury
             correctOut    = pdiv # (reservesQuote * baseAmount * feeNum) # (reservesBase * feeDen + baseAmount * feeNum)
          in correctOut #<= relaxedOut

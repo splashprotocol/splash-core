@@ -6,7 +6,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.Hedgehog as HH
 
-import qualified WhalePoolsDex.PContracts.PAssets as A
+import qualified ErgoDex.PContracts.PAssets as A
 import qualified PlutusLedgerApi.V1         as Plutus
 import PlutusLedgerApi.V2
 import PlutusLedgerApi.V1.Scripts (getScriptHash)
@@ -18,10 +18,10 @@ import PlutusTx.Builtins.Internal
 
 import qualified Data.Text as T
 
-import qualified WhalePoolsDex.Contracts.Pool   as Pool
--- import WhalePoolsDex.PContracts.PPoolStakeChangeMintPolicy
-import WhalePoolsDex.PMintingValidators
-import WhalePoolsDex.PConstants
+import qualified ErgoDex.Contracts.Pool   as Pool
+-- import ErgoDex.PContracts.PPoolStakeChangeMintPolicy
+import ErgoDex.PMintingValidators
+import ErgoDex.PConstants
 
 import Eval
 
