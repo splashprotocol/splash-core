@@ -169,8 +169,8 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
 
   pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame
 
-daoMultisigPolicyValidatorT :: Term s PAssetClass -> Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s ((PTuple DAOAction PInteger) :--> PScriptContext :--> PBool)
-daoMultisigPolicyValidatorT poolNft daoPkhs threshold = plam $ \redeemer ctx -> unTermCont $ do
+daoMultisigPolicyValidatorT :: Term s PAssetClass -> Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple DAOAction PInteger) :--> PScriptContext :--> PBool)
+daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx -> unTermCont $ do
   let  
     action     = pfromData $ pfield @"_0" # redeemer
     poolInIdx  = pfromData $ pfield @"_1" # redeemer
@@ -367,6 +367,7 @@ daoMultisigPolicyValidatorT poolNft daoPkhs threshold = plam $ \redeemer ctx -> 
       --        * pool address script credential
       --    2) FeeNum can be modified
       ChangePoolFee ->
+        lpFeeIsEditable #&&
         pforce treasuryFeeIsTheSame #&&
         treasuryIsTheSame prevConf newConf #&&
         pforce treasuryAddressIsTheSame #&&
