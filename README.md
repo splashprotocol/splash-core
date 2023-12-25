@@ -1,55 +1,43 @@
-# whalepools
+# Whalepools contracts implementation for Cardano
 
-Write validators in the `validators` folder, and supporting functions in the `lib` folder using `.ak` as a file extension.
+This repository contains implementations of the following scripts:
+* CFMM DEX scripts
+   - Pool
+   - Swap proxy
+   - Deposit proxy
+   - Redeem proxy
 
-For example, as `validators/always_true.ak`
+## Setting up
 
-```gleam
-validator {
-  fn spend(_datum: Data, _redeemer: Data, _context: Data) -> Bool {
-    True
-  }
-}
+### Cabal+Nix build
+
+Alternatively, use the Cabal+Nix build if you want to develop with incremental builds, but also have it automatically download all dependencies.
+
+Set up your machine to build things with `Nix`, following the [Plutus README](https://github.com/input-output-hk/plutus/blob/master/README.adoc) (make sure to set up the binary cache!).
+
+To enter a development environment, simply open a terminal on the project's root and run: 
+
+- `nix develop .#onchain` for the onchain part of the project (plutarch)
+- `nix develop .#tooling` to be dropped into a generic tooling flake that provides formatters/ linters/ ...
+
+
+It is strongly recommend to use [direnv](https://github.com/direnv/direnv) which allows you to use your preferred shell. Once installed, just run:
+
+```bash
+
+$ echo "use flake .#onchain" > .envrc 
+# ^ in the onchain directory of the project (and in the same way for the offchain project)
+$ direnv allow
 ```
 
-## Building
+and you'll have a working development environment for now and the future whenever you enter the corresponding directory.
 
-```sh
-aiken build
-```
+The build should not take too long if you correctly set up the binary cache. If it starts building GHC, stop and setup the binary cache.
 
-## Testing
+Afterwards, the command `cabal build` from the terminal should work (if `cabal` couldn't resolve the dependencies, run `cabal update` and then `cabal build`).
 
-You can write tests in any module using the `test` keyword. For example:
+Also included in the environment is a working [Haskell Language Server](https://github.com/haskell/haskell-language-server) you can integrate with your editor.
+See [here](https://github.com/haskell/haskell-language-server#configuring-your-editor) for instructions.
 
-```gleam
-test foo() {
-  1 + 1 == 2
-}
-```
-
-To run all tests, simply do:
-
-```sh
-aiken check
-```
-
-To run only tests matching the string `foo`, do:
-
-```sh
-aiken check -m foo
-```
-
-## Documentation
-
-If you're writing a library, you might want to generate an HTML documentation for it.
-
-Use:
-
-```sh
-aiken docs
-```
-
-## Resources
-
-Find more on the [Aiken's user manual](https://aiken-lang.org).
+To build the project with nix, run: 
+- `nix build .#"plutarch-validators:lib:plutarch-validators"` for the onchain part
