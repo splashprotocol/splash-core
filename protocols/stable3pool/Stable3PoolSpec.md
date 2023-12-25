@@ -154,26 +154,27 @@ And, in the same manner, we adjust $D_{n*}$ solution to ensure that it is an ext
 
 Data related to the pool (`Immutable` stands for pool configuration parameters) is as follows:
 
-| Field                       | Type            | Description                                                                                                                         | State       |
-| --------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `treasury_nft`              | `Asset`         | Identifier of the treasury                                                                                                          | `Immutable` |
-| `base_token`                | `Asset`         | Identifier of the base asset                                                                                                        | `Immutable` |
-| `quote_token0`              | `Asset`         | Identifier of the first quote asset                                                                                                 | `Immutable` |
-| `quote_token1`              | `Asset`         | Identifier of the second quote asset                                                                                                | `Immutable` |
-| `lp_token`                  | `Asset`         | Identifier of the liquidity token asset                                                                                             | `Immutable` |
-| `base_token_dec`            | `Integer`       | Decimals of the base asset                                                                                                          | `Immutable` |
-| `quote_token0_dec`          | `Integer`       | Decimals of the first quote asset                                                                                                   | `Immutable` |
-| `quote_token1_dec`          | `Integer`       | Decimals of the second quote asset                                                                                                  | `Immutable` |
-| `denom`                     | `Integer`       | Common denominator of calculations                                                                                                  | `Immutable` |
-| `precision`                 | `Integer`       | Precision multiplier for calculations <br/> (`precision >= MAX(base_token_decimals, quote_token0_decimals, quote_token1_decimals)`) | `Immutable` |
-| `ampl_coeff_bounds`         | `List<Integer>` | Bounds of the `ampl_coeff`: `[lower_bound, upper_bound]`                                                                            | `Immutable` |
-| `provider_fee_num_bounds`   | `List<Integer>` | Bounds of the  `provider_fee_num`        : `[lower_bound, upper_bound]`                                                             | `Immutable` |
-| `protocol_share_num_bounds` | `List<Integer>` | Bounds of the `protocol_share_num`            : `[lower_bound, upper_bound]`                                                        | `Immutable` |
-| `ampl_coeff`                | `Integer`       | Invariant's amplification coefficient                                                                                               | `Mutable`   |
-| `provider_fee_num`          | `Integer`       | Numerator of the swap fee                                                                                                           | `Mutable`   |
-| `protocol_share_num`        | `Integer`       | Numerator of the protocol fee share                                                                                                 | `Mutable`   |
-| `inv_no_fees`               | `Integer`       | Value of the pool's invariant before applying fees to the last operation with pool's liquidity                                      | `Mutable`   |
-| `inv`                       | `Integer`       | Actual value of the pool's invariant                                                                                                | `Mutable`   |
+
+| Field                  | Type             | Description                                                                                                                                                                            | State       |
+|------------------------|------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|
+| `pool_nft`             | `Asset`          | Identifier of the pool                                                                                                                                                                 | `Immutable` |
+| `base_token`           | `Asset`          | Identifier of the base asset                                                                                                                                                           | `Immutable` |
+| `quote0_token`         | `Asset`          | Identifier of the first quote asset                                                                                                                                                    | `Immutable` |
+| `quote1_token`         | `Asset`          | Identifier of the second quote asset                                                                                                                                                   | `Immutable` |
+| `lp_token`             | `Asset`          | Identifier of the liquidity token asset                                                                                                                                                | `Immutable` |
+| `base_dec`             | `Integer`        | Decimals of the base asset                                                                                                                                                             | `Immutable` |
+| `quote0_dec`           | `Integer`        | Decimals of the first quote asset                                                                                                                                                      | `Immutable` |
+| `quote1_dec`           | `Integer`        | Decimals of the second quote asset                                                                                                                                                                              | `Immutable` |
+| `ampl_coeff`           | `Integer`        | Invariant's amplification coefficient                                                                                                                                                  | `Mutable`   |
+| `swap_fee_num`         | `Integer`        | Numerator of the swap fee                                                                                                                                                              | `Mutable`   |
+| `protocol_share_num`   | `Integer`        | Numerator of the protocol fee share                                                                                                                                                    | `Mutable`   |
+| `dao_policy`           | `List<PolicyId>` | Information about the DAO policy, which audits the correctness of the following actions: "Withdraw treasury", "Change swap fee", "Change protocol share" and "Change treasury address" | `Mutable`   |
+| `treasury_address`     | `ScriptKeyHash`  | Treasury address                                                                                                                                                                       | `Mutable`   |
+| `base_protocol_fees`   | `Integer`        | Collected protocol fees in base asset units                                                                                                                                            | `Mutable`   |
+| `quote0_protocol_fees` | `Integer`        | Collected protocol fees in first quote asset units                                                                                                                                     | `Mutable`   |
+| `quote1_protocol_fees` | `Integer`        | Collected protocol fees in second quote asset units                                                                                                                                    | `Mutable`   |
+| `inv_native`          | `Integer`        | Value of the pool's invariant before applying fees to the last operation with pool's liquidity                                                                                         | `Mutable`   |
+| `inv`                  | `Integer`        | Actual value of the pool's invariant                                                                                                                                                   | `Mutable`   |
 
 #### Tokens
 
@@ -188,26 +189,20 @@ Data related to the pool (`Immutable` stands for pool configuration parameters) 
 #### Validator
 
 Pool validator must validate that:
-1. Immutable pool configuration parameters are preserved;
-2. Validator script is preserved;
-3. Treasury is valid (to collect protocol fees);
-4. Action is valid:
-   1. Mmutable parameters are changed by voting:
-      1. Valid voting results;
-      2. New parameters are inside their bounds;
-      3. Reserves are preserved.
+1. Pool NFT is preserved.
+2. Immutable pool configuration parameters are preserved;
+3. Validator script is preserved;
+4. One of the mutable parameter is not preserved || protocol fees withdraw, i.e. checking if action must be validated by the DAO contract;
+5. Action is valid:
+   1. Imutable parameters are changed by voting:
+      1. Transition is allowed by DAO contract;
    2. Deposit/Redeem:
-      1. Fair fees was paid according to the assets imbalance:
-         1. Procolols fees are >= than delta of the corresponding asset.
-         2. Theoretical StableSwap invariant value is at the minimum error point (relative to LP);
-      2. Actual StableSwap invariant value is at the minimum error point (relative to LP);
-      3. Reserves changes are valid.
+      1. Valid tokens amounts and invariant values. 
+      2. Valid protocol fees.
    3. Swap:
-      1. Fair fees was paid:
-         1. Protocol fees are >= than delta of the corresponding asset.
-         2. Theoretical StableSwap invariant value is at the minimum error point (relative to LP);
-      2. Actual StableSwap invariant value is at the minimum error point (relative to LP);
-      3. Reserves changes are valid.
+      1. Valid tokens amounts and invariant values. 
+      2. Current invariant value is legal ( comparison with the previous native invariant)
+      3. Valid protocol fees.
 
 ### Deposit Order
 ![](images/stable3_deposit.svg)
@@ -222,15 +217,16 @@ Pool validator must validate that:
 
 | Name | Description | Amount    |
 | ---- | ----------- | --------- |
-| `X`  | Base asset  | Arbitrary |
-| `Y`  | Quote asset | Arbitrary |
+| `X1`  | Base asset  | Arbitrary |
+| `Y1`  | Quote asset | Arbitrary |
+| `Y2`  | Quote asset | Arbitrary |
 | `Z`  | Quote asset | Arbitrary |
 
 #### Validator
 
 Deposit order validator must validate that:
 1. Order interacts with the desired pool;
-2. Expected liquidity token amount is received by redeemer;
+2. Expected `LP` token amount is received by redeemer;
 3. Redeemer is valid.
 
 ### Redeem Order
@@ -267,7 +263,7 @@ Redeem order validator must validate that:
 | --------------------------- | --------------------- | ------------------------------------------ |
 | `pool_nft`                  | `Asset`               | Identifier of the target pool              |
 | `redeemer`                  | `VerificationKeyHash` | Redeemer public key                        |
-| `expected_quote_token`      | `Asset`               | Expected quote token identofoer            |
+| `expected_quote_token`      | `Asset`               | Expected quote token identifier            |
 | `min_expected_quote_amount` | `Int`                 | Minimum expected amount of the quote token |
 
 ##### Tokens

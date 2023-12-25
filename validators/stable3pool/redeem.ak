@@ -42,14 +42,14 @@ validator {
         let valid_received_y_amount =
           quantity_of(
             user_output.value,
-            pool0_datum.quote_token0.policy,
-            pool0_datum.quote_token0.name,
+            pool0_datum.quote0_token.policy,
+            pool0_datum.quote0_token.name,
           ) >= self_datum.min_expected_quote0_amount
         let valid_received_z_amount =
           quantity_of(
             user_output.value,
-            pool0_datum.quote_token1.policy,
-            pool0_datum.quote_token1.name,
+            pool0_datum.quote1_token.policy,
+            pool0_datum.quote1_token.name,
           ) >= self_datum.min_expected_quote1_amount
 
         // 3. Valid successor:

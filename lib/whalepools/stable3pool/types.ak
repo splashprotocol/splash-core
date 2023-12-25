@@ -1,47 +1,51 @@
-use whalepools/plutus.{Asset, VerificationKeyHash}
+use aiken/hash.{Blake2b_256, Hash}
+use aiken/transaction/value.{PolicyId}
+use whalepools/plutus.{Asset, ScriptKeyHash, VerificationKeyHash}
 
 pub type PoolData {
+  /// Stable3Pool datum.
   PoolData {
-    // Identifier of the treasury:
-    treasury_nft: Asset,
+    // Identifier of the pool:
+    pool_nft: Asset,
     // Identifier of the base asset:
     base_token: Asset,
     // Identifier of the first quote asset:
-    quote_token0: Asset,
+    quote0_token: Asset,
     // Identifier of the second quote asset:
-    quote_token1: Asset,
+    quote1_token: Asset,
     // Identifier of the liquidity token asset:
     lp_token: Asset,
     // Decimals of the base asset:
-    base_token_dec: Int,
+    base_dec: Int,
     // Decimals of the first quote asset:
-    quote_token0_dec: Int,
+    quote0_dec: Int,
     // Decimals of the second quote asset:
-    quote_token1_dec: Int,
-    // Common denominator of calculations:
-    denom: Int,
-    // Precision multiplier for calculations:
-    precision: Int,
-    // Bounds of the ampl_coeff: [lower_bound, upper_bound]:
-    ampl_coeff_bounds: List<Int>,
-    // Bounds of the provider_fee_num : [lower_bound, upper_bound]:
-    provider_fee_num_bounds: List<Int>,
-    // Bounds of the protocol_share_num : [lower_bound, upper_bound]:
-    protocol_share_num_bounds: List<Int>,
+    quote1_dec: Int,
     // Invariant's amplification coefficient:
     ampl_coeff: Int,
     // Numerator of the swap fee:
-    provider_fee_num: Int,
+    swap_fee_num: Int,
     // Numerator of the protocol fee share:
     protocol_share_num: Int,
-    // Value of the pool's invariant before applying fees to the last operation with pool's liquidity:
-    inv_no_fees: Int,
+    // Information about the DAO policy, which audits the correctness of the following actions: "Withdraw treasury", "Change swap fee", "Change protocol share" and "Change treasury address":
+    dao_policy: List<PolicyId>,
+    // Treasury address:
+    treasury_address: ScriptKeyHash,
+    // Collected protocol fees in base asset units:
+    base_protocol_fees: Int,
+    // Collected protocol fees in first quote asset units:
+    quote0_protocol_fees: Int,
+    // Collected protocol fees in second quote asset units:
+    quote1_protocol_fees: Int,
+    // Value of the pool's invariant before fees are applied to the last AMM operation:
+    inv_native: Int,
     // Actual value of the pool's invariant:
     inv: Int,
   }
 }
 
 pub type DepositData {
+  /// Deposit order datum.
   DepositData {
     // Identifier of the pool:
     pool_nft: Asset,
@@ -53,6 +57,7 @@ pub type DepositData {
 }
 
 pub type RedeemData {
+  /// Redeem order datum.
   RedeemData {
     // Identifier of the pool:
     pool_nft: Asset,
@@ -67,22 +72,13 @@ pub type RedeemData {
   }
 }
 
-pub type SwapData {
-  SwapData {
-    // Identifier of the pool:
-    pool_nft: Asset,
-    // Redeemer PK:
-    redeemer: VerificationKeyHash,
-    // Expected quote token identifier:
-    expected_quote_token: Asset,
-    // Minimum expected amount of quote tokens:
-    min_expected_quote_amount: Int,
-  }
-}
-
 pub type PoolAction {
   /// Change pool state.
-  PoolAction { treasury_in_ix: Int, treasury_out_ix: Int, successor_ix: Int }
+  PoolAction {
+    input_data: PoolData,
+    successor_ix: Int,
+    successor_data_hash: Hash<Blake2b_256, Data>,
+  }
 }
 
 pub type DepositAction {
@@ -92,14 +88,7 @@ pub type DepositAction {
 }
 
 pub type RedeemAction {
-
-  /// Execute redeem order
+  /// Execute redeem order.
   ExecRedeem { pool_in_ix: Int, successor_ix: Int }
   CancelRedeem
-}
-
-pub type SwapAction {
-  /// Execute swap order
-  ExecSwap { pool_in_ix: Int, successor_ix: Int }
-  CancelSwap
 }
