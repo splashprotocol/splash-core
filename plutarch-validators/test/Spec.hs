@@ -3,12 +3,14 @@ module Main(main) where
 import WhalePoolsDex.PMintingValidators
 
 import Tests.Deposit
-import Tests.Pool 
+import Tests.Pool
+import Tests.PoolBFee
 import Tests.Swap
 import Tests.Redeem
 import Tests.Staking
 import Tests.Api
 import Tests.FeeSwitch
+import Tests.FeeSwitchBFee
 
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -23,9 +25,12 @@ main = do
 
 tests = testGroup "Contracts"
   [ feeSwitch
+  , feeSwitchBFee
   , checkPValueLength
   , checkPool
   , checkPoolRedeemer
+  , checkPoolBFee
+  , checkPoolBFeeRedeemer
   , checkRedeem
   , checkRedeemIdentity
   , checkRedeemIsFair

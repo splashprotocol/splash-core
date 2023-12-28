@@ -93,11 +93,13 @@ library
     WhalePoolsDex.Contracts.Proxy.Redeem
     WhalePoolsDex.Contracts.Proxy.FeeSwitch
     WhalePoolsDex.Contracts.Pool
+    WhalePoolsDex.Contracts.PoolBFee
     WhalePoolsDex.PContracts.PApi
     WhalePoolsDex.PContracts.PAssets
     WhalePoolsDex.PContracts.PDeposit
     WhalePoolsDex.PContracts.POrder
     WhalePoolsDex.PContracts.PPool
+    WhalePoolsDex.PContracts.PPoolBFee
     WhalePoolsDex.PContracts.PRedeem
     WhalePoolsDex.PContracts.PSwap
     WhalePoolsDex.PContracts.PSimpleStaking
@@ -146,10 +148,12 @@ test-suite cardano-dex-contracts-test
     Gen.Utils
     Tests.Deposit
     Tests.Pool
+    Tests.PoolBFee
     Tests.Swap
     Tests.Redeem
     Tests.Staking
     Tests.FeeSwitch
+    Tests.FeeSwitchBFee
     Tests.Api
     Eval
   build-depends:
