@@ -181,10 +181,10 @@ Data related to the pool (`Immutable` stands for pool configuration parameters) 
 | Name       | Description                             | Amount                                 |
 | ---------- | --------------------------------------- | -------------------------------------- |
 | `pool_NFT` | NFT to identify the pool                | `1`                                    |
-| `X`        | Base asset token                        | `1` to `0x7fffffffffffffffL`           |
-| `Y`        | First quote asset token                 | `1` to `0x7fffffffffffffffL`           |
-| `Z`        | Second quote asset token                | `1` to `0x7fffffffffffffffL`           |
-| `LP`       | Liquidity token of the  `X/Y/Z` triplet | Emission must be `0x7fffffffffffffffL` |
+| `X`        | Base asset token                        | `1` to `7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF`           |
+| `Y`        | First quote asset token                 | `1` to `7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF`           |
+| `Z`        | Second quote asset token                | `1` to `7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF`           |
+| `LP`       | Liquidity token of the  `X/Y/Z` triplet | Emission must be `7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF` |
 
 #### Validator
 
