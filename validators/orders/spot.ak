@@ -3,11 +3,11 @@
 
 use aiken/list
 use aiken/transaction.{
-  InlineDatum, Input, Output, OutputReference, ScriptContext, Spend, Transaction,
-  TransactionId, find_input,
+  InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
+  Transaction, TransactionId, find_input,
 }
 use aiken/transaction/credential.{
-  ScriptCredential, VerificationKeyCredential, from_script,
+  Address, ScriptCredential, VerificationKeyCredential, from_script,
 }
 use aiken/transaction/value.{
   ada_asset_name, ada_policy_id, add, from_lovelace, lovelace_of, quantity_of,
@@ -104,6 +104,7 @@ fn swap_native_to_token(
   input_amount: Int,
   price: Rational,
   fee_per_output: Rational,
+  termination_threshold: Int,
 ) -> (Output, ConfigNativeToToken) {
   let order_addr =
     from_script(#"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50")
@@ -113,7 +114,7 @@ fn swap_native_to_token(
       output: mk_asset(policy_y, "usd"),
       base_price: price,
       fee_per_output,
-      termination_threshold: 1_000_000_000,
+      termination_threshold,
       redeemer_reward_pkh: #"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50",
       redeemer_stake_pkh: [],
     }
@@ -131,16 +132,59 @@ fn swap_native_to_token(
       ),
       output_index: 0,
     }
+  (order_in_out, conf)
+}
+
+fn test_atomic_swap(
+  order_input: Int,
+  removed_input: Int,
+  added_output: Int,
+  price: Rational,
+  fee: Rational,
+  termination_threshold: Int,
+) -> Bool {
+  let (order_utxo_init, conf) =
+    swap_native_to_token(order_input, price, fee, termination_threshold)
+  let order_input_ref =
+    OutputReference {
+      transaction_id: TransactionId(
+        #"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50",
+      ),
+      output_index: 0,
+    }
   let order_input =
-    Input { output_reference: order_in_out_ref, output: order_in_out }
+    Input { output_reference: order_input_ref, output: order_utxo_init }
+  let updated_value =
+    add(
+      add(order_utxo_init.value, policy_y, conf.output.name, added_output),
+      ada_policy_id,
+      ada_asset_name,
+      -removed_input,
+    )
   let order_output =
     Output {
-      address: order_addr,
-      value: initial_order_value,
-      datum: InlineDatum(conf),
+      address: Address {
+        payment_credential: VerificationKeyCredential(conf.redeemer_reward_pkh),
+        stake_credential: None,
+      },
+      value: updated_value,
+      datum: NoDatum,
       reference_script: None,
     }
-  (order_in_out, conf)
+  let ctx =
+    ScriptContext {
+      purpose: Spend(order_input_ref),
+      transaction: transaction.placeholder()
+        |> fn(transaction) {
+             Transaction {
+               ..transaction,
+               inputs: [order_input],
+               outputs: [order_output],
+             }
+           },
+    }
+  let action = Exec { successor_ix: 0 }
+  spot_native_to_token(conf, action, ctx)
 }
 
 fn test_partial_swap(
@@ -150,7 +194,7 @@ fn test_partial_swap(
   price: Rational,
   fee: Rational,
 ) -> Bool {
-  let (order_utxo_init, conf) = swap_native_to_token(order_input, price, fee)
+  let (order_utxo_init, conf) = swap_native_to_token(order_input, price, fee, 0)
   let order_input_ref =
     OutputReference {
       transaction_id: TransactionId(
@@ -200,7 +244,7 @@ test valid_partial_swap_at_exact_price() {
   test_partial_swap(input, removed_input, added_output, price, fee)
 }
 
-test invalid_partial_swap() {
+test invalid_partial_swap_invalid_exchange_rate() {
   let price = rational(61, 100)
   let fee = rational(1, 1_000_000)
   let input = 1_000_000_000
@@ -208,4 +252,52 @@ test invalid_partial_swap() {
   let removed_input =
     added_output * price.denom / price.num + added_output * fee.num / fee.denom
   !test_partial_swap(input, removed_input + 1, added_output, price, fee)
+}
+
+test valid_atomic_swap_at_exact_price() {
+  let price = rational(61, 100)
+  let fee = rational(1, 1_000_000)
+  let added_output = 1_000_000_000
+  let removed_input =
+    added_output * price.denom / price.num + added_output * fee.num / fee.denom
+  test_atomic_swap(
+    removed_input,
+    removed_input,
+    added_output,
+    price,
+    fee,
+    added_output,
+  )
+}
+
+test invalid_atomic_swap_invalid_exchange_rate() {
+  let price = rational(61, 100)
+  let fee = rational(1, 1_000_000)
+  let added_output = 1_000_000_000
+  let removed_input =
+    added_output * price.denom / price.num + added_output * fee.num / fee.denom
+  !test_atomic_swap(
+    removed_input,
+    removed_input,
+    added_output - 1,
+    price,
+    fee,
+    added_output,
+  )
+}
+
+test invalid_atomic_swap_illigal_termination() {
+  let price = rational(61, 100)
+  let fee = rational(1, 1_000_000)
+  let added_output = 1_000_000_000
+  let removed_input =
+    added_output * price.denom / price.num + added_output * fee.num / fee.denom
+  !test_atomic_swap(
+    removed_input,
+    removed_input,
+    added_output,
+    price,
+    fee,
+    added_output + 1,
+  )
 }
