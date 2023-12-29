@@ -1,0 +1,238 @@
+{
+  "preamble": {
+    "title": "spectrum/whalepools",
+    "description": "Aiken contracts for project 'spectrum/whalepools'",
+    "version": "0.0.0",
+    "plutusVersion": "v2",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.0.21-alpha+4b04517"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "orders/auction.auction",
+      "datum": {
+        "title": "conf",
+        "schema": {
+          "$ref": "#/definitions/orders~1auction~1Config"
+        }
+      },
+      "redeemer": {
+        "title": "action",
+        "schema": {
+          "$ref": "#/definitions/orders~1auction~1Action"
+        }
+      },
+      "compiledCode": "5906bc01000032323232323232323222232325333008323232533300b3370e900000189919191919191919299980999b8748008c0480044c8c8c94ccc058cdc3a4000602a0022646464646464646464646464a66604466e1d2000302100113232323232323232323232323232323232323232323232533303953330395333039533303901b100114a0200e2940400852808040a503232533303a3370e900000089919299981e19b8f375c60666074072002266e1c04d200014a06eb8c100004c0e00084cdd79818181c00d9818181c00b981c0009817181b1817181b00a99b873370401200266e0801c008ccc00800cdd6980c981a180b181a0199119b82002483403cccc004008dd698159819980a98198191119b82002375a6078607a607a607a607a607a607a606a06844464666002002008006444a66607a004200226660060066080004660080026eb4c0fc008c8cc004005200022533303533710052002297ae013303937500026600400466e0000520023371090000022999818a9998188030a51100514a2266e24c8cdc098009bab3015303001330013756602a606001e466601800291100488100002533303000413370266e0402401c0044cdc080480399b83337040026eb4c094c0b4008dd6980918168012999817001899b833370466e04010018dd69808981600099b80375a602260580026eb4c090c0b00044cdc08020031809181581519b8f008489003371e00c9101003330043756601a605000e00a6eb8c034c0a0c034c0a009cccc00cdd5980618138030029bae300c3027301f302702633300237566016604c0120066eb8c02cc098c02cc098094ccc004dd5980518128040019bae300a3025301d3025024222323232533302c3370e90010008a400026eb4c0c4c0a8008c0a8004c94ccc0accdc3a4004002298103d87a8000132323300100100222533303100114c103d87a800013232323253330323371e014004266e95200033036375000297ae0133006006003375a60660066eb8c0c4008c0d4008c0cc004dd598181814801181480099198008008021129998170008a6103d87a8000132323232533302f3371e010004266e95200033033374c00297ae0133006006003375660600066eb8c0b8008c0c8008c0c0004dd7180d9811980418118111bae301a3022301a3022021302800130200011633323001001222533302700214c0103d87a80001323253330263370e0069000099ba548000cc0a80092f5c0266600a00a00266e0400d2002302b003302900237586002603e0220264604c604e604e0026004603a010a66603ca66603c66e20048dd6981198121812181218121812180e00d89919299981019b87480080044c8c94ccc088cdc3a400460466ea8c014c080c060c0800184cdc4004800899b89009001375a604c002603c0042940c078004c050c070c050c07000852809919299981019b87480080044c8c94ccc088cdc3a400460466ea8c014c080c014c0800184cdc4000804099b89001008375a604c002603c0042940c078004c050c070c004c0700085281181198120009800980d00611810981118111811181118111811181100099b80001002337006eb4c078c07cc07cc07cc05c058cdc10008069bad301d301e301e301e301e3016015301c00130140011632323300100100222533301b00114c103d87a800013232533301a3375e6020603000400c266e9520003301e0024bd70099802002000980f801180e8009bac300b30130053019001301100116301700130170023015001300d00a375a602600260260046eb4c044004c02401c4cc88c8cc00400400c894ccc04800452809919299980899b8f00200514a2266008008002602c0046eb8c050004dd618011804980098048031bae30023009008230100012300f30103010301030103010301030103010001300700414984d958c94ccc020cdc3a4000002264646464a66601e60240042930b1bad30100013010002375a601c002600c0082a66601066e1d20020011533300b300600414985858c01800cc8c8c94ccc024cdc3a40000022646464646464646464646464646464646464a66603c604200426464646493180b803180b007980b008180a8088b1bae301f001301f002301d001301d002375a603600260360046eb4c064004c064008dd6980b800980b8011bad301500130150023013001301300230110013011002300f001300700616300700523253330093370e9000000899191919299980818098010a4c2c6eb4c044004c044008dd6980780098038010b1803800919299980419b87480000044c8c8c8c94ccc03cc04800852616375c602000260200046eb8c038004c01800858c0180048c014dd5000918019baa0015734aae7555cf2ab9f5740ae855d11",
+      "hash": "a0c7d4382eba21ed5713ae245d1c8643199470d568c8fcc30ab85dcf"
+    },
+    {
+      "title": "orders/spot.spot_native_to_token",
+      "datum": {
+        "title": "conf",
+        "schema": {
+          "$ref": "#/definitions/orders~1spot~1ConfigNativeToToken"
+        }
+      },
+      "redeemer": {
+        "title": "action",
+        "schema": {
+          "$ref": "#/definitions/orders~1spot~1Action"
+        }
+      },
+      "compiledCode": "5904b901000032323232323232323222232325333008323232533300b3370e90000018991919191919299980899b8748008c0400044c8c8c94ccc050cdc3a400060260022646464646464a66603466e1d20003019001132323232323232323232323232323232533302a533302a001100214a020062940c8c94ccc0accdc3a4000002264646464a66605e00420022940cdc79bae3025302c02b002337126eb4c0c8c0ccc0ccc0ccc0ac0a802cdd71818800981480109919299981680108008a503375e6028605402a6028605402266ebcc084c0a4050c084c0a4040c0a4004c07cc09cc07cc09c038cdc42400000a66e24cdc10009bad301d302530113025024337040086eb4c044c094c044c094090cdc099b810070050013370666e08008dd6980d98118009bad300f3023001300c30220213370200200666600a6eacc030c08001c018dd718061810180c181000f98019bab300b301f00633300337566014603c0120086eb8c028c078c058c078074c004dd59804980e8041199801000a450048810022232323253330233370e90010008a400026eb4c0a0c084008c084004c94ccc088cdc3a4004002298103d87a8000132323300100100222533302800114c103d87a800013232323253330293371e014004266e9520003302d375000297ae0133006006003375a60540066eb8c0a0008c0b0008c0a8004dd598139810001181000099198008008021129998128008a6103d87a800013232323253330263371e010004266e9520003302a374c00297ae01330060060033756604e0066eb8c094008c0a4008c09c004dd71809180d1809180d00c9810000980c0008b19991800800911299980f8010a6103d87a800013232533301e3370e0069000099ba548000cc0880092f5c0266600a00a00266e0400d20023023003302100237586002602e01601a4603c603e603e0026002602a00446038603a002603400260240022c64646600200200444a6660320022980103d87a80001323253330183375e601c602c00400c266e9520003301c0024bd70099802002000980e801180d8009bac300930110053017001300f00116301500130150023013001300b008375a6022002601200e26644646600200200644a66602400229404c8c94ccc044cdc78010028a511330040040013016002375c60280026eb0c040c044c044c044c044c044c044c044c044c024c004c024018dd7180118048041180800091807980818081808180800098038020a4c26cac64a66601066e1d200000113232533300d3010002149858dd6980700098030020a99980419b874800800454ccc02cc01801052616163006003323253330083370e90000008991919191919191919191919299980b980d00109919191924c646600200200a44a6660380022930991980180198100011bae301e0013010009300f00a3253330153370e9000000899191919299980e180f8010a4c2c6eb8c074004c074008dd7180d80098098060b18098058b1bac30180013018002375c602c002602c0046eb4c050004c050008c048004c048008c040004c040008c038004c01801458c0180108c94ccc020cdc3a4000002264646464a66601e60240042930b1bad30100013010002375a601c002600c0042c600c0024600a6ea80048c00cdd5000ab9a5573aaae7955cfaba05742ae881",
+      "hash": "98272534f075be31ea9f567fa44b6876aeb306cce46b2223444ee1a5"
+    }
+  ],
+  "definitions": {
+    "ByteArray": {
+      "dataType": "bytes"
+    },
+    "Int": {
+      "dataType": "integer"
+    },
+    "List$ByteArray": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/ByteArray"
+      }
+    },
+    "orders/auction/Action": {
+      "title": "Action",
+      "anyOf": [
+        {
+          "title": "Exec",
+          "description": "Execute order",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "span_ix",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "successor_ix",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "Cancel",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "orders/auction/Config": {
+      "title": "Config",
+      "anyOf": [
+        {
+          "title": "Config",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "base",
+              "$ref": "#/definitions/whalepools~1plutus~1Asset"
+            },
+            {
+              "title": "quote",
+              "$ref": "#/definitions/whalepools~1plutus~1Asset"
+            },
+            {
+              "title": "price_start",
+              "$ref": "#/definitions/whalepools~1rational~1Rational"
+            },
+            {
+              "title": "start_time",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "step_len",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "steps",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "price_dacay_num",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "fee_per_quote",
+              "$ref": "#/definitions/whalepools~1rational~1Rational"
+            },
+            {
+              "title": "redeemer",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "orders/spot/Action": {
+      "title": "Action",
+      "anyOf": [
+        {
+          "title": "Exec",
+          "description": "Execute order",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "successor_ix",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "Cancel",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "orders/spot/ConfigNativeToToken": {
+      "title": "ConfigNativeToToken",
+      "anyOf": [
+        {
+          "title": "ConfigNativeToToken",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "output",
+              "$ref": "#/definitions/whalepools~1plutus~1Asset"
+            },
+            {
+              "title": "base_price",
+              "$ref": "#/definitions/whalepools~1rational~1Rational"
+            },
+            {
+              "title": "fee_per_output",
+              "$ref": "#/definitions/whalepools~1rational~1Rational"
+            },
+            {
+              "title": "termination_threshold",
+              "description": "Amount of output sufficient for the order to be terminated.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "redeemer_reward_pkh",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "redeemer_stake_pkh",
+              "$ref": "#/definitions/List$ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "whalepools/plutus/Asset": {
+      "title": "Asset",
+      "anyOf": [
+        {
+          "title": "Asset",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "policy",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "name",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "whalepools/rational/Rational": {
+      "title": "Rational",
+      "anyOf": [
+        {
+          "title": "Rational",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "num",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "denom",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
