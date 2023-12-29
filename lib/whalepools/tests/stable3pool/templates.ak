@@ -1,5 +1,5 @@
 use aiken/cbor.{serialise}
-use aiken/hash.{blake2b_256}
+use aiken/hash.{Blake2b_256, Hash, blake2b_256}
 use aiken/transaction.{
   InlineDatum, Input, Output, OutputReference, ScriptContext, Spend, Transaction,
   TransactionId,
@@ -7,7 +7,16 @@ use aiken/transaction.{
 use aiken/transaction/credential.{from_script}
 use aiken/transaction/value.{Value, add, from_lovelace}
 use whalepools/plutus.{Asset}
-use whalepools/stable3pool/types.{PoolAction, PoolData}
+use whalepools/stable3pool/types.{PoolData}
+
+pub type PoolTestAction {
+  /// Change pool state.
+  PoolAction {
+    input_data: PoolData,
+    successor_ix: Int,
+    successor_data_hash: Hash<Blake2b_256, Data>,
+  }
+}
 
 // Default template policies:
 const pool_nft_policy =
@@ -40,7 +49,7 @@ const lp_token_policy =
 const lp_token_name =
   #"5000000000000000000000000000000000000000000000000000000000000000"
 
-const default_lovelase_value = 1_000_000_000_000
+const default_lovelace_value = 1_000_000_000_000
 
 pub fn pool_data_with_default_config(
   base_protocol_fees: Int,
@@ -82,7 +91,7 @@ pub fn pool_value(
   quote1_amount: Int,
   lp_amount: Int,
 ) -> Value {
-  let input_value = from_lovelace(default_lovelase_value)
+  let input_value = from_lovelace(default_lovelace_value)
   let input_value =
     add(
       input_value,
@@ -124,7 +133,7 @@ pub fn pool_amm_action_state_transition_tx(
   input_value: Value,
   output_data: PoolData,
   output_value: Value,
-) -> (ScriptContext, PoolAction) {
+) -> (ScriptContext, PoolTestAction) {
   let pool_addr =
     from_script(#"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50")
   let pool_ref_script =

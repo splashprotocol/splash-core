@@ -1,14 +1,18 @@
 use aiken/list
-use aiken/math.{max, min}
+use aiken/math.{max}
 use aiken/transaction.{
   Input, Output, ScriptContext, Spend, Transaction, find_datum, find_input,
 }
 use aiken/transaction/value.{quantity_of}
 use whalepools/plutus.{Asset}
-use whalepools/stable3pool/types.{PoolAction, PoolData}
-use whalepools/stable3pool/utils.{check_invariant_extremum, convert_pool_datum}
+use whalepools/stable3pool/types.{PoolData}
+use whalepools/stable3pool/utils.{
+  check_invariant_extremum, check_invariant_extremum_for_asset,
+  convert_pool_datum,
+}
 use whalepools/tests/stable3pool/templates.{
-  pool_amm_action_state_transition_tx, pool_data_with_default_config, pool_value,
+  PoolTestAction, pool_amm_action_state_transition_tx,
+  pool_data_with_default_config, pool_value,
 }
 
 // Number of tradable assets in the pool:
@@ -23,7 +27,7 @@ const denom = 10_000
 // LP tokens emisson:
 const lp_emission = 9223372036854775807
 
-fn stable3_pool(action: PoolAction, ctx: ScriptContext) -> Bool {
+fn stable3_pool(action: PoolTestAction, ctx: ScriptContext) -> Bool {
   let ScriptContext { transaction, purpose } = ctx
   expect Spend(spent_utxo_reference) = purpose
   // ==================================== POOL INPUT ==================================== //
@@ -114,7 +118,7 @@ fn stable3_pool(action: PoolAction, ctx: ScriptContext) -> Bool {
   let quote1_policy = quote1_token0.policy
   let lp_policy = lp_token0.policy
 
-  // We do not take into account the current protocol commissions for deposit/swap/redeem actions!
+  // We do not take into account the current protocol fees for deposit/swap/redeem actions!
   let base_amount_total0 =
     quantity_of(self.value, base_policy, base_token0.name)
   let base_amount0 = base_amount_total0 - base_protocol_fees0
@@ -161,8 +165,8 @@ fn stable3_pool(action: PoolAction, ctx: ScriptContext) -> Bool {
       pool_nft_policy,
       pool_nft0.name,
     ) == 1
+
   // 2. Immutable pool configuration parameters are preserved:
-  // Precision multiplier for calculations:
   let pool_nft_preserved = pool_nft0 == pool_nft1
   let tradeble_tokens_preserved =
     base_token0 == base_token1 && quote0_token0 == quote0_token1 && quote1_token0 == quote1_token1 && lp_token0 == lp_token1
@@ -187,45 +191,21 @@ fn stable3_pool(action: PoolAction, ctx: ScriptContext) -> Bool {
       // 5.1. DAO action. #TODO.
       False
     } else {
-      // In the case of a swap, the invariants are swapped, since without commissions the amount of tradable assets are preserved:
-      let inv1_calc =
-        if delta_lp == 0 {
-          inv_native1
-        } else {
-          inv1
-        }
-      let inv_native1_calc =
-        if delta_lp == 0 {
-          inv1
-        } else {
-          inv_native1
-        }
-
+      // Precision multiplier for calculations:
       let precision = max(max(base_dec0, quote0_dec0), quote1_dec0)
-
-      let base_amount1_calc = precision * base_amount1 / base_dec0
-      let quote0_amount1_calc = precision * quote0_amount1 / quote0_dec0
-      let quote1_amount1_calc = precision * quote1_amount1 / quote1_dec0
-
-      // Check the invariant.
-      // Invariant is valid if there is an extremum (min) with the final tradable assets amounts substituted.
+      // Widely used constant:
       let ann = a0 * nn
-      let valid_invariant_extremum: Bool =
-        check_invariant_extremum(
-          x_calc: base_amount1_calc,
-          y_calc: quote0_amount1_calc,
-          z_calc: quote1_amount1_calc,
-          d: inv1_calc,
-          nn: nn,
-          ann: ann,
-        )
 
       // Calculate final amounts without latest fees:
       let base_amount1_no_fees = base_amount_total1 - base_protocol_fees0
       let quote0_amount1_no_fees = quote0_amount_total1 - quote0_protocol_fees0
       let quote1_amount1_no_fees = quote1_amount_total1 - quote1_protocol_fees0
 
-      // Convert all amounts to the common precision:
+      // Convert all amounts to the equal precision:
+      let base_amount1_calc = precision * base_amount1 / base_dec0
+      let quote0_amount1_calc = precision * quote0_amount1 / quote0_dec0
+      let quote1_amount1_calc = precision * quote1_amount1 / quote1_dec0
+
       let base_amount1_no_fees_calc =
         precision * base_amount1_no_fees / base_dec0
       let quote0_amount1_no_fees_calc =
@@ -233,20 +213,32 @@ fn stable3_pool(action: PoolAction, ctx: ScriptContext) -> Bool {
       let quote1_amount1_no_fees_calc =
         precision * quote1_amount1_no_fees / quote1_dec0
 
-      // Check the native invariant.
-      // Native invariant is valid if there is an extremum (min) with the tradable assets amounts without latest fees substituted.
-      let valid_native_invariant_extremum: Bool =
-        check_invariant_extremum(
-          x_calc: base_amount1_no_fees_calc,
-          y_calc: quote0_amount1_no_fees_calc,
-          z_calc: quote1_amount1_no_fees_calc,
-          d: inv_native1_calc,
-          nn: nn,
-          ann: ann,
-        )
-
       if delta_lp != 0 {
         // 5.2. Deposit || Redeem
+
+        // Check the invariant.
+        // Invariant is valid if there is an extremum (min) with the final tradable assets amounts substituted.
+        let valid_invariant_extremum: Bool =
+          check_invariant_extremum(
+            x_calc: base_amount1_calc,
+            y_calc: quote0_amount1_calc,
+            z_calc: quote1_amount1_calc,
+            d: inv1,
+            nn: nn,
+            ann: ann,
+          )
+
+        // Check the native invariant.
+        // Native invariant is valid if there is an extremum (min) with the tradable assets amounts without latest fees substituted.
+        let valid_native_invariant_extremum: Bool =
+          check_invariant_extremum(
+            x_calc: base_amount1_no_fees_calc,
+            y_calc: quote0_amount1_no_fees_calc,
+            z_calc: quote1_amount1_no_fees_calc,
+            d: inv_native1,
+            nn: nn,
+            ann: ann,
+          )
 
         // Calculate LP tokens delta:
         let supply_lp0 = lp_emission - lp_amount0
@@ -303,40 +295,68 @@ fn stable3_pool(action: PoolAction, ctx: ScriptContext) -> Bool {
         valid_invariant_extremum && valid_native_invariant_extremum && valid_protocol_fees && valid_lp_delta && valid_invariant_movement
       } else {
         // 5.3. Swap
-        // Invariant value is preserved:
-        let min_decimals = min(min(base_dec0, quote0_dec0), quote1_dec0)
-        let max_inv_unit_errror = n * precision / min_decimals
-        let abs_inv_diff =
-          if inv1_calc > inv0 {
-            inv1_calc - inv0
-          } else {
-            inv0 - inv1_calc
-          }
-        let valid_invariant_for_swap = abs_inv_diff <= max_inv_unit_errror
 
         // LP tokens amount is preserved:
         let valid_lp_delta_for_swap = delta_lp == 0
 
-        let (valid_protocol_swap_fees, valid_quote_swap_deltas) =
+        // Difference between invariant of the previous state and current native invariant:
+        let inv_diff =
+          if inv_native1 > inv0 {
+            inv_native1 - inv0
+          } else {
+            inv0 - inv_native1
+          }
+
+        // Basic validations:
+        let (
+          quote_asset_ind,
+          base_amount1_no_fees_calc_for_swap,
+          quote0_amount1_no_fees_calc_for_swap,
+          quote1_amount1_no_fees_calc_for_swap,
+          minimal_quote_asset_unit,
+          valid_quote_swap_deltas,
+        ) =
           // Swap Y/Z to X:
           if delta_base < 0 {
+            let min_base_unit = precision / base_dec0
             (
-              delta_base_protocol_fees == -delta_base * swap_fee_num0 * protocol_share_num0 / (
-                denom * denom
-              ),
-              // While swapping Y to X, delta_z must be 0 and delta_y must be > 0, etc.:
+              // Index of the quote asset:
+              0,
+              // Base asset without latest fees:
+              base_amount1_no_fees_calc - delta_base_protocol_fees - delta_base_protocol_fees * (
+                denom - protocol_share_num0
+              ) / protocol_share_num0,
+              // First quote asset without latest fees:
+              quote0_amount1_no_fees_calc,
+              // Second quote asset without latest fees:
+              quote1_amount1_no_fees_calc,
+              // Minimal logical step of the quote asset change:
+              min_base_unit,
+              // Valid deltas:
               if delta_quote0 > 0 {
                 delta_quote1 == 0
               } else {
                 delta_quote1 > 0 && delta_quote0 == 0
               },
             )
-          } else if // Swap X/Z to Y:
+          } else if // Value 'inv_diff' should not exeed 2 minimal quote asset units:
+          // Swap X/Z to Y:
           delta_quote0 < 0 {
+            let min_quote0_unit = precision / quote0_dec0
             (
-              delta_quote0_protocol_fees == -delta_quote0 * swap_fee_num0 * protocol_share_num0 / (
-                denom * denom
-              ),
+              // Index of the quote asset:
+              1,
+              // Base asset without latest fees:
+              base_amount1_no_fees_calc,
+              // First quote asset without latest fees:
+              quote0_amount1_no_fees_calc - delta_quote0_protocol_fees - delta_quote0_protocol_fees * (
+                denom - protocol_share_num0
+              ) / protocol_share_num0,
+              // Second quote asset without latest fees:
+              quote1_amount1_no_fees_calc,
+              // Minimal logical step of the quote asset change:
+              min_quote0_unit,
+              // Valid deltas:
               if delta_base > 0 {
                 delta_quote1 == 0
               } else {
@@ -345,10 +365,22 @@ fn stable3_pool(action: PoolAction, ctx: ScriptContext) -> Bool {
             )
           } else if // Swap X/Y to Z:
           delta_quote1 < 0 {
+            let min_quote1_unit = precision / quote1_dec0
+
             (
-              delta_quote1_protocol_fees == -delta_quote1 * swap_fee_num0 * protocol_share_num0 / (
-                denom * denom
-              ),
+              // Index of the quote asset:
+              2,
+              // Base asset without latest fees:
+              base_amount1_no_fees_calc,
+              // First quote asset without latest fees:
+              quote0_amount1_no_fees_calc,
+              // Second quote asset without latest fees:
+              quote1_amount1_no_fees_calc - delta_quote1_protocol_fees - delta_quote1_protocol_fees * (
+                denom - protocol_share_num0
+              ) / protocol_share_num0,
+              // Minimal logical step of the quote asset change:
+              min_quote1_unit,
+              // Valid deltas:
               if delta_base > 0 {
                 delta_quote0 == 0
               } else {
@@ -356,151 +388,77 @@ fn stable3_pool(action: PoolAction, ctx: ScriptContext) -> Bool {
               },
             )
           } else {
-            (False, False)
+            (0, 0, 0, 0, 0, False)
           }
 
-        valid_invariant_extremum && valid_native_invariant_extremum && valid_invariant_for_swap && valid_lp_delta_for_swap && valid_protocol_swap_fees && valid_quote_swap_deltas
+        // Value 'inv_diff' should not exeed 2 minimal quote asset units:
+        let native_invariant_preserved =
+          inv_diff <= 2 * minimal_quote_asset_unit
+        // let 
+        // Check the invariant for swap:
+        let valid_invariant_extremum_for_asset: Bool =
+          check_invariant_extremum_for_asset(
+            x_calc: base_amount1_calc,
+            y_calc: quote0_amount1_calc,
+            z_calc: quote1_amount1_calc,
+            d: inv1,
+            nn: nn,
+            ann: ann,
+            minimal_asset_unit: minimal_quote_asset_unit,
+            asset_ind: quote_asset_ind,
+          )
+
+        // Check the native invariant for swap:
+        let valid_native_invariant_extremum_for_asset: Bool =
+          check_invariant_extremum_for_asset(
+            x_calc: base_amount1_no_fees_calc_for_swap,
+            y_calc: quote0_amount1_no_fees_calc_for_swap,
+            z_calc: quote1_amount1_no_fees_calc_for_swap,
+            d: inv_native1,
+            nn: nn,
+            ann: ann,
+            minimal_asset_unit: minimal_quote_asset_unit,
+            asset_ind: quote_asset_ind,
+          )
+        valid_invariant_extremum_for_asset && valid_native_invariant_extremum_for_asset && native_invariant_preserved && valid_lp_delta_for_swap && valid_quote_swap_deltas
       }
     }
   pool_nft_token_preserved && preserved_config && preserved_script && valid_action
 }
 
 test test_stable3pool_deposit() {
-  // Empty pool config:
-  let empty_pool_config =
-    pool_data_with_default_config(
-      base_protocol_fees: 0,
-      quote0_protocol_fees: 0,
-      quote1_protocol_fees: 0,
-      inv_native: 0,
-      inv: 0,
-    )
-
   // Input data:
-  let usd_value = 1_000
-  let x0 = usd_value * empty_pool_config.base_dec
-  let y0 = usd_value * empty_pool_config.quote0_dec
-  let z0 = usd_value * empty_pool_config.quote1_dec
-  let sum_usd0 = 3 * usd_value
-  let precision =
-    max(
-      max(empty_pool_config.base_dec, empty_pool_config.quote0_dec),
-      empty_pool_config.quote1_dec,
-    )
-  let supply_lp0 = sum_usd0 * precision
-
   let input_data =
     pool_data_with_default_config(
-      base_protocol_fees: 0,
-      quote0_protocol_fees: 0,
-      quote1_protocol_fees: 0,
-      inv_native: supply_lp0,
-      inv: supply_lp0,
+      base_protocol_fees: 3922600039226,
+      quote0_protocol_fees: 1989919899,
+      quote1_protocol_fees: 31614583,
+      inv_native: 249586736899936,
+      inv: 249586736899936,
     )
 
   let input_value =
     pool_value(
-      base_amount: x0,
-      quote0_amount: y0,
-      quote1_amount: z0,
-      lp_amount: lp_emission - supply_lp0,
+      base_amount: 10476100039226,
+      quote0_amount: 8543419899,
+      quote1_amount: 97149583,
+      lp_amount: 9223343302408446571,
     )
   // Output data:
-  let usd_value = 2_000
-  let x1 = usd_value * empty_pool_config.base_dec
-  let y1 = usd_value * empty_pool_config.quote0_dec
-  let z1 = usd_value * empty_pool_config.quote1_dec
-  let sum_usd1 = 3 * usd_value
-  let supply_lp1 = sum_usd1 * precision
   let output_data =
     pool_data_with_default_config(
-      base_protocol_fees: 0,
-      quote0_protocol_fees: 0,
-      quote1_protocol_fees: 0,
-      inv_native: supply_lp1,
-      inv: supply_lp1,
+      base_protocol_fees: 4038414485117,
+      quote0_protocol_fees: 229707313770,
+      quote1_protocol_fees: 1279855697,
+      inv_native: 12071847959036641,
+      inv: 11954682477020570,
     )
   let output_value =
     pool_value(
-      base_amount: x1,
-      quote0_amount: y1,
-      quote1_amount: z1,
-      lp_amount: lp_emission - supply_lp1,
-    )
-
-  // Deposit Action:
-  let (context, action) =
-    pool_amm_action_state_transition_tx(
-      input_data,
-      input_value,
-      output_data,
-      output_value,
-    )
-
-  stable3_pool(action, context)
-}
-
-test test_stable3pool_imbalanced_deposit() {
-  // Empty pool config:
-  let empty_pool_config =
-    pool_data_with_default_config(
-      base_protocol_fees: 0,
-      quote0_protocol_fees: 0,
-      quote1_protocol_fees: 0,
-      inv_native: 0,
-      inv: 0,
-    )
-
-  // Input data:
-  let usd_value = 1_000
-  let x0 = usd_value * empty_pool_config.base_dec
-  let y0 = usd_value * empty_pool_config.quote0_dec
-  let z0 = usd_value * empty_pool_config.quote1_dec
-  let sum0 = 3 * usd_value
-  let precision =
-    max(
-      max(empty_pool_config.base_dec, empty_pool_config.quote0_dec),
-      empty_pool_config.quote1_dec,
-    )
-  let supply_lp0 = sum0 * precision
-
-  let input_data =
-    pool_data_with_default_config(
-      base_protocol_fees: 0,
-      quote0_protocol_fees: 0,
-      quote1_protocol_fees: 0,
-      inv_native: supply_lp0,
-      inv: supply_lp0,
-    )
-
-  let input_value =
-    pool_value(
-      base_amount: x0,
-      quote0_amount: y0,
-      quote1_amount: z0,
-      lp_amount: lp_emission - supply_lp0,
-    )
-  // Output data:
-  let usd_value = 10_000
-  let x1 = x0
-  let y1 = y0 + usd_value * empty_pool_config.quote0_dec
-  let z1 = z0
-  let inv1 = 12989768785
-  let inv2 = 12984756899
-  let output_data =
-    pool_data_with_default_config(
-      base_protocol_fees: 1248,
-      quote0_protocol_fees: 2501278,
-      quote1_protocol_fees: 1248,
-      inv_native: inv1,
-      inv: inv2,
-    )
-  let output_value =
-    pool_value(
-      base_amount: x1,
-      quote0_amount: y1,
-      quote1_amount: z1,
-      lp_amount: 9223372023870018908,
+      base_amount: 12059477004396,
+      quote0_amount: 607565348976097,
+      quote1_amount: 3331844339354,
+      lp_amount: 9221995716997856785,
     )
 
   // Deposit Action:
@@ -516,130 +474,38 @@ test test_stable3pool_imbalanced_deposit() {
 }
 
 test test_stable3pool_redeem() {
-  // Empty pool config:
-  let empty_pool_config =
-    pool_data_with_default_config(
-      base_protocol_fees: 0,
-      quote0_protocol_fees: 0,
-      quote1_protocol_fees: 0,
-      inv_native: 0,
-      inv: 0,
-    )
-
   // Input data:
-  let usd_value = 1_000
-  let x0 = usd_value * empty_pool_config.base_dec
-  let y0 = usd_value * empty_pool_config.quote0_dec
-  let z0 = usd_value * empty_pool_config.quote1_dec
-  let sum0 = 3 * usd_value
-  let precision =
-    max(
-      max(empty_pool_config.base_dec, empty_pool_config.quote0_dec),
-      empty_pool_config.quote1_dec,
-    )
-
-  let supply_lp0 = sum0 * precision
-
   let input_data =
     pool_data_with_default_config(
-      base_protocol_fees: 0,
-      quote0_protocol_fees: 0,
-      quote1_protocol_fees: 0,
-      inv_native: supply_lp0,
-      inv: supply_lp0,
+      base_protocol_fees: 2348600023486,
+      quote0_protocol_fees: 4257842578,
+      quote1_protocol_fees: 9889880,
+      inv_native: 249586736899936,
+      inv: 249586736899936,
     )
 
   let input_value =
     pool_value(
-      base_amount: x0,
-      quote0_amount: y0,
-      quote1_amount: z0,
-      lp_amount: lp_emission - supply_lp0,
+      base_amount: 8902100023486,
+      quote0_amount: 10811342578,
+      quote1_amount: 75424880,
+      lp_amount: 9223344781018733046,
     )
   // Output data:
-  let usd_value = 500
-  let x1 = usd_value * empty_pool_config.base_dec
-  let y1 = usd_value * empty_pool_config.quote0_dec
-  let z1 = usd_value * empty_pool_config.quote1_dec
-  let sum1 = 3 * usd_value
-  let precision =
-    max(
-      max(empty_pool_config.base_dec, empty_pool_config.quote0_dec),
-      empty_pool_config.quote1_dec,
-    )
-
-  let supply_lp1 = sum1 * precision
   let output_data =
     pool_data_with_default_config(
-      base_protocol_fees: 0,
-      quote0_protocol_fees: 0,
-      quote1_protocol_fees: 0,
-      inv_native: supply_lp1,
-      inv: supply_lp1,
+      base_protocol_fees: 2348614670947,
+      quote0_protocol_fees: 4257884180,
+      quote1_protocol_fees: 9890002,
+      inv_native: 248099155340753,
+      inv: 248098361891813,
     )
   let output_value =
     pool_value(
-      base_amount: x1,
-      quote0_amount: y1,
-      quote1_amount: z1,
-      lp_amount: lp_emission - supply_lp1,
-    )
-
-  // Redeem Action:
-  let (context, action) =
-    pool_amm_action_state_transition_tx(
-      input_data,
-      input_value,
-      output_data,
-      output_value,
-    )
-
-  stable3_pool(action, context)
-}
-
-test test_stable3pool_imbalanced_redeem() {
-  // Input data:
-  let x0 = 1000000
-  let y0 = 11000000000
-  let z0 = 1000000
-
-  let input_data =
-    pool_data_with_default_config(
-      base_protocol_fees: 1248,
-      quote0_protocol_fees: 2501278,
-      quote1_protocol_fees: 1248,
-      inv_native: 12984756899,
-      inv: 12984756899,
-    )
-
-  let input_value =
-    pool_value(
-      base_amount: x0,
-      quote0_amount: y0,
-      quote1_amount: z0,
-      lp_amount: 9223372023870018908,
-    )
-
-  // Output data:
-  let x1 = 500000
-  let y1 = 6000000000
-  let z1 = 1000000
-  let inv1 = 7491107818
-  let inv2 = 7490790275
-  let output_data =
-    pool_data_with_default_config(
-      base_protocol_fees: 1277,
-      quote0_protocol_fees: 2631451,
-      quote1_protocol_fees: 1406,
-      inv_native: inv1,
-      inv: inv2,
-    )
-  let output_value =
-    pool_value(
-      base_amount: x1,
-      quote0_amount: y1,
-      quote1_amount: z1,
-      lp_amount: 9223372029363985532,
+      base_amount: 8902099890353,
+      quote0_amount: 10661342428,
+      quote1_amount: 75359815,
+      lp_amount: 9223344943555034836,
     )
 
   // Redeem Action:
@@ -656,42 +522,36 @@ test test_stable3pool_imbalanced_redeem() {
 
 test test_stable3pool_swap() {
   // Input data:
-  let x0 = 1000000
-  let y0 = 11000000000
-  let z0 = 1000000
   let input_data =
     pool_data_with_default_config(
-      base_protocol_fees: 1248,
-      quote0_protocol_fees: 2501278,
-      quote1_protocol_fees: 1248,
-      inv_native: 12989768785,
-      inv: 12984756899,
+      base_protocol_fees: 88088,
+      quote0_protocol_fees: 220000220,
+      quote1_protocol_fees: 93093,
+      inv_native: 765000000,
+      inv: 765000000,
     )
   let input_value =
     pool_value(
-      base_amount: x0,
-      quote0_amount: y0,
-      quote1_amount: z0,
-      lp_amount: 9223372023870018908,
+      base_amount: 343088,
+      quote0_amount: 475000220,
+      quote1_amount: 348093,
+      lp_amount: 9223372035688599693,
     )
   // Output data:
-  let x1 = 1254000
-  let y1 = 10744079069
-  let z1 = 1000000
   let output_data =
     pool_data_with_default_config(
-      base_protocol_fees: 1248,
-      quote0_protocol_fees: 2757455,
-      quote1_protocol_fees: 1248,
-      inv_native: 12984756899,
-      inv: 12985012576,
+      base_protocol_fees: 88088,
+      quote0_protocol_fees: 220047216,
+      quote1_protocol_fees: 93093,
+      inv_native: 765000000,
+      inv: 765892997,
     )
   let output_value =
     pool_value(
-      base_amount: x1,
-      quote0_amount: y1,
-      quote1_amount: z1,
-      lp_amount: 9223372023870018908,
+      base_amount: 390088,
+      quote0_amount: 428943460,
+      quote1_amount: 348093,
+      lp_amount: 9223372035688599693,
     )
 
   // Swap Action:

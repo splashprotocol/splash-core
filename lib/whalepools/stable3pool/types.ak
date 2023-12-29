@@ -1,4 +1,3 @@
-use aiken/hash.{Blake2b_256, Hash}
 use aiken/transaction/value.{PolicyId}
 use whalepools/plutus.{Asset, ScriptKeyHash, VerificationKeyHash}
 
@@ -74,11 +73,7 @@ pub type RedeemData {
 
 pub type PoolAction {
   /// Change pool state.
-  PoolAction {
-    input_data: PoolData,
-    successor_ix: Int,
-    successor_data_hash: Hash<Blake2b_256, Data>,
-  }
+  PoolAction { successor_ix: Int }
 }
 
 pub type DepositAction {

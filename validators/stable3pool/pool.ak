@@ -1,11 +1,14 @@
 use aiken/list
-use aiken/math.{max, min}
+use aiken/math.{max}
 use aiken/transaction.{
-  Input, Output, ScriptContext, Spend, Transaction, find_datum, find_input,
+  Input, Output, ScriptContext, Spend, Transaction, find_input,
 }
 use aiken/transaction/value.{quantity_of}
 use whalepools/stable3pool/types.{PoolAction, PoolData}
-use whalepools/stable3pool/utils.{check_invariant_extremum, convert_pool_datum}
+use whalepools/stable3pool/utils.{
+  check_invariant_extremum, check_invariant_extremum_for_asset,
+  convert_pool_datum,
+}
 
 // Number of tradable assets in the pool:
 const n = 3
@@ -17,7 +20,8 @@ const nn = 27
 const denom = 10_000
 
 // LP tokens emisson:
-const lp_emission = 9223372036854775807
+const lp_emission =
+  57896044618658097711785492504343953926634992332820282019728792003956564819967
 
 // Main pool validator:
 validator {
@@ -28,7 +32,7 @@ validator {
     expect Some(self_input) =
       find_input(transaction.inputs, spent_utxo_reference)
     let self = self_input.output
-    let datum = action.input_data
+    let datum = convert_pool_datum(self.datum)
 
     let script0 = self.reference_script
     // Pool's tokens | Input:
@@ -65,13 +69,7 @@ validator {
 
     // ==================================== POOL OUTPUT ==================================== //
     expect Some(successor) = list.at(transaction.outputs, action.successor_ix)
-    expect Some(successor_data) =
-      find_datum(
-        outputs: transaction.outputs,
-        datums: transaction.datums,
-        datum_hash: action.successor_data_hash,
-      )
-    let datum_successor = convert_pool_datum(successor_data)
+    let datum_successor = convert_pool_datum(successor.datum)
     let script1 = successor.reference_script
     // Pool's tokens | Output:
     let pool_nft1 = datum_successor.pool_nft
@@ -113,7 +111,7 @@ validator {
     let quote1_policy = quote1_token0.policy
     let lp_policy = lp_token0.policy
 
-    // We do not take into account the current protocol commissions for deposit/swap/redeem actions!
+    // We do not take into account the current protocol fees for deposit/swap/redeem actions!
     let base_amount_total0 =
       quantity_of(self.value, base_policy, base_token0.name)
     let base_amount0 = base_amount_total0 - base_protocol_fees0
@@ -162,8 +160,8 @@ validator {
         pool_nft_policy,
         pool_nft0.name,
       ) == 1
+
     // 2. Immutable pool configuration parameters are preserved:
-    // Precision multiplier for calculations:
     let pool_nft_preserved = pool_nft0 == pool_nft1
     let tradeble_tokens_preserved =
       base_token0 == base_token1 && quote0_token0 == quote0_token1 && quote1_token0 == quote1_token1 && lp_token0 == lp_token1
@@ -188,38 +186,10 @@ validator {
         // 5.1. DAO action. #TODO.
         False
       } else {
-        // In the case of a swap, the invariants are swapped, since without commissions the amount of tradable assets are preserved:
-        let inv1_calc =
-          if delta_lp == 0 {
-            inv_native1
-          } else {
-            inv1
-          }
-        let inv_native1_calc =
-          if delta_lp == 0 {
-            inv1
-          } else {
-            inv_native1
-          }
-
+        // Precision multiplier for calculations:
         let precision = max(max(base_dec0, quote0_dec0), quote1_dec0)
-
-        let base_amount1_calc = precision * base_amount1 / base_dec0
-        let quote0_amount1_calc = precision * quote0_amount1 / quote0_dec0
-        let quote1_amount1_calc = precision * quote1_amount1 / quote1_dec0
-
-        // Check the invariant.
-        // Invariant is valid if there is an extremum (min) with the final tradable assets amounts substituted.
+        // Widely used constant:
         let ann = a0 * nn
-        let valid_invariant_extremum: Bool =
-          check_invariant_extremum(
-            x_calc: base_amount1_calc,
-            y_calc: quote0_amount1_calc,
-            z_calc: quote1_amount1_calc,
-            d: inv1_calc,
-            nn: nn,
-            ann: ann,
-          )
 
         // Calculate final amounts without latest fees:
         let base_amount1_no_fees = base_amount_total1 - base_protocol_fees0
@@ -228,7 +198,11 @@ validator {
         let quote1_amount1_no_fees =
           quote1_amount_total1 - quote1_protocol_fees0
 
-        // Convert all amounts to the common precision:
+        // Convert all amounts to the equal precision:
+        let base_amount1_calc = precision * base_amount1 / base_dec0
+        let quote0_amount1_calc = precision * quote0_amount1 / quote0_dec0
+        let quote1_amount1_calc = precision * quote1_amount1 / quote1_dec0
+
         let base_amount1_no_fees_calc =
           precision * base_amount1_no_fees / base_dec0
         let quote0_amount1_no_fees_calc =
@@ -236,20 +210,32 @@ validator {
         let quote1_amount1_no_fees_calc =
           precision * quote1_amount1_no_fees / quote1_dec0
 
-        // Check the native invariant.
-        // Native invariant is valid if there is an extremum (min) with the tradable assets amounts without latest fees substituted.
-        let valid_native_invariant_extremum: Bool =
-          check_invariant_extremum(
-            x_calc: base_amount1_no_fees_calc,
-            y_calc: quote0_amount1_no_fees_calc,
-            z_calc: quote1_amount1_no_fees_calc,
-            d: inv_native1_calc,
-            nn: nn,
-            ann: ann,
-          )
-
         if delta_lp != 0 {
           // 5.2. Deposit || Redeem
+
+          // Check the invariant.
+          // Invariant is valid if there is an extremum (min) with the final tradable assets amounts substituted.
+          let valid_invariant_extremum: Bool =
+            check_invariant_extremum(
+              x_calc: base_amount1_calc,
+              y_calc: quote0_amount1_calc,
+              z_calc: quote1_amount1_calc,
+              d: inv1,
+              nn: nn,
+              ann: ann,
+            )
+
+          // Check the native invariant.
+          // Native invariant is valid if there is an extremum (min) with the tradable assets amounts without latest fees substituted.
+          let valid_native_invariant_extremum: Bool =
+            check_invariant_extremum(
+              x_calc: base_amount1_no_fees_calc,
+              y_calc: quote0_amount1_no_fees_calc,
+              z_calc: quote1_amount1_no_fees_calc,
+              d: inv_native1,
+              nn: nn,
+              ann: ann,
+            )
 
           // Calculate LP tokens delta:
           let supply_lp0 = lp_emission - lp_amount0
@@ -306,41 +292,68 @@ validator {
           valid_invariant_extremum && valid_native_invariant_extremum && valid_protocol_fees && valid_lp_delta && valid_invariant_movement
         } else {
           // 5.3. Swap
-          // Invariant value is preserved (inv1_calc should be equal to inv0, but but due to rounding some error is possible.
-          // This error should not exceed the minimum error from rounding when calculating the invariant:
-          let min_decimals = min(min(base_dec0, quote0_dec0), quote1_dec0)
-          let max_inv_unit_errror = n * precision / min_decimals
-          let abs_inv_diff =
-            if inv1_calc > inv0 {
-              inv1_calc - inv0
-            } else {
-              inv0 - inv1_calc
-            }
-          let valid_invariant_for_swap = abs_inv_diff <= max_inv_unit_errror
 
           // LP tokens amount is preserved:
           let valid_lp_delta_for_swap = delta_lp == 0
 
-          let (valid_protocol_swap_fees, valid_quote_swap_deltas) =
+          // Difference between invariant of the previous state and current native invariant:
+          let inv_diff =
+            if inv_native1 > inv0 {
+              inv_native1 - inv0
+            } else {
+              inv0 - inv_native1
+            }
+
+          // Basic validations:
+          let (
+            quote_asset_ind,
+            base_amount1_no_fees_calc_for_swap,
+            quote0_amount1_no_fees_calc_for_swap,
+            quote1_amount1_no_fees_calc_for_swap,
+            minimal_quote_asset_unit,
+            valid_quote_swap_deltas,
+          ) =
             // Swap Y/Z to X:
             if delta_base < 0 {
+              let min_base_unit = precision / base_dec0
               (
-                delta_base_protocol_fees == -delta_base * swap_fee_num0 * protocol_share_num0 / (
-                  denom * denom
-                ),
-                // While swapping Y to X, delta_z must be 0 and delta_y must be > 0, etc.:
+                // Index of the quote asset:
+                0,
+                // Base asset without latest fees:
+                base_amount1_no_fees_calc - delta_base_protocol_fees - delta_base_protocol_fees * (
+                  denom - protocol_share_num0
+                ) / protocol_share_num0,
+                // First quote asset without latest fees:
+                quote0_amount1_no_fees_calc,
+                // Second quote asset without latest fees:
+                quote1_amount1_no_fees_calc,
+                // Minimal logical step of the quote asset change:
+                min_base_unit,
+                // Valid deltas:
                 if delta_quote0 > 0 {
                   delta_quote1 == 0
                 } else {
                   delta_quote1 > 0 && delta_quote0 == 0
                 },
               )
-            } else if // Swap X/Z to Y:
+            } else if // Value 'inv_diff' should not exeed 2 minimal quote asset units:
+            // Swap X/Z to Y:
             delta_quote0 < 0 {
+              let min_quote0_unit = precision / quote0_dec0
               (
-                delta_quote0_protocol_fees == -delta_quote0 * swap_fee_num0 * protocol_share_num0 / (
-                  denom * denom
-                ),
+                // Index of the quote asset:
+                1,
+                // Base asset without latest fees:
+                base_amount1_no_fees_calc,
+                // First quote asset without latest fees:
+                quote0_amount1_no_fees_calc - delta_quote0_protocol_fees - delta_quote0_protocol_fees * (
+                  denom - protocol_share_num0
+                ) / protocol_share_num0,
+                // Second quote asset without latest fees:
+                quote1_amount1_no_fees_calc,
+                // Minimal logical step of the quote asset change:
+                min_quote0_unit,
+                // Valid deltas:
                 if delta_base > 0 {
                   delta_quote1 == 0
                 } else {
@@ -349,10 +362,22 @@ validator {
               )
             } else if // Swap X/Y to Z:
             delta_quote1 < 0 {
+              let min_quote1_unit = precision / quote1_dec0
+
               (
-                delta_quote1_protocol_fees == -delta_quote1 * swap_fee_num0 * protocol_share_num0 / (
-                  denom * denom
-                ),
+                // Index of the quote asset:
+                2,
+                // Base asset without latest fees:
+                base_amount1_no_fees_calc,
+                // First quote asset without latest fees:
+                quote0_amount1_no_fees_calc,
+                // Second quote asset without latest fees:
+                quote1_amount1_no_fees_calc - delta_quote1_protocol_fees - delta_quote1_protocol_fees * (
+                  denom - protocol_share_num0
+                ) / protocol_share_num0,
+                // Minimal logical step of the quote asset change:
+                min_quote1_unit,
+                // Valid deltas:
                 if delta_base > 0 {
                   delta_quote0 == 0
                 } else {
@@ -360,10 +385,39 @@ validator {
                 },
               )
             } else {
-              (False, False)
+              (0, 0, 0, 0, 0, False)
             }
 
-          valid_invariant_extremum && valid_native_invariant_extremum && valid_invariant_for_swap && valid_lp_delta_for_swap && valid_protocol_swap_fees && valid_quote_swap_deltas
+          // Value 'inv_diff' should not exeed 2 minimal quote asset units:
+          let native_invariant_preserved =
+            inv_diff <= 2 * minimal_quote_asset_unit
+          // let 
+          // Check the invariant for swap:
+          let valid_invariant_extremum_for_asset: Bool =
+            check_invariant_extremum_for_asset(
+              x_calc: base_amount1_calc,
+              y_calc: quote0_amount1_calc,
+              z_calc: quote1_amount1_calc,
+              d: inv1,
+              nn: nn,
+              ann: ann,
+              minimal_asset_unit: minimal_quote_asset_unit,
+              asset_ind: quote_asset_ind,
+            )
+
+          // Check the native invariant for swap:
+          let valid_native_invariant_extremum_for_asset: Bool =
+            check_invariant_extremum_for_asset(
+              x_calc: base_amount1_no_fees_calc_for_swap,
+              y_calc: quote0_amount1_no_fees_calc_for_swap,
+              z_calc: quote1_amount1_no_fees_calc_for_swap,
+              d: inv_native1,
+              nn: nn,
+              ann: ann,
+              minimal_asset_unit: minimal_quote_asset_unit,
+              asset_ind: quote_asset_ind,
+            )
+          valid_invariant_extremum_for_asset && valid_native_invariant_extremum_for_asset && native_invariant_preserved && valid_lp_delta_for_swap && valid_quote_swap_deltas
         }
       }
     pool_nft_token_preserved && preserved_config && preserved_script && valid_action
