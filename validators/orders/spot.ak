@@ -10,23 +10,26 @@ use aiken/transaction/credential.{
   Address, ScriptCredential, VerificationKeyCredential, from_script,
 }
 use aiken/transaction/value.{
-  ada_asset_name, ada_policy_id, add, from_lovelace, lovelace_of, quantity_of,
+  PolicyId, Value, ada_asset_name, ada_policy_id, add, from_lovelace,
+  lovelace_of, quantity_of,
 }
 use whalepools/plutus.{Asset, VerificationKeyHash, mk_asset}
 use whalepools/rational.{Rational, rational}
 
 type ConfigNativeToToken {
-  // What we receive.
+  /// Beacon used to track progress.
+  beacon: PolicyId,
+  /// What we receive.
   output: Asset,
-  // Worst acceptable price (Output/Input).
+  /// Worst acceptable price (Output/Input).
   base_price: Rational,
-  // How much we pay for each unit of ouput asset.
+  /// How much we pay for each unit of ouput asset.
   fee_per_output: Rational,
   /// Amount of output sufficient for the order to be terminated.
   termination_threshold: Int,
-  // Redeemer PKH.
+  /// Redeemer PKH.
   redeemer_reward_pkh: VerificationKeyHash,
-  // Redeemer stake PKH.
+  /// Redeemer stake PKH.
   redeemer_stake_pkh: List<VerificationKeyHash>,
 }
 
@@ -35,6 +38,8 @@ type Action {
   Exec { successor_ix: Int }
   Cancel
 }
+
+pub const beacon_name = #"01"
 
 validator {
   fn spot_native_to_token(
@@ -79,10 +84,12 @@ validator {
               order_satisfied && redeemer_correct
             }
             ScriptCredential(_) -> {
+              let beacon_preserved =
+                quantity_of(successor.value, conf.beacon, beacon_name) == 1
               let script_preserved = self.address == successor.address
               let config_preserved = self.datum == successor.datum
               // Script and configuration are preserved.
-              script_preserved && config_preserved
+              beacon_preserved && script_preserved && config_preserved
             }
           }
 
@@ -94,24 +101,25 @@ validator {
   }
 }
 
-const policy_x =
-  #"0000000000000000000000000000000000000000000000000000000000000001"
-
 const policy_y =
   #"0000000000000000000000000000000000000000000000000000000000000002"
 
+const name_y = "usd"
+
+const beacon = #"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50"
+
 fn swap_native_to_token(
-  input_amount: Int,
+  input_value: Value,
   price: Rational,
   fee_per_output: Rational,
   termination_threshold: Int,
 ) -> (Output, ConfigNativeToToken) {
   let order_addr =
     from_script(#"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50")
-  let initial_order_value = from_lovelace(input_amount)
   let conf =
     ConfigNativeToToken {
-      output: mk_asset(policy_y, "usd"),
+      beacon,
+      output: mk_asset(policy_y, name_y),
       base_price: price,
       fee_per_output,
       termination_threshold,
@@ -121,7 +129,7 @@ fn swap_native_to_token(
   let order_in_out =
     Output {
       address: order_addr,
-      value: initial_order_value,
+      value: input_value,
       datum: InlineDatum(conf),
       reference_script: None,
     }
@@ -136,15 +144,14 @@ fn swap_native_to_token(
 }
 
 fn test_atomic_swap(
-  order_input: Int,
-  removed_input: Int,
-  added_output: Int,
+  value_in: Value,
+  value_out: Value,
   price: Rational,
   fee: Rational,
   termination_threshold: Int,
 ) -> Bool {
   let (order_utxo_init, conf) =
-    swap_native_to_token(order_input, price, fee, termination_threshold)
+    swap_native_to_token(value_in, price, fee, termination_threshold)
   let order_input_ref =
     OutputReference {
       transaction_id: TransactionId(
@@ -154,20 +161,13 @@ fn test_atomic_swap(
     }
   let order_input =
     Input { output_reference: order_input_ref, output: order_utxo_init }
-  let updated_value =
-    add(
-      add(order_utxo_init.value, policy_y, conf.output.name, added_output),
-      ada_policy_id,
-      ada_asset_name,
-      -removed_input,
-    )
   let order_output =
     Output {
       address: Address {
         payment_credential: VerificationKeyCredential(conf.redeemer_reward_pkh),
         stake_credential: None,
       },
-      value: updated_value,
+      value: value_out,
       datum: NoDatum,
       reference_script: None,
     }
@@ -188,13 +188,12 @@ fn test_atomic_swap(
 }
 
 fn test_partial_swap(
-  order_input: Int,
-  removed_input: Int,
-  added_output: Int,
+  value_in: Value,
+  value_out: Value,
   price: Rational,
   fee: Rational,
 ) -> Bool {
-  let (order_utxo_init, conf) = swap_native_to_token(order_input, price, fee, 0)
+  let (order_utxo_init, conf) = swap_native_to_token(value_in, price, fee, 0)
   let order_input_ref =
     OutputReference {
       transaction_id: TransactionId(
@@ -204,17 +203,10 @@ fn test_partial_swap(
     }
   let order_input =
     Input { output_reference: order_input_ref, output: order_utxo_init }
-  let updated_value =
-    add(
-      add(order_utxo_init.value, policy_y, conf.output.name, added_output),
-      ada_policy_id,
-      ada_asset_name,
-      -removed_input,
-    )
   let order_output =
     Output {
       address: order_utxo_init.address,
-      value: updated_value,
+      value: value_out,
       datum: InlineDatum(conf),
       reference_script: None,
     }
@@ -241,17 +233,56 @@ test valid_partial_swap_at_exact_price() {
   let added_output = 100_000
   let removed_input =
     added_output * price.denom / price.num + added_output * fee.num / fee.denom
-  test_partial_swap(input, removed_input, added_output, price, fee)
+  let value_in = add(from_lovelace(input), beacon, beacon_name, 1)
+  let value_out =
+    add(
+      add(value_in, policy_y, name_y, added_output),
+      ada_policy_id,
+      ada_asset_name,
+      -removed_input,
+    )
+  test_partial_swap(value_in, value_out, price, fee)
 }
 
-test invalid_partial_swap_invalid_exchange_rate() {
+test invalid_partial_swap_bad_exchange_rate() {
   let price = rational(61, 100)
   let fee = rational(1, 1_000_000)
   let input = 1_000_000_000
   let added_output = 100_000
   let removed_input =
     added_output * price.denom / price.num + added_output * fee.num / fee.denom
-  !test_partial_swap(input, removed_input + 1, added_output, price, fee)
+  let value_in = add(from_lovelace(input), beacon, beacon_name, 1)
+  let value_out =
+    add(
+      add(value_in, policy_y, name_y, added_output),
+      ada_policy_id,
+      ada_asset_name,
+      -(removed_input + 1),
+    )
+  !test_partial_swap(value_in, value_out, price, fee)
+}
+
+test invalid_partial_swap_beacon_lost() {
+  let price = rational(61, 100)
+  let fee = rational(1, 1_000_000)
+  let input = 1_000_000_000
+  let added_output = 100_000
+  let removed_input =
+    added_output * price.denom / price.num + added_output * fee.num / fee.denom
+  let value_in = add(from_lovelace(input), beacon, beacon_name, 1)
+  let value_out =
+    add(
+      add(
+        add(value_in, policy_y, name_y, added_output),
+        ada_policy_id,
+        ada_asset_name,
+        -removed_input,
+      ),
+      beacon,
+      beacon_name,
+      1,
+    )
+  !test_partial_swap(value_in, value_out, price, fee)
 }
 
 test valid_atomic_swap_at_exact_price() {
@@ -260,14 +291,15 @@ test valid_atomic_swap_at_exact_price() {
   let added_output = 1_000_000_000
   let removed_input =
     added_output * price.denom / price.num + added_output * fee.num / fee.denom
-  test_atomic_swap(
-    removed_input,
-    removed_input,
-    added_output,
-    price,
-    fee,
-    added_output,
-  )
+  let value_in = add(from_lovelace(removed_input), beacon, beacon_name, 1)
+  let value_out =
+    add(
+      add(value_in, policy_y, name_y, added_output),
+      ada_policy_id,
+      ada_asset_name,
+      -removed_input,
+    )
+  test_atomic_swap(value_in, value_out, price, fee, added_output)
 }
 
 test invalid_atomic_swap_invalid_exchange_rate() {
@@ -276,14 +308,15 @@ test invalid_atomic_swap_invalid_exchange_rate() {
   let added_output = 1_000_000_000
   let removed_input =
     added_output * price.denom / price.num + added_output * fee.num / fee.denom
-  !test_atomic_swap(
-    removed_input,
-    removed_input,
-    added_output - 1,
-    price,
-    fee,
-    added_output,
-  )
+  let value_in = add(from_lovelace(removed_input), beacon, beacon_name, 1)
+  let value_out =
+    add(
+      add(value_in, policy_y, name_y, added_output - 1),
+      ada_policy_id,
+      ada_asset_name,
+      -removed_input,
+    )
+  !test_atomic_swap(value_in, value_out, price, fee, added_output)
 }
 
 test invalid_atomic_swap_illigal_termination() {
@@ -292,12 +325,13 @@ test invalid_atomic_swap_illigal_termination() {
   let added_output = 1_000_000_000
   let removed_input =
     added_output * price.denom / price.num + added_output * fee.num / fee.denom
-  !test_atomic_swap(
-    removed_input,
-    removed_input,
-    added_output,
-    price,
-    fee,
-    added_output + 1,
-  )
+  let value_in = add(from_lovelace(removed_input), beacon, beacon_name, 1)
+  let value_out =
+    add(
+      add(value_in, policy_y, name_y, added_output),
+      ada_policy_id,
+      ada_asset_name,
+      -removed_input,
+    )
+  !test_atomic_swap(value_in, value_out, price, fee, added_output + 1)
 }
