@@ -10,8 +10,8 @@ use aiken/transaction/value.{from_lovelace, from_minted_value, quantity_of}
 
 const beacon_name = #"01"
 
-validator {
-  fn beacon(ref: OutputReference, _redeemer: Data, ctx: ScriptContext) {
+validator(ref: OutputReference) {
+  fn beacon(_: Data, ctx: ScriptContext) {
     expect Mint(policy) = ctx.purpose
     let amount_minted =
       quantity_of(from_minted_value(ctx.transaction.mint), policy, beacon_name)
