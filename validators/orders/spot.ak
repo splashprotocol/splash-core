@@ -39,7 +39,7 @@ type Action {
   Cancel
 }
 
-pub const beacon_name = #"01"
+const beacon_name = #"01"
 
 validator {
   fn spot_native_to_token(
@@ -78,10 +78,11 @@ validator {
         let valid_successor =
           when successor.address.payment_credential is {
             VerificationKeyCredential(successor_cred) -> {
-              let order_satisfied = output_1 >= conf.termination_threshold
+              let order_satisfied_or_exhausted =
+                output_1 >= conf.termination_threshold || input_1 == 0
               let redeemer_correct = conf.redeemer_reward_pkh == successor_cred
-              // Order is satisfied and accumulated funds are transferred to a right address.
-              order_satisfied && redeemer_correct
+              // Order is satisfied or exhausted and accumulated funds are transferred to a right address.
+              order_satisfied_or_exhausted && redeemer_correct
             }
             ScriptCredential(_) -> {
               let beacon_preserved =
@@ -126,21 +127,14 @@ fn swap_native_to_token(
       redeemer_reward_pkh: #"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50",
       redeemer_stake_pkh: [],
     }
-  let order_in_out =
+  let order_out =
     Output {
       address: order_addr,
       value: input_value,
       datum: InlineDatum(conf),
       reference_script: None,
     }
-  let order_in_out_ref =
-    OutputReference {
-      transaction_id: TransactionId(
-        #"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50",
-      ),
-      output_index: 0,
-    }
-  (order_in_out, conf)
+  (order_out, conf)
 }
 
 fn test_atomic_swap(
@@ -331,7 +325,25 @@ test invalid_atomic_swap_illigal_termination() {
       add(value_in, policy_y, name_y, added_output),
       ada_policy_id,
       ada_asset_name,
-      -removed_input,
+      -(removed_input - 1),
     )
   !test_atomic_swap(value_in, value_out, price, fee, added_output + 1)
+}
+
+test valid_atomic_swap_order_exhausted() {
+  let price = rational(61, 100)
+  let fee = rational(1, 1_000_000)
+  let added_output = 1_000_000_000
+  let removed_input =
+    added_output * price.denom / price.num + added_output * fee.num / fee.denom
+  let value_in = add(from_lovelace(removed_input), beacon, beacon_name, 1)
+  let value_out =
+    add(
+      add(value_in, policy_y, name_y, added_output),
+      ada_policy_id,
+      ada_asset_name,
+      -removed_input,
+    )
+  // Termination threshold is not reached, but the order is exhausted.
+  test_atomic_swap(value_in, value_out, price, fee, added_output + 1)
 }
