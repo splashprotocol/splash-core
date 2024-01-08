@@ -217,10 +217,9 @@ Pool validator must validate that:
 
 | Name | Description | Amount    |
 | ---- | ----------- | --------- |
-| `X1`  | Base asset  | Arbitrary |
-| `Y1`  | Quote asset | Arbitrary |
-| `Y2`  | Quote asset | Arbitrary |
-| `Z`  | Quote asset | Arbitrary |
+| `X`  | Base asset  | Arbitrary |
+| `Y`  | First quote asset | Arbitrary |
+| `Z`  | Second quote asset | Arbitrary |
 
 #### Validator
 
@@ -259,6 +258,7 @@ Redeem order validator must validate that:
 ### Swap Order
 ![](images/stable3_swap.svg)
 
+#### Data
 | Field                       | Type                  | Description                                |
 | --------------------------- | --------------------- | ------------------------------------------ |
 | `pool_nft`                  | `Asset`               | Identifier of the target pool              |
@@ -267,14 +267,68 @@ Redeem order validator must validate that:
 | `min_expected_quote_amount` | `Int`                 | Minimum expected amount of the quote token |
 
 ##### Tokens
-
 | Name    | Description   | Amount    |
 | ------- | ------------- | --------- |
 | `X/Y/Z` | Token to swap | Arbitrary |
 
 #### Validator
-
 Swap order validator must validate that:
 1. Order interacts with the desired pool;
 2. Expected quote token and it's amount is received by redeemer;
 3. Redeemer is valid.
+
+
+### DAO
+The DAO contract is a separate contract that verifies the correctness of non-AMM actions (AMM actions are: `deposit/redeem/swap`). It allows to add different logic to the protocol without significantly affecting the main pool contract.
+The pool will only verify that the corresponding NFT-token was minted, with the token `PolicyId` being the hash of the DAO Contract. If the minting of the token was successful, pool contract ensures that all checks from the DAO contract have passed successfully. 
+
+The hash of the DAO contract is stored in the pool datum and is represented by the `DAOPolicy` field. The `DAOPolicy` field contains a list with one element of type `PolicyId`, which acts as a wrapper around the script hash of the DAO Policy contract.
+
+The DAO contract ensures the correctness of the following actions: 
+
+- Change swap fee
+- Change protocol fee share
+- Change StableSwap amplification coefficient
+- Withdraw protocol treasury
+- Change treasury address
+- Change admin address (Placeholder of the DAO)
+
+#### Data
+
+| Field | Type |Description  |
+| --- | --- | --- |
+| `admin_pkhs` | `List<VerificationKeyHash>` | List of authorized keys, which are allowed to perform actions |
+| `pool_nft`                  | `Asset`               | Identifier of the target pool              |
+| `threshold`  | `Int` | The minimum number of signatures that must be present in the TX to verify the validity of any non-AMM action |
+
+#### Action
+
+List of all possible non-AMM actions is as follows:
+
+| Name | Type | Description | Value |
+| --- | --- | --- | --- |
+| `ChangeSwapFee` | `Int` | Indicates that DAO contract should validate correct changing of ` swap_fee_num`  field in the pool datum | `0` |
+| `ChangeProtocolFeeShare` | `Int` | Indicates that DAO Contract should validate correct changing of `protocol_share_num`  in pool | `1` |
+| `ChangeAmplCoeff` | `Int` | Indicates that DAO Contract should validate correct changing of `ampl_coeff`  field in pool datum | `2` |
+| `WithdrawTreasury` | `Int` | Indicates that DAO Contract should validate correct treasury withdraw | `3` |
+| `ChangeTreasuryAddress` | `Int` | Indicates that DAO Contract should validate correct changing of `treasury_address`  field in pool datum | `4` |
+| `ChangeAdminAddress` | `Int` | Indicates that DAO Contract should validate correct changing of `dao_policy` field in pool datum | `5` |
+
+Description of the action to be provided with the data:
+| Name | Type |Description  |
+| --- | --- | --- |
+| `action_ix` | `Int` | Index of the non-AMM action |
+| `successor_ix` | `Int` | Index of the pool output |
+
+
+#### Non-AMM transactions
+Non-AMM transactions are simple due to validation logic separation described above. Value is transfered only in the case of `WithdrawTreasury` action:
+![](images/stable3_withTr.svg)
+
+For all other actions it looks like the following:
+![](images/stable3_changeParams.svg)
+
+#### Validator
+DAO contract must validate that:
+1. Transaction with non-AMM action is signed by `N` out of `M` participants of the DAO contract.
+2. Non-AMM action is valid.

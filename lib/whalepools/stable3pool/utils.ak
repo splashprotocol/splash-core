@@ -1,4 +1,6 @@
-use whalepools/stable3pool/types.{DepositData, PoolData, RedeemData}
+use whalepools/stable3pool/types.{DAOData, DepositData, PoolData, RedeemData}
+
+// Custom datum types conversion:
 
 pub fn convert_pool_datum(data: Data) -> PoolData {
   expect pool_datum: PoolData = data
@@ -13,6 +15,11 @@ pub fn convert_deposit_datum(data: Data) -> DepositData {
 pub fn convert_redeem_datum(data: Data) -> RedeemData {
   expect redeem_datum: RedeemData = data
   redeem_datum
+}
+
+pub fn convert_dao_datum(data: Data) -> DAOData {
+  expect dao_datum: DAOData = data
+  dao_datum
 }
 
 /// Calculates absolute error between left and right parts of the StableSwap invariant.

@@ -71,6 +71,19 @@ pub type RedeemData {
   }
 }
 
+pub type DAOData {
+  /// DAO contract datum.
+  DAOData {
+    // List of authorized keys, which are allowed to perform actions:
+    admin_pkhs: List<VerificationKeyHash>,
+    // Identifier of the pool:
+    pool_nft: Asset,
+    // The minimum number of signatures that must be present
+    // in the TX to verify the validity of any non-AMM action:
+    threshold: Int,
+  }
+}
+
 pub type PoolAction {
   /// Change pool state.
   PoolAction { successor_ix: Int }
@@ -86,4 +99,22 @@ pub type RedeemAction {
   /// Execute redeem order.
   ExecRedeem { pool_in_ix: Int, successor_ix: Int }
   CancelRedeem
+}
+
+pub type DAOAction {
+  // Value of 'action_ix' is one from the set:
+  // - 0: Change swap fee
+  // - 1: Change protocol fee share
+  // - 2: Change StableSwap amplification coefficient
+  // - 3: Withdraw protocol treasury
+  // - 4: Change treasury address
+  // - 5: Change admin address.
+  /// Change adjustable pool params.
+  DAOAction {
+    pool_in_ix: Int,
+    pool_out_ix: Int,
+    action_ix: Int,
+    dao_out_ix: Int,
+    treasury_out_ix: Int,
+  }
 }
