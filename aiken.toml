@@ -1,11 +1,11 @@
-name = "spectrum/whalepools"
+name = "spectrum/splash"
 version = "0.0.0"
 license = "Apache-2.0"
-description = "Aiken contracts for project 'spectrum/whalepools'"
+description = "Aiken contracts for project 'spectrum/splash'"
 
 [repository]
 user = "spectrum"
-project = "whalepools"
+project = "splash"
 platform = "github"
 
 [[dependencies]]

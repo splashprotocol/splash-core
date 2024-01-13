@@ -7,8 +7,8 @@ use aiken/list
 use aiken/transaction.{ScriptContext, Spend, find_input}
 use aiken/transaction/credential.{ScriptCredential, VerificationKeyCredential}
 use aiken/transaction/value.{ada_policy_id, lovelace_of, quantity_of}
-use whalepools/plutus.{Asset, VerificationKeyHash}
-use whalepools/rational.{Rational}
+use splash/plutus.{Asset, VerificationKeyHash}
+use splash/rational.{Rational}
 
 type Config {
   // What we swap.
