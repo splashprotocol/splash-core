@@ -1,7 +1,7 @@
 use aiken/list
 use aiken/transaction.{
-  InlineDatum, Input, Output, OutputReference, ScriptContext, Spend, Transaction,
-  TransactionId, find_input,
+  InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
+  Transaction, TransactionId, find_input,
 }
 use aiken/transaction/credential.{
   Address, ScriptCredential, VerificationKeyCredential, from_script,
@@ -144,6 +144,66 @@ fn make_order(
   (output, conf)
 }
 
+fn test_full_swap(
+  tradable_input: Int,
+  fee_per_ex_step: Int,
+  max_ex_steps: Int,
+  fee_per_output: Rational,
+  base_price: Rational,
+  best_price: Rational,
+  removed_tradable_input: Int,
+  removed_ex_fee: Int,
+  removed_ex_budget: Int,
+  added_output: Int,
+) -> Bool {
+  let (initial_order_utxo, initial_conf) =
+    make_order(
+      tradable_input,
+      fee_per_ex_step,
+      max_ex_steps,
+      fee_per_output,
+      base_price,
+      best_price,
+    )
+  let order_input_ref =
+    OutputReference { transaction_id: TransactionId(hex32), output_index: 0 }
+  let order_input =
+    Input { output_reference: order_input_ref, output: initial_order_utxo }
+  let removed_input =
+    removed_tradable_input + removed_ex_fee + removed_ex_budget
+  let order_output =
+    Output {
+      address: Address {
+        payment_credential: VerificationKeyCredential(
+          initial_conf.redeemer_reward_pkh,
+        ),
+        stake_credential: None,
+      },
+      value: add(
+        add(initial_order_utxo.value, policy_y, name_y, added_output),
+        ada_policy_id,
+        ada_asset_name,
+        -removed_input,
+      ),
+      datum: NoDatum,
+      reference_script: None,
+    }
+  let ctx =
+    ScriptContext {
+      purpose: Spend(order_input_ref),
+      transaction: transaction.placeholder()
+        |> fn(transaction) {
+             Transaction {
+               ..transaction,
+               inputs: [order_input],
+               outputs: [order_output],
+             }
+           },
+    }
+  let action = Exec { successor_ix: 0 }
+  spot_native_to_token(initial_conf, action, ctx)
+}
+
 fn test_partial_swap(
   tradable_input: Int,
   fee_per_ex_step: Int,
@@ -226,8 +286,221 @@ test valid_partial_swap_at_base_price() {
     base_price,
     best_price,
     removed_tradable_input,
-    fee_per_ex_step,
     removed_ex_fee,
+    fee_per_ex_step,
+    added_output,
+  )
+}
+
+test valid_full_swap_at_base_price() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000_000)
+  let fee_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+
+  let removed_tradable_input = tradable_input
+  let added_output = removed_tradable_input * base_price.num / base_price.denom
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  test_full_swap(
+    tradable_input,
+    fee_per_ex_step,
+    max_ex_steps,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input,
+    removed_ex_fee,
+    fee_per_ex_step,
+    added_output,
+  )
+}
+
+test valid_full_swap_at_best_price() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000_000)
+  let fee_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+
+  let removed_tradable_input = tradable_input
+  let added_output = removed_tradable_input * best_price.num / best_price.denom
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  test_full_swap(
+    tradable_input,
+    fee_per_ex_step,
+    max_ex_steps,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input,
+    removed_ex_fee,
+    fee_per_ex_step,
+    added_output,
+  )
+}
+
+test invalid_full_swap_bad_exchange_rate() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000_000)
+  let fee_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+
+  let removed_tradable_input = tradable_input
+  let added_output =
+    removed_tradable_input * base_price.num / base_price.denom - 1
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  !test_full_swap(
+    tradable_input,
+    fee_per_ex_step,
+    max_ex_steps,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input,
+    removed_ex_fee,
+    fee_per_ex_step,
+    added_output,
+  )
+}
+
+test invalid_full_swap_bad_exchange_direction() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000_000)
+  let fee_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+
+  let removed_tradable_input = tradable_input
+  let added_output = removed_tradable_input * base_price.num / base_price.denom
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  !test_full_swap(
+    tradable_input,
+    fee_per_ex_step,
+    max_ex_steps,
+    fee_per_output,
+    base_price,
+    best_price,
+    -removed_tradable_input,
+    removed_ex_fee,
+    fee_per_ex_step,
+    -added_output,
+  )
+}
+
+test invalid_full_swap_early_termination() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000_000)
+  let fee_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+
+  let removed_tradable_input = tradable_input - 1
+  let added_output = removed_tradable_input * base_price.num / base_price.denom
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  !test_full_swap(
+    tradable_input,
+    fee_per_ex_step,
+    max_ex_steps,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input,
+    removed_ex_fee,
+    fee_per_ex_step,
+    added_output,
+  )
+}
+
+test invalid_partial_swap_bad_exchange_rate() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000_000)
+  let fee_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+
+  let removed_tradable_input = 60_000_000
+  let added_output =
+    removed_tradable_input * base_price.num / base_price.denom - 1
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  !test_partial_swap(
+    tradable_input,
+    fee_per_ex_step,
+    max_ex_steps,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input,
+    removed_ex_fee,
+    fee_per_ex_step,
+    added_output,
+  ) && !test_partial_swap(
+    tradable_input,
+    fee_per_ex_step,
+    max_ex_steps,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input + 1,
+    removed_ex_fee,
+    fee_per_ex_step,
+    added_output,
+  )
+}
+
+test invalid_partial_swap_bad_execution_budget() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000_000)
+  let fee_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+
+  let removed_tradable_input = 60_000_000
+  let added_output = removed_tradable_input * base_price.num / base_price.denom
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  !test_partial_swap(
+    tradable_input,
+    fee_per_ex_step,
+    max_ex_steps,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input,
+    removed_ex_fee,
+    fee_per_ex_step + 1,
+    added_output,
+  )
+}
+
+test invalid_partial_swap_bad_execution_fee() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000_000)
+  let fee_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+
+  let removed_tradable_input = 60_000_000
+  let added_output = removed_tradable_input * base_price.num / base_price.denom
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  !test_partial_swap(
+    tradable_input,
+    fee_per_ex_step,
+    max_ex_steps,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input,
+    removed_ex_fee + 1,
+    fee_per_ex_step,
     added_output,
   )
 }
