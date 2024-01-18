@@ -4,12 +4,12 @@ module PExtra.Num (
     PNum,
     pproduct,
     psum,
-    pexp,
+    pexp
 ) where
 
 import Plutarch.Prelude
 
-import Plutarch.Rational (PRational (..))
+import Plutarch.Rational
 
 import PExtra.Integer (podd)
 import PExtra.Monadic (tcon, tmatch)

@@ -1,4 +1,4 @@
-module WhalePoolsDex.PContracts.PFeeSwitch where
+module WhalePoolsDex.PContracts.PFeeSwitchBalancePool where
 
 import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit)
 import PExtra.API (assetClassValueOf, ptryFromData, PAssetClass(..))
@@ -12,13 +12,15 @@ import Plutarch.Extra.TermCont
 import Plutarch.Builtin             (pasInt, pforgetData, PIsData(..))
 import Plutarch.Unsafe              (punsafeCoerce)
 import Plutarch.Internal.PlutusType (pcon', pmatch')
-import WhalePoolsDex.PContracts.PPool
-import Plutarch.Api.V1.Scripts (PValidatorHash)
+
+import WhalePoolsDex.PContracts.PBalancePool 
+import WhalePoolsDex.PContracts.PPool        (findPoolOutput)
+import Plutarch.Api.V1.Scripts               (PValidatorHash)
 import Plutarch.Trace
 import Plutarch.Extra.TermCont
 
-extractPoolConfig :: Term s (PTxOut :--> PoolConfig)
-extractPoolConfig = plam $ \txOut -> unTermCont $ do
+extractBalancePoolConfig :: Term s (PTxOut :--> BalancePoolConfig)
+extractBalancePoolConfig = plam $ \txOut -> unTermCont $ do
   txOutDatum <- tletField @"datum" txOut
 
   POutputDatum txOutOutputDatum <- pmatchC txOutDatum
@@ -27,7 +29,7 @@ extractPoolConfig = plam $ \txOut -> unTermCont $ do
 
   PDatum poolDatum <- pmatchC rawDatum
 
-  tletUnwrap $ ptryFromData @(PoolConfig) $ poolDatum
+  tletUnwrap $ ptryFromData @(BalancePoolConfig) $ poolDatum
 
 findOutput :: Term s (PValidatorHash :--> PBuiltinList PTxOut :--> PTxOut)
 findOutput =
@@ -81,32 +83,38 @@ instance PlutusType DAOAction where
             )
 
 -- All SwitchFee actions shouldn't modify main poolConfig elements: poolNft, poolX, poolY, poolLq, lqBound, feeNum
-validateCommonFields :: PMemberFields PoolConfig '["poolNft", "poolX", "poolY", "poolLq", "lqBound"] s as => HRec as -> HRec as -> Term s PBool
+validateCommonFields :: PMemberFields BalancePoolConfig '["poolNft", "poolX", "poolY", "poolLq", "weightX", "weightY", "invariant"] s as => HRec as -> HRec as -> Term s PBool
 validateCommonFields prevConfig newConfig =
   let
-    prevPoolNft = getField @"poolNft" prevConfig
-    prevPoolX   = getField @"poolX"   prevConfig
-    prevPoolY   = getField @"poolY"   prevConfig
-    prevPoolLq  = getField @"poolLq"  prevConfig
-    prevLqBound = getField @"lqBound"  prevConfig
+    prevPoolNft   = getField @"poolNft" prevConfig
+    prevPoolX     = getField @"poolX"   prevConfig
+    prevWeightX   = getField @"weightX"  prevConfig
+    prevPoolY     = getField @"poolY"   prevConfig
+    prevWeightY   = getField @"weightY"  prevConfig
+    prevPoolLq    = getField @"poolLq"  prevConfig
+    prevInvariant = getField @"invariant"  prevConfig
 
-    newPoolNft  = getField @"poolNft" newConfig
-    newPoolX    = getField @"poolX"   newConfig
-    newPoolY    = getField @"poolY"   newConfig
-    newPoolLq   = getField @"poolLq"  newConfig
-    newLqBound  = getField @"lqBound" newConfig
+    newPoolNft   = getField @"poolNft" newConfig
+    newPoolX     = getField @"poolX"   newConfig
+    newWeightX   = getField @"weightX"   newConfig
+    newPoolY     = getField @"poolY"   newConfig
+    newWeightY   = getField @"weightY"   newConfig
+    newPoolLq    = getField @"poolLq"  newConfig
+    newInvariant = getField @"invariant" newConfig
 
     commonFieldsValid = 
       prevPoolNft    #== newPoolNft  #&&
       prevPoolX      #== newPoolX    #&&
+      prevWeightX    #== newWeightX  #&&
       prevPoolY      #== newPoolY    #&&
+      prevWeightY    #== newWeightY  #&&
       prevPoolLq     #== newPoolLq   #&&
-      prevLqBound    #== newLqBound
+      prevInvariant  #== newInvariant
 
   in commonFieldsValid
 
 -- Validates that treasuryX, treasuryY fields from poolConfig hadn't be modified
-treasuryIsTheSame :: PMemberFields PoolConfig '["treasuryX", "treasuryY"] s as => HRec as -> HRec as -> Term s PBool
+treasuryIsTheSame :: PMemberFields BalancePoolConfig '["treasuryX", "treasuryY"] s as => HRec as -> HRec as -> Term s PBool
 treasuryIsTheSame prevConfig newConfig =
   let
     prevTreasuryX = getField @"treasuryX" prevConfig
@@ -122,7 +130,7 @@ treasuryIsTheSame prevConfig newConfig =
   in commonFieldsValid
 
 validateTreasuryWithdraw 
-  :: PMemberFields PoolConfig '["treasuryX", "treasuryY", "poolX", "poolY", "poolLq", "treasuryAddress"] s as 
+  :: PMemberFields BalancePoolConfig '["treasuryX", "treasuryY", "poolX", "poolY", "poolLq", "treasuryAddress"] s as 
   => HRec as 
   -> HRec as
   -> Term s (PBuiltinList PTxOut :--> PValue _ _ :--> PValue _ _ :--> PAssetClass :--> PBool)
@@ -200,17 +208,17 @@ daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \
     poolInputResolved = getField @"resolved" poolInput
 
   poolInputValue <- tletField @"value" poolInputResolved
-  poolInputDatum <- tlet $ extractPoolConfig # poolInputResolved
+  poolInputDatum <- tlet $ extractBalancePoolConfig # poolInputResolved
 
   successor       <- tlet $ findPoolOutput # poolNft # outputs
-  poolOutputDatum <- tlet $ extractPoolConfig # successor
+  poolOutputDatum <- tlet $ extractBalancePoolConfig # successor
   poolOutputValue <- tletField @"value" successor
 
   poolInputAddr  <- tletField @"address" poolInputResolved
   poolOutputAddr <- tletField @"address" successor
 
-  prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] poolInputDatum
-  newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] poolOutputDatum
+  prevConf <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant"] poolInputDatum
+  newConf  <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant"] poolOutputDatum
   let
     validSignaturesQty =
       pfoldl # plam (\acc pkh -> pif (containsSignature # signatories # pkh) (acc + 1) acc) # 0 # daoPkhs
