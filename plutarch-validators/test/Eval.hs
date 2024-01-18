@@ -21,6 +21,7 @@ evalWithArgs x args = do
   cmp <- compile evalConfig x
   let (escr, budg, trc) = evalScript $ applyArguments cmp args
   scr <- left (pack . show) escr
+  traceM $ show trc
   pure (budg, trc, unScript scr)
 
 evalWithArgsT :: ClosedTerm a -> [Data] -> Either Text (Program DeBruijn DefaultUni DefaultFun ())

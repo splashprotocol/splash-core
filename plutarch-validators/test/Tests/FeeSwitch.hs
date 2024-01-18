@@ -167,6 +167,9 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withSh
     context  = toData $ mkContext txInInfo purpose
     redeemer = toData $ DAORedeemer action 0
 
+  traceM $ show redeemer
+
+  let 
     correctResult = 
       case testResultShouldBe of
         Success -> Right()

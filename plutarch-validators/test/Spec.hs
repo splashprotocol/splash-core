@@ -11,6 +11,7 @@ import Tests.Staking
 import Tests.Api
 import Tests.FeeSwitch
 import Tests.FeeSwitchBFee
+import Tests.BalancePool
 
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -26,6 +27,7 @@ main =
 tests = testGroup "Contracts"
   [ feeSwitch
   , feeSwitchBFee
+  , balancePool
   , checkPValueLength
   , checkPool
   , checkPoolRedeemer

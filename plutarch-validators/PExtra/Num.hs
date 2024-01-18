@@ -4,7 +4,7 @@ module PExtra.Num (
     PNum,
     pproduct,
     psum,
-    pexp,
+    pexp
 ) where
 
 import Plutarch.Prelude

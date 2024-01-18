@@ -178,12 +178,15 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
   pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1) #&& validFinalTreasuryXValue #&& validFinalTreasuryYValue
 
 daoMultisigPolicyValidatorT :: Term s PAssetClass -> Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple DAOAction PInteger) :--> PScriptContext :--> PBool)
-daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx -> unTermCont $ do
+daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx' -> unTermCont $ do
   let  
     action     = pfromData $ pfield @"_0" # redeemer
     poolInIdx  = pfromData $ pfield @"_1" # redeemer
 
-  txinfo' <- tletField @"txInfo" ctx
+  ctx <- pletFieldsC @'["txInfo", "purpose"] ctx'
+
+  PRewarding _ <- pmatchC $ getField @"purpose" ctx
+  let txinfo' = getField @"txInfo" ctx
 
   txInfo  <- pletFieldsC @'["inputs", "outputs", "signatories"] txinfo'
   inputs  <- tletUnwrap $ getField @"inputs" txInfo
