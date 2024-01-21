@@ -2,8 +2,8 @@ use aiken/interval
 use aiken/list
 use aiken/time.{PosixTime}
 use aiken/transaction.{
-  InlineDatum, Input, Output, OutputReference, ScriptContext, Spend, Transaction,
-  TransactionId, find_input,
+  InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
+  Transaction, TransactionId, ValidityRange, find_input,
 }
 use aiken/transaction/credential.{
   Address, VerificationKeyCredential, from_script,
@@ -45,18 +45,19 @@ validator {
               successor_amount >= self_amount
             },
           )
-        assets_at_least_preserved && successor_conf.locked_until >= conf.locked_until
+        let valid_unlock_time = successor_conf.locked_until >= conf.locked_until
+        assets_at_least_preserved? && valid_unlock_time?
       } else {
         // Redemption
         interval.is_entirely_after(
           transaction.validity_range,
           conf.locked_until,
-        )
+        )?
       }
     let is_authorized =
       list.has(ctx.transaction.extra_signatories, conf.redeemer)
 
-    is_authorized && valid_action
+    is_authorized? && valid_action
   }
 }
 
@@ -71,8 +72,6 @@ const pkh1 = #"f686d9aa9f784c7e3dc0027c57505444c0383776d159733776226ed2"
 
 const pkh2 = #"1544d2ed5fc4fafd503ef7334ccab11eb8a0815817aa0822938c4302"
 
-const pkh3 = #"b1ac43b559d103921480b55b64e818be4af47fb9f70ee5e1bc19dfa7"
-
 const min_value = 1_000
 
 fn make_lock(
@@ -86,6 +85,46 @@ fn make_lock(
   let output =
     Output { address, value, datum: InlineDatum(conf), reference_script: None }
   (output, conf)
+}
+
+fn test_redeem(
+  amount: Int,
+  locked_until: PosixTime,
+  redeemer: VerificationKeyHash,
+  signatories: List<VerificationKeyHash>,
+  validity_range: ValidityRange,
+) -> Bool {
+  let (initial_lock_utxo, initial_conf) =
+    make_lock(amount, locked_until, redeemer)
+  let order_input_ref =
+    OutputReference { transaction_id: TransactionId(hex32), output_index: 0 }
+  let order_input =
+    Input { output_reference: order_input_ref, output: initial_lock_utxo }
+  let order_output =
+    Output {
+      address: Address {
+        payment_credential: VerificationKeyCredential(pkh2),
+        stake_credential: None,
+      },
+      value: from_lovelace(100),
+      datum: NoDatum,
+      reference_script: None,
+    }
+  let ctx =
+    ScriptContext {
+      purpose: Spend(order_input_ref),
+      transaction: transaction.placeholder()
+        |> fn(transaction) {
+             Transaction {
+               ..transaction,
+               inputs: [order_input],
+               outputs: [order_output],
+               extra_signatories: signatories,
+               validity_range: validity_range,
+             }
+           },
+    }
+  liquidity_locker(initial_conf, 0, ctx)
 }
 
 fn test_relock_or_transfer(
@@ -128,4 +167,55 @@ fn test_relock_or_transfer(
            },
     }
   liquidity_locker(initial_conf, 0, ctx)
+}
+
+test valid_redeem() {
+  let locked_until = 100
+  test_redeem(
+    1000,
+    locked_until,
+    pkh1,
+    [pkh1],
+    interval.after(locked_until + 1),
+  )
+}
+
+test premature_redeem() {
+  let locked_until = 100
+  !test_redeem(1000, locked_until, pkh1, [pkh1], interval.after(locked_until))
+}
+
+test unauthorized_redeem() {
+  let locked_until = 100
+  !test_redeem(1000, locked_until, pkh1, [], interval.after(locked_until + 1))
+}
+
+test valid_relock() {
+  let locked_until = 100
+  test_relock_or_transfer(1000, locked_until, pkh1, pkh1, 500, 1, [pkh1])
+}
+
+test valid_transfer() {
+  let locked_until = 100
+  test_relock_or_transfer(1000, locked_until, pkh1, pkh2, 0, 0, [pkh1])
+}
+
+test valid_transfer_and_relock() {
+  let locked_until = 100
+  test_relock_or_transfer(1000, locked_until, pkh1, pkh2, 100, 1, [pkh1])
+}
+
+test invalid_transfer_unauthorized() {
+  let locked_until = 100
+  !test_relock_or_transfer(1000, locked_until, pkh1, pkh2, 100, 1, [])
+}
+
+test invalid_transfer_asset_balance_shrinked() {
+  let locked_until = 100
+  !test_relock_or_transfer(1000, locked_until, pkh1, pkh2, -1, 1, [pkh1])
+}
+
+test invalid_transfer_unlock_time_shrinked() {
+  let locked_until = 100
+  !test_relock_or_transfer(1000, locked_until, pkh1, pkh2, 1, -1, [pkh1])
 }
