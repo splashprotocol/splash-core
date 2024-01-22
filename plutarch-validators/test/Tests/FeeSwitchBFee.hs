@@ -39,7 +39,7 @@ import Data.Char
 import Debug.Trace
 
 feeSwitchBFee = testGroup "FeeSwitchV1 BFee Pool"
-  (genTests `map` [daoSwitchTests , treasuryFeeTests,  treasuryAddressTests, stakeAddressTests, treasuryWithdrawTests, poolFeeTests])
+  ((genTests `map` [daoSwitchTests , treasuryFeeTests,  treasuryAddressTests, stakeAddressTests, treasuryWithdrawTests, poolFeeTests]) ++ [lpFeeEditableTest])
 
 genTests TestGroup{..} = 
   let
@@ -158,7 +158,7 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withSh
     threshold = 2
 
   (pkh1, pkh2, pkh3)  <- forAll $ tuple3 genPkh
-  prevPool            <- forAll $ genPool [pkh1, pkh2, pkh3] threshold
+  prevPool            <- forAll $ genPool [pkh1, pkh2, pkh3] threshold True
   updateResult        <- forAll $ poolUpdater prevPool
 
   txInInfo <- forAll $ createTxInfo prevPool updateResult (take sigsQty [pkh1, pkh2, pkh3])
@@ -175,3 +175,24 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withSh
     result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold True) [redeemer, context]
   
   result === correctResult
+
+lpFeeEditableTest = HH.testPropertyNamed "Pool fee tests" "fail_if_lpFeeEditable_is_false" lpFeeEditableProperty
+
+lpFeeEditableProperty :: Property
+lpFeeEditableProperty = withShrinks 1 $ withTests 1 $ property $ do
+  let
+    threshold = 2
+
+  (pkh1, pkh2, pkh3)  <- forAll $ tuple3 genPkh
+  prevPool            <- forAll $ genPool [pkh1, pkh2, pkh3] threshold False
+  updateResult        <- forAll $ (Gen.Utils.action changePoolFee) prevPool
+
+  txInInfo <- forAll $ createTxInfo prevPool updateResult (take 2 [pkh1, pkh2, pkh3])
+  let
+    purpose  = daoMintingPurpose prevPool
+    context  = toData $ mkContext txInInfo purpose
+    redeemer = toData $ DAORedeemer ChangePoolFee 0
+
+    result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold False) [redeemer, context]
+  
+  result === Left()
