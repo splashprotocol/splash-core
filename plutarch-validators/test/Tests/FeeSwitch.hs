@@ -172,6 +172,6 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withSh
         Success -> Right()
         Failed  -> Left()
 
-    result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold) [redeemer, context]
+    result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold True) [redeemer, context]
   
   result === correctResult

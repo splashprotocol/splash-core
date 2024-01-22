@@ -114,7 +114,7 @@ genPool adminsPkhs threshold = do
 
   let
     daoContract =
-        CurrencySymbol $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft adminsPkhs threshold))
+        CurrencySymbol $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft adminsPkhs threshold True))
 
     poolConfig = PoolConfig
       { poolNft = nft
@@ -134,9 +134,9 @@ genPool adminsPkhs threshold = do
 
   pure $ Pool poolConfig stakeHash poolValue
 
-daoValidator :: Pool -> [PubKeyHash] -> Integer -> ClosedTerm (PData :--> PScriptContext :--> POpaque)
-daoValidator Pool{..} admins threshold = 
-  wrapMintingValidator (daoMultisigPolicyValidatorT (pconstant (poolNft config)) (pconstant admins) (pconstant threshold))
+daoValidator :: Pool -> [PubKeyHash] -> Integer -> Bool -> ClosedTerm (PData :--> PScriptContext :--> POpaque)
+daoValidator Pool{..} admins threshold lpFeeIsEditable = 
+  wrapMintingValidator (daoMultisigPolicyValidatorT (pconstant (poolNft config)) (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable))
 
 incorrectPoolValue :: Pool -> Pool
 incorrectPoolValue prevPool =
