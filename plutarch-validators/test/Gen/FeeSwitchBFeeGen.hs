@@ -93,8 +93,8 @@ poolFeeNumUpperLimit = 9999
 treasuryFeeDen = 10000
 poolFeeNumDen  = 10000
 
-genPool :: MonadGen f => [PubKeyHash] -> Integer -> f Pool
-genPool adminsPkhs threshold = do
+genPool :: MonadGen f => [PubKeyHash] -> Integer -> Bool -> f Pool
+genPool adminsPkhs threshold lpFeeIsEditable = do
   (x, y, lq, nft) <- tuple4 genAssetClass
 
   stakeHash <- genPkh
@@ -114,7 +114,7 @@ genPool adminsPkhs threshold = do
 
   let
     daoContract =
-        CurrencySymbol $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft adminsPkhs threshold))
+        CurrencySymbol $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft adminsPkhs threshold lpFeeIsEditable))
 
     poolConfig = PoolConfig
       { poolNft = nft
@@ -135,9 +135,9 @@ genPool adminsPkhs threshold = do
 
   pure $ Pool poolConfig stakeHash poolValue
 
-daoValidator :: Pool -> [PubKeyHash] -> Integer -> ClosedTerm (PData :--> PScriptContext :--> POpaque)
-daoValidator Pool{..} admins threshold = 
-  wrapMintingValidator (daoMultisigPolicyValidatorT (pconstant (poolNft config)) (pconstant admins) (pconstant threshold))
+daoValidator :: Pool -> [PubKeyHash] -> Integer -> Bool -> ClosedTerm (PData :--> PScriptContext :--> POpaque)
+daoValidator Pool{..} admins threshold lpFeeIsEditable = 
+  wrapMintingValidator (daoMultisigPolicyValidatorT (pconstant (poolNft config)) (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable))
 
 incorrectPoolValue :: Pool -> Pool
 incorrectPoolValue prevPool =
