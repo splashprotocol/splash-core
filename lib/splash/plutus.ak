@@ -9,3 +9,7 @@ pub type Asset {
   policy: PolicyId,
   name: AssetName,
 }
+
+pub fn mk_asset(policy: PolicyId, name: AssetName) -> Asset {
+  Asset { policy, name }
+}
