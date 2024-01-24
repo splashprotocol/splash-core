@@ -31,6 +31,8 @@ type ConfigNativeToToken {
   fee_per_output: Rational,
   /// Redeemer PKH.
   redeemer_reward_pkh: VerificationKeyHash,
+  /// Executors permitted to execute this order.
+  permitted_executors: List<VerificationKeyHash>,
 }
 
 validator {
@@ -39,6 +41,7 @@ validator {
     action: Action,
     ctx: ScriptContext,
   ) -> Bool {
+    let signatories = ctx.transaction.extra_signatories
     when action is {
       Exec { successor_ix } -> {
         let ScriptContext { transaction, purpose } = ctx
@@ -99,16 +102,25 @@ validator {
                 successor_conf.tradable_input == remaining_tradable_input
               // Immutable field are unchanged.
               let config_preserved =
-                conf.beacon == successor_conf.beacon && conf.output == successor_conf.output && conf.base_price == successor_conf.base_price && conf.fee_per_output == successor_conf.fee_per_output && conf.cost_per_ex_step == successor_conf.cost_per_ex_step && conf.min_marginal_output == successor_conf.min_marginal_output && conf.redeemer_reward_pkh == successor_conf.redeemer_reward_pkh
+                conf.beacon == successor_conf.beacon && conf.output == successor_conf.output && conf.base_price == successor_conf.base_price && conf.fee_per_output == successor_conf.fee_per_output && conf.cost_per_ex_step == successor_conf.cost_per_ex_step && conf.min_marginal_output == successor_conf.min_marginal_output && conf.redeemer_reward_pkh == successor_conf.redeemer_reward_pkh && conf.permitted_executors == successor_conf.permitted_executors
               // Script and configuration are preserved.
               !order_exhausted_or_satisfied && valid_marginal_output && beacon_preserved && script_preserved && valid_tradable_input && config_preserved
             }
           }
 
-        valid_successor && valid_stake_cred && valid_exchange_direction && valid_exchange_rate && valid_input
+        let valid_authorization =
+          when conf.permitted_executors is {
+            [] -> True
+            non_empty_executors ->
+              list.any(
+                non_empty_executors,
+                fn(pkh) { list.has(signatories, pkh) },
+              )
+          }
+
+        valid_successor && valid_stake_cred && valid_exchange_direction && valid_exchange_rate && valid_input && valid_authorization
       }
-      Cancel ->
-        list.has(ctx.transaction.extra_signatories, conf.redeemer_reward_pkh)
+      Cancel -> list.has(signatories, conf.redeemer_reward_pkh)
     }
   }
 }
@@ -120,6 +132,12 @@ const name_y = "usd"
 
 const hex32 = #"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50"
 
+const pkh1 = #"f686d9aa9f784c7e3dc0027c57505444c0383776d159733776226ed2"
+
+const pkh2 = #"1544d2ed5fc4fafd503ef7334ccab11eb8a0815817aa0822938c4302"
+
+const pkh3 = #"b1ac43b559d103921480b55b64e818be4af47fb9f70ee5e1bc19dfa7"
+
 fn make_order(
   tradable_input: Int,
   cost_per_ex_step: Int,
@@ -128,6 +146,7 @@ fn make_order(
   fee_per_output: Rational,
   base_price: Rational,
   best_price: Rational,
+  permitted_executors: List<VerificationKeyHash>,
 ) -> (Output, ConfigNativeToToken) {
   let conf =
     ConfigNativeToToken {
@@ -139,6 +158,7 @@ fn make_order(
       base_price,
       fee_per_output,
       redeemer_reward_pkh: hex32,
+      permitted_executors,
     }
   let address = from_script(hex32)
   let reserved_fees =
@@ -165,6 +185,8 @@ fn test_full_swap(
   removed_ex_fee: Int,
   removed_ex_budget: Int,
   added_output: Int,
+  permitted_executors: List<VerificationKeyHash>,
+  executor: VerificationKeyHash,
 ) -> Bool {
   let (initial_order_utxo, initial_conf) =
     make_order(
@@ -175,6 +197,7 @@ fn test_full_swap(
       fee_per_output,
       base_price,
       best_price,
+      permitted_executors,
     )
   let order_input_ref =
     OutputReference { transaction_id: TransactionId(hex32), output_index: 0 }
@@ -208,6 +231,7 @@ fn test_full_swap(
                ..transaction,
                inputs: [order_input],
                outputs: [order_output],
+               extra_signatories: [executor],
              }
            },
     }
@@ -227,6 +251,8 @@ fn test_partial_swap(
   removed_ex_fee: Int,
   removed_ex_budget: Int,
   added_output: Int,
+  permitted_executors: List<VerificationKeyHash>,
+  executor: VerificationKeyHash,
 ) -> Bool {
   let (initial_order_utxo, initial_conf) =
     make_order(
@@ -237,6 +263,7 @@ fn test_partial_swap(
       fee_per_output,
       base_price,
       best_price,
+      permitted_executors,
     )
   let order_input_ref =
     OutputReference { transaction_id: TransactionId(hex32), output_index: 0 }
@@ -273,6 +300,7 @@ fn test_partial_swap(
                ..transaction,
                inputs: [order_input],
                outputs: [order_output],
+               extra_signatories: [executor],
              }
            },
     }
@@ -293,6 +321,8 @@ test valid_partial_swap_at_base_price() {
   let removed_tradable_input = 600_000_000
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2, pkh3]
   test_partial_swap(
     tradable_input,
     cost_per_ex_step,
@@ -305,6 +335,40 @@ test valid_partial_swap_at_base_price() {
     removed_ex_fee,
     cost_per_ex_step,
     added_output,
+    allowed_executors,
+    pkh3,
+  )
+}
+
+test valid_open_partial_swap_at_base_price() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000)
+  let cost_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+  let min_final_output = tradable_input * base_price.num / base_price.denom
+  let min_marginal_output = min_final_output / max_ex_steps
+
+  let removed_tradable_input = 600_000_000
+  let added_output = removed_tradable_input * base_price.num / base_price.denom
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    []
+  test_partial_swap(
+    tradable_input,
+    cost_per_ex_step,
+    max_ex_steps,
+    min_marginal_output,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input,
+    removed_ex_fee,
+    cost_per_ex_step,
+    added_output,
+    allowed_executors,
+    pkh3,
   )
 }
 
@@ -322,6 +386,8 @@ test invalid_partial_swap_bad_marginal_output() {
     min_marginal_output * base_price.denom / base_price.num - 1
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2, pkh3]
   !test_partial_swap(
     tradable_input,
     cost_per_ex_step,
@@ -334,6 +400,41 @@ test invalid_partial_swap_bad_marginal_output() {
     removed_ex_fee,
     cost_per_ex_step,
     added_output,
+    allowed_executors,
+    pkh3,
+  )
+}
+
+test invalid_partial_swap_bad_executor() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000)
+  let cost_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+  let min_final_output = tradable_input * base_price.num / base_price.denom
+  let min_marginal_output = min_final_output / max_ex_steps
+
+  let removed_tradable_input =
+    min_marginal_output * base_price.denom / base_price.num
+  let added_output = removed_tradable_input * base_price.num / base_price.denom
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2]
+  !test_partial_swap(
+    tradable_input,
+    cost_per_ex_step,
+    max_ex_steps,
+    min_marginal_output,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input,
+    removed_ex_fee,
+    cost_per_ex_step,
+    added_output,
+    allowed_executors,
+    pkh3,
   )
 }
 
@@ -350,6 +451,8 @@ test valid_full_swap_at_base_price() {
   let removed_tradable_input = tradable_input
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2, pkh3]
   test_full_swap(
     tradable_input,
     cost_per_ex_step,
@@ -362,6 +465,8 @@ test valid_full_swap_at_base_price() {
     removed_ex_fee,
     cost_per_ex_step,
     added_output,
+    allowed_executors,
+    pkh3,
   )
 }
 
@@ -378,6 +483,8 @@ test valid_full_swap_at_best_price() {
   let removed_tradable_input = tradable_input
   let added_output = removed_tradable_input * best_price.num / best_price.denom
   let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2, pkh3]
   test_full_swap(
     tradable_input,
     cost_per_ex_step,
@@ -390,6 +497,8 @@ test valid_full_swap_at_best_price() {
     removed_ex_fee,
     cost_per_ex_step,
     added_output,
+    allowed_executors,
+    pkh3,
   )
 }
 
@@ -407,6 +516,8 @@ test invalid_full_swap_bad_exchange_rate() {
   let added_output =
     removed_tradable_input * base_price.num / base_price.denom - 1
   let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2, pkh3]
   !test_full_swap(
     tradable_input,
     cost_per_ex_step,
@@ -419,6 +530,8 @@ test invalid_full_swap_bad_exchange_rate() {
     removed_ex_fee,
     cost_per_ex_step,
     added_output,
+    allowed_executors,
+    pkh3,
   )
 }
 
@@ -435,6 +548,8 @@ test invalid_full_swap_bad_exchange_direction() {
   let removed_tradable_input = tradable_input
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2, pkh3]
   !test_full_swap(
     tradable_input,
     cost_per_ex_step,
@@ -447,6 +562,8 @@ test invalid_full_swap_bad_exchange_direction() {
     removed_ex_fee,
     cost_per_ex_step,
     -added_output,
+    allowed_executors,
+    pkh3,
   )
 }
 
@@ -463,6 +580,8 @@ test invalid_full_swap_early_termination() {
   let removed_tradable_input = tradable_input - 1
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2, pkh3]
   !test_full_swap(
     tradable_input,
     cost_per_ex_step,
@@ -475,6 +594,40 @@ test invalid_full_swap_early_termination() {
     removed_ex_fee,
     cost_per_ex_step,
     added_output,
+    allowed_executors,
+    pkh3,
+  )
+}
+
+test invalid_full_swap_bad_executor() {
+  let tradable_input = 1_000_000_000
+  let base_price = rational(61, 100)
+  let best_price = rational(70, 100)
+  let fee_per_output = rational(1, 1_000_000)
+  let cost_per_ex_step = 30_000_000
+  let max_ex_steps = 5
+  let min_final_output = tradable_input * base_price.num / base_price.denom
+  let min_marginal_output = min_final_output / max_ex_steps
+
+  let removed_tradable_input = tradable_input
+  let added_output = removed_tradable_input * base_price.num / base_price.denom
+  let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2]
+  !test_full_swap(
+    tradable_input,
+    cost_per_ex_step,
+    max_ex_steps,
+    min_marginal_output,
+    fee_per_output,
+    base_price,
+    best_price,
+    removed_tradable_input,
+    removed_ex_fee,
+    cost_per_ex_step,
+    added_output,
+    allowed_executors,
+    pkh3,
   )
 }
 
@@ -492,6 +645,8 @@ test invalid_partial_swap_bad_exchange_rate() {
   let added_output =
     removed_tradable_input * base_price.num / base_price.denom - 1
   let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2, pkh3]
   !test_partial_swap(
     tradable_input,
     cost_per_ex_step,
@@ -504,6 +659,8 @@ test invalid_partial_swap_bad_exchange_rate() {
     removed_ex_fee,
     cost_per_ex_step,
     added_output,
+    allowed_executors,
+    pkh3,
   ) && !test_partial_swap(
     tradable_input,
     cost_per_ex_step,
@@ -516,6 +673,8 @@ test invalid_partial_swap_bad_exchange_rate() {
     removed_ex_fee,
     cost_per_ex_step,
     added_output,
+    allowed_executors,
+    pkh3,
   )
 }
 
@@ -532,6 +691,8 @@ test invalid_partial_swap_bad_execution_budget() {
   let removed_tradable_input = 60_000_000
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2, pkh3]
   !test_partial_swap(
     tradable_input,
     cost_per_ex_step,
@@ -544,6 +705,8 @@ test invalid_partial_swap_bad_execution_budget() {
     removed_ex_fee,
     cost_per_ex_step + 1,
     added_output,
+    allowed_executors,
+    pkh3,
   )
 }
 
@@ -560,6 +723,8 @@ test invalid_partial_swap_bad_execution_fee() {
   let removed_tradable_input = 60_000_000
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = added_output * fee_per_output.num / fee_per_output.denom
+  let allowed_executors =
+    [pkh1, pkh2, pkh3]
   !test_partial_swap(
     tradable_input,
     cost_per_ex_step,
@@ -572,5 +737,7 @@ test invalid_partial_swap_bad_execution_fee() {
     removed_ex_fee + 1,
     cost_per_ex_step,
     added_output,
+    allowed_executors,
+    pkh3,
   )
 }
