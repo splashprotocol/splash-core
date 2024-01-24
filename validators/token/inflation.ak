@@ -128,7 +128,6 @@ const emission_start = 1705930274227
 const num_reductions = 28
 
 fn test_emission_chain(
-  epoch: Int,
   next_epoch: Int,
   emission_box: Output,
   withdrawal: Int,
@@ -167,6 +166,8 @@ fn test_emission_chain(
              }
            },
     }
+  expect InlineDatum(emission_data) = emission_box.datum
+  expect epoch: Int = emission_data
   (
     inflation(policy, name, hash32_2, emission_start, epoch, action, ctx),
     emission_output,
@@ -251,7 +252,6 @@ test full_emission() {
         let valid_time = interval.after(emission_start + e * epoch_len + 1)
         let (res, next_emission_box) =
           test_emission_chain(
-            e,
             e + 1,
             emission_box,
             current_emission,
@@ -291,7 +291,6 @@ test valid_tail_emission_step() {
   let current_emission = emission_rate(e)
   let (passed, _) =
     test_emission_chain(
-      e,
       e + 1,
       initial_emission_box,
       current_emission,
@@ -315,7 +314,6 @@ test invalid_epoch_transition() {
   let current_emission = emission_rate(e)
   let (passed, _) =
     test_emission_chain(
-      e,
       e + 2,
       initial_emission_box,
       current_emission,
@@ -339,7 +337,6 @@ test invalid_emission() {
   let current_emission = emission_rate(e) + 1
   let (passed, _) =
     test_emission_chain(
-      e,
       e + 1,
       initial_emission_box,
       current_emission,
@@ -363,7 +360,6 @@ test invalid_interval() {
   let current_emission = emission_rate(e)
   let (passed, _) =
     test_emission_chain(
-      e,
       e + 1,
       initial_emission_box,
       current_emission,
@@ -387,7 +383,6 @@ test invalid_withdrawal_script() {
   let current_emission = emission_rate(e)
   let (passed, _) =
     test_emission_chain(
-      e,
       e + 1,
       initial_emission_box,
       current_emission,
@@ -411,7 +406,6 @@ test invalid_withdrawal_epoch() {
   let current_emission = emission_rate(e)
   let (passed, _) =
     test_emission_chain(
-      e,
       e + 1,
       initial_emission_box,
       current_emission,
@@ -420,6 +414,38 @@ test invalid_withdrawal_epoch() {
       interval.after(emission_start + 1),
     )
   !passed
+}
+
+test double_emission() {
+  let e = 128
+  let value = add(from_lovelace(min_value), policy, name, total_emission)
+  let initial_emission_box =
+    Output {
+      address: from_script(hash32_1),
+      value,
+      datum: InlineDatum(e),
+      reference_script: None,
+    }
+  let current_emission = emission_rate(e)
+  let (passed_1, next_emission_box) =
+    test_emission_chain(
+      e + 1,
+      initial_emission_box,
+      current_emission,
+      e,
+      from_script(hash32_2),
+      interval.after(emission_start + epoch_len * e + 1),
+    )
+  let (passed_2, _) =
+    test_emission_chain(
+      e + 1,
+      next_emission_box,
+      current_emission,
+      e,
+      from_script(hash32_2),
+      interval.after(emission_start + epoch_len * e + 1),
+    )
+  passed_1 && !passed_2
 }
 
 test invalid_withdrawal_balance() {
