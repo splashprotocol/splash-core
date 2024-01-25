@@ -52,7 +52,6 @@ validator {
         let self = self_input.output
         expect Some(successor) = list.at(transaction.outputs, successor_ix)
 
-        // Validate swap
         let output_policy = conf.output.policy
         let input_0 = lovelace_of(self.value)
         let output_0 = quantity_of(self.value, output_policy, conf.output.name)
@@ -67,9 +66,7 @@ validator {
 
         let cost_per_ex_step = conf.cost_per_ex_step
         let tradable_input_0 = conf.tradable_input
-
         let fee_0 = conf.fee
-
         let base_price = conf.base_price
         let permitted_executors = conf.permitted_executors
 
