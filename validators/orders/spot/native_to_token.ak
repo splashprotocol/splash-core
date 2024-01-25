@@ -27,7 +27,7 @@ type ConfigNativeToToken {
   output: Asset,
   /// Worst acceptable price (Output/Input).
   base_price: Rational,
-  /// How much we pay for each unit of ouput asset.
+  /// How much fee we pay to executor for whole swap.
   fee: Int,
   /// Redeemer PKH.
   redeemer_reward_pkh: VerificationKeyHash,
