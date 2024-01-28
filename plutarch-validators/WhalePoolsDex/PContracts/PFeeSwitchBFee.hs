@@ -123,7 +123,7 @@ daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \
         pforce daoPolicyIsTheSame #&&
         pforce treasuryAddressIsTheSame #&&
         (poolInputAddr #== poolOutputAddr) #&&
-        (validateTreasuryWithdraw prevConf newConf) # outputs # poolInputValue # poolOutputValue #&&
+        (validateTreasuryWithdraw prevConf newConf poolNft) # outputs # poolInputValue # poolOutputValue # poolNft #&&
         pforce poolFeeIsTheSame
 
       -- In case of changing pool staking part we should verify next conditions:
