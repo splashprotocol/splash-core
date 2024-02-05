@@ -19,13 +19,15 @@ import Hedgehog.Internal.Property
 import Data.Text as T
 
 import PlutusLedgerApi.V2
+import qualified PlutusTx.AssocMap as AssocMap
 import PlutusLedgerApi.V1.Address
+import PlutusLedgerApi.V1.Value
 import Plutarch.Api.V2 (scriptHash)
 import PlutusTx.Builtins.Internal
 import qualified PlutusLedgerApi.V1 as Plutus
 
 import Gen.DepositGen (mkByteString)
-import Gen.Models     (mkDatum)
+import Gen.Models     (mkDatum, genTxOutRef)
 
 import WhalePoolsDex.Contracts.Pool
 
@@ -66,6 +68,14 @@ instance ToTxOut Pool where
     , txOutReferenceScript = Nothing
     }
 
+instance ToTxInfo TxOut where
+  toTxInInfo txOut = do
+    ref <- genTxOutRef
+    pure $ TxInInfo
+      { txInInfoOutRef   = ref
+      , txInInfoResolved = txOut
+      }
+
 data TestResult = Success | Failed
 
 data TestGroup action = TestGroup 
@@ -73,6 +83,14 @@ data TestGroup action = TestGroup
   , contractAction  :: action
   , validAction     :: TestAction Gen
   , invalidActions  :: [TestAction Gen]
+  }
+
+filterAssetClass :: AssetClass -> Value -> Value
+filterAssetClass ac2filter initValue = let
+  (cs2filter, tn2filter) = unAssetClass ac2filter
+  filterTNList tnList = AssocMap.fromList $ (\(tn, _) -> tn /= tn2filter) `Prelude.filter` (AssocMap.toList tnList)
+  in Value {
+    getValue = AssocMap.fromList $ (\(cs, tnList) -> if (cs /= cs2filter) then (cs, tnList) else (cs, filterTNList tnList)) `Prelude.map` (AssocMap.toList $ getValue initValue)
   }
 
 constructCase testResult TestAction{..} = 

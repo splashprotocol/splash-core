@@ -124,13 +124,13 @@ treasuryIsTheSame prevConfig newConfig =
 validateTreasuryWithdraw 
   :: PMemberFields PoolConfig '["treasuryX", "treasuryY", "poolX", "poolY", "poolLq", "treasuryAddress"] s as 
   => HRec as 
-  -> HRec as 
-  -> Term s (PBuiltinList PTxOut :--> PValue _ _ :--> PValue _ _ :--> PBool)
-validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue newPoolValue -> unTermCont $ do
+  -> HRec as
+  -> Term s (PBuiltinList PTxOut :--> PValue _ _ :--> PValue _ _ :--> PAssetClass :--> PBool)
+validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue newPoolValue poolNft -> unTermCont $ do
   let
-    poolX  = getField @"poolX"  prevConfig
-    poolY  = getField @"poolY"  prevConfig
-    poolLq = getField @"poolLq" prevConfig
+    poolX  = getField @"poolX"    prevConfig
+    poolY  = getField @"poolY"    prevConfig
+    poolLq = getField @"poolLq"   prevConfig
 
     prevTreasuryX  = getField @"treasuryX" prevConfig
     prevTreasuryY  = getField @"treasuryY" prevConfig
@@ -145,6 +145,8 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
   let
     xValueInTreasury = assetClassValueOf # treasuryValue # poolX
     yValueInTreasury = assetClassValueOf # treasuryValue # poolY
+
+    nftQtyInPrevValue = assetClassValueOf # prevPoolValue # poolNft
 
     prevPoolXValue   = assetClassValueOf # prevPoolValue # poolX
     prevPoolYValue   = assetClassValueOf # prevPoolValue # poolY
@@ -167,7 +169,7 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
 
     treasuryAddrIsTheSame = prevTreasuryAddress #== newTreasuryAddress
 
-  pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame
+  pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1)
 
 daoMultisigPolicyValidatorT :: Term s PAssetClass -> Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple DAOAction PInteger) :--> PScriptContext :--> PBool)
 daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx -> unTermCont $ do
@@ -267,7 +269,7 @@ daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \
         pforce daoPolicyIsTheSame #&&
         pforce treasuryAddressIsTheSame #&&
         (poolInputAddr #== poolOutputAddr) #&&
-        (validateTreasuryWithdraw prevConf newConf) # outputs # poolInputValue # poolOutputValue #&&
+        (validateTreasuryWithdraw prevConf newConf) # outputs # poolInputValue # poolOutputValue # poolNft #&&
         pforce poolFeeIsTheSame
 
       -- In case of changing pool staking part we should verify next conditions:

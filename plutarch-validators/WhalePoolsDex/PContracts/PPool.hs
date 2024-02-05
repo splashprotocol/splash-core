@@ -204,7 +204,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     newPoolX   = getField @"poolX"  newConfig
     newPoolY   = getField @"poolY"  newConfig
     newPoolLq  = getField @"poolLq" newConfig
-    newPeeNum  = getField @"feeNum" newConfig
+    newFeeNum  = getField @"feeNum" newConfig
     newTreasuryFee = getField @"treasuryFee" newConfig
     newTreasuryX = getField @"treasuryX" newConfig
     newTreasuryY = getField @"treasuryY" newConfig
@@ -239,7 +239,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
         prevPoolX   #== newPoolX #&&
         prevPoolY   #== newPoolY #&&
         prevPoolLq  #== newPoolLq #&&
-        prevFeeNum  #== newPeeNum #&&
+        prevFeeNum  #== newFeeNum #&&
         prevTreasuryFee #== newTreasuryFee #&&
         prevDAOPolicy #== newDAOPolicy #&&
         prevLqBound   #== newLqBound #&&

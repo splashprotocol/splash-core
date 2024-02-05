@@ -39,7 +39,7 @@ import Data.Char
 import Debug.Trace
 
 feeSwitch = testGroup "FeeSwitchV1"
-  ((genTests `map` [daoSwitchTests , treasuryFeeTests,  treasuryAddressTests, stakeAddressTests, treasuryWithdrawTests, poolFeeTests]) ++ [lpFeeEditableTest])
+  ((genTests `map` [daoSwitchTests , treasuryFeeTests,  treasuryAddressTests, stakeAddressTests, treasuryWithdrawTests, poolFeeTests]) ++ [lpFeeEditableTest, incorrectPoolInputTest])
 
 genTests TestGroup{..} = 
   let
@@ -192,6 +192,32 @@ lpFeeEditableProperty = withShrinks 1 $ withTests 1 $ property $ do
     purpose  = daoMintingPurpose prevPool
     context  = toData $ mkContext txInInfo purpose
     redeemer = toData $ DAORedeemer ChangePoolFee 0
+
+    result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold False) [redeemer, context]
+  
+  result === Left()
+
+incorrectPoolInputTest = HH.testPropertyNamed "Incorrect pool input tests" "fail_if_pool_nft_is_not_preserved_in_indexed_input" incorrectPoolInputProperty
+
+incorrectPoolInputProperty :: Property
+incorrectPoolInputProperty = withShrinks 1 $ withTests 1 $ property $ do
+  let
+    threshold = 2
+
+  (pkh1, pkh2, pkh3)  <- forAll $ tuple3 genPkh
+  prevPool@Pool{..}   <- forAll $ genPool [pkh1, pkh2, pkh3] threshold False
+  let
+    newPoolValue      = filterAssetClass (Pool.poolNft $ config) value
+    fakePool          = prevPool {
+      value  = newPoolValue
+    }
+  updateResult        <- forAll $ (Gen.Utils.action withdrawTreasury) prevPool
+
+  txInInfo <- forAll $ createTxInfoCustom prevPool [toTxOut fakePool] ([toTxOut (newPool updateResult)] ++ additionalOutputs updateResult) [] (take 2 [pkh1, pkh2, pkh3])
+  let
+    purpose  = daoMintingPurpose prevPool
+    context  = toData $ mkContext txInInfo purpose
+    redeemer = toData $ DAORedeemer WithdrawTreasury 1
 
     result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold False) [redeemer, context]
   

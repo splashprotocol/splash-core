@@ -448,5 +448,29 @@ createTxInfo prevPool@Pool{..} ActionResult{..} adminPkhs = do
     , txInfoId = "b0"
     }
 
+createTxInfoCustom :: MonadGen m => Pool -> [TxOut] -> [TxOut] -> [TxOut] -> [PubKeyHash] -> m TxInfo
+createTxInfoCustom prevPool@Pool{..} maliciousInputs validOutputs maliciousOutputs adminPkhs = do
+  poolTxIn  <- toTxInInfo prevPool
+  malicious <- toTxInInfo `RIO.traverse` maliciousInputs
+  let
+    daoCS = List.head (daoPolicy config)
+    scMintAssetClass = AssetClass (daoCS, poolStakeChangeMintTokenName)
+    mintValue = mkValue scMintAssetClass 1
+
+  pure $ TxInfo
+    { txInfoInputs = [poolTxIn] ++ malicious
+    , txInfoReferenceInputs = []
+    , txInfoOutputs = validOutputs ++ maliciousOutputs
+    , txInfoFee = mempty
+    , txInfoMint = mintValue
+    , txInfoDCert = []
+    , txInfoWdrl = fromList []
+    , txInfoValidRange = Interval.always
+    , txInfoSignatories = adminPkhs
+    , txInfoRedeemers = fromList []
+    , txInfoData = fromList []
+    , txInfoId = "b0"
+    }
+
 daoMintingPurpose :: Pool -> ScriptPurpose
 daoMintingPurpose Pool{..} = Minting $ List.head (daoPolicy config)
