@@ -160,8 +160,14 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
     xDiffInValue = newPoolXValue - prevPoolXValue
     yDiffInValue = newPoolYValue - prevPoolYValue
 
-    xDiffInDatum = (pfromData newTreasuryX) - (pfromData prevTreasuryX)
-    yDiffInDatum = (pfromData newTreasuryY) - (pfromData prevTreasuryY)
+    newTreasuryXValue = pfromData newTreasuryX
+    newTreasuryYValue = pfromData newTreasuryY
+
+    xDiffInDatum = newTreasuryXValue - (pfromData prevTreasuryX)
+    yDiffInDatum = newTreasuryYValue - (pfromData prevTreasuryY)
+
+    validFinalTreasuryXValue = 0 #<= newTreasuryXValue
+    validFinalTreasuryYValue = 0 #<= newTreasuryYValue
 
     correctPoolDiff = prevPoolLqValue #== newPoolLqValue #&& xDiffInValue #== xDiffInDatum #&& yDiffInValue #== yDiffInDatum
 
@@ -169,7 +175,7 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
 
     treasuryAddrIsTheSame = prevTreasuryAddress #== newTreasuryAddress
 
-  pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1)
+  pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1) #&& validFinalTreasuryXValue #&& validFinalTreasuryYValue
 
 daoMultisigPolicyValidatorT :: Term s PAssetClass -> Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple DAOAction PInteger) :--> PScriptContext :--> PBool)
 daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx -> unTermCont $ do
