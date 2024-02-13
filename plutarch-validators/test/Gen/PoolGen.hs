@@ -11,11 +11,11 @@ import Hedgehog.Range as Range
 
 import qualified WhalePoolsDex.Contracts.Pool as P
 
-genPConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
-genPConfig x y nft lq fee daoPolicy lqBound treasuryAddress =
+genPConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
+genPConfig x y nft lq fee treasuryFeeNum daoPolicy lqBound treasuryAddress =
   let
     -- for tests treasury fee will be 50% of lp fee
-    config    = mkPoolConfig nft x y lq fee 5000 0 0 daoPolicy lqBound treasuryAddress
+    config    = mkPoolConfig nft x y lq fee treasuryFeeNum 0 0 daoPolicy lqBound treasuryAddress
     od        = OutputDatum $ mkDatum config
   in (toData config, od)
 
@@ -34,35 +34,37 @@ calculateXtoYSwap prevXPool prevYPool xToSwap =
     yFromSwapWithoutFee = prevYPool - (prevXPool * prevYPool) `div` (prevXPool + xToSwap)
   in ((prevXPool + xToSwap), prevYPool - (yFromSwapWithoutFee * 995 `div` 1000) + 1)
 
-calculateY :: Integer -> Integer -> Integer -> Integer
-calculateY prevXPool prevYPool xToSwap =
-  let
-    yFromSwapWithoutFee = prevYPool - (prevXPool * prevYPool) `div` (prevXPool + xToSwap)
-  in yFromSwapWithoutFee
+calculateY :: Integer -> Integer -> Integer -> Integer -> Integer
+calculateY prevXPool prevYPool xToSwap feeNum =
+  ((prevYPool * xToSwap * feeNum) `div` (prevXPool * 10000 + xToSwap * feeNum))
+
+calculateTreasury :: Integer -> Integer -> Integer -> Integer
+calculateTreasury token2swap feeNum treasuryFeeNum =
+  (token2swap * (10000 - feeNum) `div` 10000) * treasuryFeeNum `div` 10000
 
 calculateWithFee :: Integer -> Integer -> Integer -> Integer
 calculateWithFee prevXPool prevYPool xToSwap =
   let
     yFromSwapWithoutFee = prevYPool - (prevXPool * prevYPool) `div` (prevXPool + xToSwap)
-  in yFromSwapWithoutFee * 995 `div` 1000
+  in yFromSwapWithoutFee * 9997 `div` 10000
 
 calculateLqFee :: Integer -> Integer -> Integer -> Integer
 calculateLqFee prevXPool prevYPool xToSwap =
   let
     yFromSwapWithoutFee = prevYPool - (prevXPool * prevYPool) `div` (prevXPool + xToSwap)
-  in (yFromSwapWithoutFee * 5 `div` 1000)
+  in (yFromSwapWithoutFee * 3 `div` 10000)
 
 calculateLqFeeXtoYSwap :: Integer -> Integer -> Integer -> Integer
 calculateLqFeeXtoYSwap prevXPool prevYPool xToSwap =
   let
     yFromSwapWithoutFee = prevYPool - (prevXPool * prevYPool) `div` (prevXPool + xToSwap)
-  in (yFromSwapWithoutFee * 5 `div` 1000) `div` 2
+  in (yFromSwapWithoutFee * 3 `div` 10000) `div` 10000
 
-genPConfigWithUpdatedTreasury :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
-genPConfigWithUpdatedTreasury x y nft lq fee newTreasuryX newTreasuryY daoPolicy lqBound treasuryAddress =
+genPConfigWithUpdatedTreasury :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
+genPConfigWithUpdatedTreasury x y nft lq fee treasuryFeeNum newTreasuryX newTreasuryY daoPolicy lqBound treasuryAddress =
   let
     -- for tests treasury fee will be 50% of lp fee
-    config    = mkPoolConfig nft x y lq fee 5000 newTreasuryX newTreasuryY daoPolicy lqBound treasuryAddress
+    config    = mkPoolConfig nft x y lq fee treasuryFeeNum newTreasuryX newTreasuryY daoPolicy lqBound treasuryAddress
     od        = OutputDatum $ mkDatum config
   in (toData config, od)
 

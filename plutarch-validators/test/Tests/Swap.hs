@@ -53,7 +53,7 @@ successSwap = withTests 1 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 10 y 10 lq 9223372036854775797 nft 1 1000000000
     poolTxOut   = genPTxOut pdh x 20 y 6 lq 9223372036854775787 nft 1 3000000
   
@@ -83,7 +83,7 @@ successSwapWithXIsAda = withTests 1 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 5000 y 5000 lq 9223372036854775797 nft 1 0
     poolTxOut   = genPTxOut pdh x 5010 y 4990 lq 9223372036854775787 nft 1 0 
   
@@ -113,7 +113,7 @@ successSwapWithYIsAda = withTests 1 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 9940655 y 0 lq 9223372036844775807 nft 1 10060000
     poolTxOut   = genPTxOut pdh x 9990060 y 0 lq 9223372036854775787 nft 1 10010497
   
@@ -142,7 +142,7 @@ invalidFairPrice = withTests 1 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 10 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -171,7 +171,7 @@ invalidExFee = withTests 1 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -200,7 +200,7 @@ swapSelfIdentity = withTests 1 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -229,7 +229,7 @@ swapPoolIdentity = withTests 1 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 2 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -258,7 +258,7 @@ swapIncorrectPoolInIx = withTests 1 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -287,7 +287,7 @@ swapIncorrectOrderInIx = withTests 1 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
@@ -316,7 +316,7 @@ swapIncorrectRewardOutIx = withTests 1 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPConfig x y nft lq 1 [] 0 treasuryAddress
+    (pcfg, pdh) = genPConfig x y nft lq 9950 1 [] 0 treasuryAddress
     poolTxIn    = genPTxIn poolTxRef pdh x 100 y 100 lq 9223372036854775797 nft 1 5000000
     poolTxOut   = genPTxOut pdh x 110 y 90 lq 9223372036854775787 nft 1 3000000
   
