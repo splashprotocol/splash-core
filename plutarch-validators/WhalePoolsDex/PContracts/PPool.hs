@@ -215,25 +215,25 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     dt = 
       pif
         (zero #< dx)
-        (newTreasuryY - prevTreasuryY)
         (newTreasuryX - prevTreasuryX)
+        (newTreasuryY - prevTreasuryY)
 
-    c1 = prevFeeNum * treasuryFeeDen
+    c1 = feeDen * treasuryFeeDen
 
     c2 = 
       pif
         (zero #< dx)
-        (-dy * prevTreasuryFee * (feeDen - prevFeeNum))
-        (-dx * prevTreasuryFee * (feeDen - prevFeeNum))
-
+        (dx * prevTreasuryFee * (feeDen - prevFeeNum))
+        (dy * prevTreasuryFee * (feeDen - prevFeeNum))
+        
     validTreasuryChange = (c1 * dt #<= c2) #&& (c2 #< c1 * (dt + 1))
 
     anotherTokenTreasuryCorrect =
       pif
         (zero #< dx)
-        (prevTreasuryX #== newTreasuryX)
         (prevTreasuryY #== newTreasuryY)
-
+        (prevTreasuryX #== newTreasuryX)
+        
     validConfig =
         prevPoolNft #== newPoolNft #&&
         prevPoolX   #== newPoolX #&&
@@ -361,7 +361,7 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                                         (zero #< dx)
                                         (-dy * (rx0 * feeDen' + dxf) #<= ry0 * dxf)
                                         (-dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
-                            ptraceC $ pshow validSwap
+
                             pure $ noMoreTokens #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
                         DAOAction -> validDAOAction # conf # txinfo'
                         _ -> unTermCont $ do
