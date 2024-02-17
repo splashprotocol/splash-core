@@ -11,7 +11,7 @@ import Hedgehog.Range as Range
 
 import qualified WhalePoolsDex.Contracts.Pool as P
 
-genPConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
+genPConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> [StakingCredential] -> Integer -> ValidatorHash -> (Data, OutputDatum)
 genPConfig x y nft lq fee treasuryFeeNum daoPolicy lqBound treasuryAddress =
   let
     -- for tests treasury fee will be 50% of lp fee
@@ -19,7 +19,7 @@ genPConfig x y nft lq fee treasuryFeeNum daoPolicy lqBound treasuryAddress =
     od        = OutputDatum $ mkDatum config
   in (toData config, od)
 
-genPBConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
+genPBConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> [StakingCredential] -> Integer -> ValidatorHash -> (Data, OutputDatum)
 genPBConfig x y nft lq fee daoPolicy lqBound treasuryAddress =
   let
     -- for tests treasury fee will be 50% of lp fee
@@ -60,7 +60,7 @@ calculateLqFeeXtoYSwap prevXPool prevYPool xToSwap =
     yFromSwapWithoutFee = prevYPool - (prevXPool * prevYPool) `div` (prevXPool + xToSwap)
   in (yFromSwapWithoutFee * 30 `div` 100000) `div` 100000
 
-genPConfigWithUpdatedTreasury :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
+genPConfigWithUpdatedTreasury :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> [StakingCredential] -> Integer -> ValidatorHash -> (Data, OutputDatum)
 genPConfigWithUpdatedTreasury x y nft lq fee treasuryFeeNum newTreasuryX newTreasuryY daoPolicy lqBound treasuryAddress =
   let
     -- for tests treasury fee will be 50% of lp fee
@@ -68,7 +68,7 @@ genPConfigWithUpdatedTreasury x y nft lq fee treasuryFeeNum newTreasuryX newTrea
     od        = OutputDatum $ mkDatum config
   in (toData config, od)
 
-genPBConfigWithUpdatedTreasury :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
+genPBConfigWithUpdatedTreasury :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> [StakingCredential] -> Integer -> ValidatorHash -> (Data, OutputDatum)
 genPBConfigWithUpdatedTreasury x y nft lq fee newTreasuryX newTreasuryY daoPolicy lqBound treasuryAddress =
   let
     -- for tests treasury fee will be 50% of lp fee

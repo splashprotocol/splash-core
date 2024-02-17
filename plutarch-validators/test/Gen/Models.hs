@@ -5,6 +5,7 @@ module Gen.Models
   , genTxId
   , genTxOutRef
   , genCSRandom
+  , genSCRandom
   , random16bs
   , random28bs
   , random32bs
@@ -61,6 +62,7 @@ import PlutusLedgerApi.V1.Value
 import qualified PlutusLedgerApi.V1.Value as Value
 import PlutusLedgerApi.V2.Tx
 import PlutusLedgerApi.V2
+import PlutusLedgerApi.V1.Credential
 import qualified PlutusLedgerApi.V1.Interval as Interval
 import Plutarch.Api.V2 ( validatorHash, datumHash)
 
@@ -112,6 +114,9 @@ genTNRandom = (genBuiltinByteString tnSize) <&> TokenName
 genCSRandom :: MonadGen f => f CurrencySymbol
 genCSRandom = (genBuiltinByteString csSize) <&> CurrencySymbol
 
+genSCRandom :: MonadGen f => f StakingCredential
+genSCRandom = (genBuiltinByteString validatorHashSize) <&> (\hash -> StakingHash $ ScriptCredential $ ValidatorHash $ hash)
+
 genAssetClass :: MonadGen f => f AssetClass
 genAssetClass = do
   cs <- genCSRandom
@@ -135,11 +140,11 @@ mkValues (x:xs) acc = mkValues xs (x <> acc)
 mkValues [] acc = acc
 
 -- fee will be used as feeX and feeY
-mkPoolConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> P.PoolConfig
+mkPoolConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> [StakingCredential] -> Integer -> ValidatorHash -> P.PoolConfig
 mkPoolConfig nft x y lq fee treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress = 
   P.PoolConfig nft x y lq fee treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress
 
-mkPoolBFeeConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> PBFee.PoolConfig
+mkPoolBFeeConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> Integer -> [StakingCredential] -> Integer -> ValidatorHash -> PBFee.PoolConfig
 mkPoolBFeeConfig nft x y lq feeX feeY treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress = 
   PBFee.PoolConfig nft x y lq feeX feeY treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress
 
@@ -288,16 +293,16 @@ mkTxInfoWithSignatures pIns pOuts sigs =
     , txInfoId = "b0"
     }
 
-mkTxInfoWithSignaturesAndMinting :: [TxInInfo] -> TxOut -> [PubKeyHash] -> Value -> TxInfo
-mkTxInfoWithSignaturesAndMinting pIn pOut sigs mintValue =
+mkTxInfoWithSignaturesAndMinting :: [TxInInfo] -> TxOut -> [PubKeyHash] -> StakingCredential -> TxInfo
+mkTxInfoWithSignaturesAndMinting pIn pOut sigs sc =
   TxInfo
     { txInfoInputs = pIn
     , txInfoReferenceInputs = []
     , txInfoOutputs = [pOut]
     , txInfoFee = mempty
-    , txInfoMint = mintValue
+    , txInfoMint = mempty
     , txInfoDCert = []
-    , txInfoWdrl = fromList []
+    , txInfoWdrl = fromList [(sc, 0)]
     , txInfoValidRange = Interval.always
     , txInfoSignatories = sigs
     , txInfoRedeemers = fromList []

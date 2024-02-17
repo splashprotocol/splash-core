@@ -14,6 +14,7 @@ import qualified PlutusTx
 import PlutusLedgerApi.V1.Value
 import PlutusLedgerApi.V1.Crypto (PubKeyHash)
 import PlutusLedgerApi.V1.Scripts (ValidatorHash)
+import PlutusLedgerApi.V1.Credential
 
 data PoolConfig = PoolConfig
     { poolNft     :: AssetClass
@@ -24,7 +25,7 @@ data PoolConfig = PoolConfig
     , treasuryFee :: Integer
     , treasuryX   :: Integer
     , treasuryY   :: Integer
-    , daoPolicy   :: [CurrencySymbol]
+    , daoPolicy   :: [StakingCredential]
     , lqBound     :: Integer
     , treasuryAddress :: ValidatorHash
     }

@@ -30,10 +30,11 @@ import qualified Data.ByteString as BS
 import PlutusLedgerApi.V2
 import PlutusLedgerApi.V1.Address
 import Plutarch.Api.V2 (scriptHash)
+import PlutusLedgerApi.V1.Credential
 import PlutusTx.Builtins.Internal
 import WhalePoolsDex.PMintingValidators
 import qualified PlutusLedgerApi.V1 as Plutus
-import Gen.Models (mkAdaValue, mkValues, mkValue, genAssetClass, genPkh, genCSRandom, genTxId, genTxOutRef, genValidatorHash, mkContext)
+import Gen.Models (mkAdaValue, mkValues, mkValue, genAssetClass, genPkh, genCSRandom, genSCRandom, genTxId, genTxOutRef, genValidatorHash, mkContext)
 import Gen.DepositGen (unsafeFromEither, mkByteString)
 import Gen.Utils
 
@@ -114,7 +115,7 @@ genPool adminsPkhs threshold lpFeeIsEditable = do
 
   let
     daoContract =
-        CurrencySymbol $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft adminsPkhs threshold lpFeeIsEditable))
+        StakingHash . ScriptCredential . ValidatorHash . getScriptHash . scriptHash $ (unMintingPolicyScript (daoMintPolicyValidator nft adminsPkhs threshold lpFeeIsEditable))
 
     poolConfig = PoolConfig
       { poolNft = nft
@@ -248,23 +249,24 @@ withdrawTreasury :: MonadGen m => TestAction m
 withdrawTreasury = 
   let
     testAction prevPool@Pool{..} = do
-      toWithdraw <- integral (Range.constant 1 (treasuryX config))
+      toWithdrawX <- integral (Range.constant 1 (treasuryX config))
+      toWithdrawY <- integral (Range.constant 1 (treasuryY config))
       let
         newPoolConfig = config 
-          { treasuryX = (treasuryX config) - toWithdraw
-          , treasuryY = (treasuryY config) - toWithdraw
+          { treasuryX = (treasuryX config) - toWithdrawX
+          , treasuryY = (treasuryY config) - toWithdrawY
           }
 
         newPool = prevPool 
           { config = newPoolConfig
-          , value  = value <> (assetClassValue (poolX config) (negate toWithdraw)) <> (assetClassValue (poolY config) (negate toWithdraw))
+          , value  = value <> (assetClassValue (poolX config) (negate toWithdrawX)) <> (assetClassValue (poolY config) (negate toWithdrawY))
           }
 
         treasury = Treasury 
           { xTokenAC     = poolX config
-          , xTokenQty    = toWithdraw
+          , xTokenQty    = toWithdrawX
           , yTokenAC     = poolY config
-          , yTokenQty    = toWithdraw
+          , yTokenQty    = toWithdrawY
           , treasuryAddr = scriptHashAddress (treasuryAddress config)
           }
       pure $ ActionResult newPool [toTxOut treasury]
@@ -395,7 +397,7 @@ treasuryAddressSwitch  = let
 changeDAOAdminAddress :: forall m. MonadGen m => TestAction m
 changeDAOAdminAddress = let
   testAction prevPool@Pool{..} = do
-    randomDAOContract <- genCSRandom
+    randomDAOContract <- genSCRandom
     let
       newPoolConfig = config {
         daoPolicy = [randomDAOContract]
@@ -430,17 +432,15 @@ createTxInfo prevPool@Pool{..} ActionResult{..} adminPkhs = do
   poolTxIn <- toTxInInfo prevPool
   let
     daoCS = List.head (daoPolicy config)
-    scMintAssetClass = AssetClass (daoCS, poolStakeChangeMintTokenName)
-    mintValue = mkValue scMintAssetClass 1
 
   pure $ TxInfo
     { txInfoInputs = [poolTxIn]
     , txInfoReferenceInputs = []
     , txInfoOutputs = [toTxOut newPool] ++ additionalOutputs
     , txInfoFee = mempty
-    , txInfoMint = mintValue
-    , txInfoDCert = []
-    , txInfoWdrl = fromList []
+    , txInfoMint = mempty
+    , txInfoDCert = mempty
+    , txInfoWdrl = fromList [(daoCS, 0)]
     , txInfoValidRange = Interval.always
     , txInfoSignatories = adminPkhs
     , txInfoRedeemers = fromList []
@@ -454,17 +454,15 @@ createTxInfoCustom prevPool@Pool{..} maliciousInputs validOutputs maliciousOutpu
   malicious <- toTxInInfo `RIO.traverse` maliciousInputs
   let
     daoCS = List.head (daoPolicy config)
-    scMintAssetClass = AssetClass (daoCS, poolStakeChangeMintTokenName)
-    mintValue = mkValue scMintAssetClass 1
 
   pure $ TxInfo
     { txInfoInputs = [poolTxIn] ++ malicious
     , txInfoReferenceInputs = []
     , txInfoOutputs = validOutputs ++ maliciousOutputs
     , txInfoFee = mempty
-    , txInfoMint = mintValue
-    , txInfoDCert = []
-    , txInfoWdrl = fromList []
+    , txInfoMint = mempty
+    , txInfoDCert = mempty
+    , txInfoWdrl = fromList [(daoCS, 0)]
     , txInfoValidRange = Interval.always
     , txInfoSignatories = adminPkhs
     , txInfoRedeemers = fromList []
@@ -473,4 +471,4 @@ createTxInfoCustom prevPool@Pool{..} maliciousInputs validOutputs maliciousOutpu
     }
 
 daoMintingPurpose :: Pool -> ScriptPurpose
-daoMintingPurpose Pool{..} = Minting $ List.head (daoPolicy config)
+daoMintingPurpose Pool{..} = Rewarding $ List.head (daoPolicy config)

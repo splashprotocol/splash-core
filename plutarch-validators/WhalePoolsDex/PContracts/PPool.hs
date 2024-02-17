@@ -13,7 +13,7 @@ import qualified GHC.Generics as GHC
 import           Generics.SOP (Generic, I (I))
 
 import Plutarch
-import Plutarch.Api.V2              (PScriptHash(..), PMaybeData (..), PTxOut, POutputDatum(..), PAddress(..), PPubKeyHash(..), PDatum(..), PValue(..), KeyGuarantees(..), AmountGuarantees(..), PCurrencySymbol(..))
+import Plutarch.Api.V2              (PScriptHash(..), PMaybeData (..), PTxOut, POutputDatum(..), PAddress(..), PPubKeyHash(..), PDatum(..), PValue(..), KeyGuarantees(..), AmountGuarantees(..), PCurrencySymbol(..), PStakingCredential(..))
 import Plutarch.Api.V2.Contexts     (PScriptContext, PScriptPurpose (PSpending), PTxInfo(..))
 import Plutarch.DataRepr
 import Plutarch.Lift
@@ -24,6 +24,8 @@ import Plutarch.Unsafe              (punsafeCoerce)
 import Plutarch.Internal.PlutusType (PInner, PlutusType, pcon', pmatch')
 import Plutarch.TryFrom             (PTryFrom (PTryFromExcess, ptryFrom'))
 import Plutarch.Api.V1.Scripts      (PValidatorHash)
+import Plutarch.Api.V1.AssocMap     as Map
+import Plutarch.Extra.Maybe         as Maybe
 
 import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromData, assetClass, pValueLength)
 import PExtra.List                  (pelemAt)
@@ -58,7 +60,7 @@ newtype PoolConfig (s :: S)
                  , "treasuryFee"      ':= PInteger
                  , "treasuryX"        ':= PInteger
                  , "treasuryY"        ':= PInteger
-                 , "DAOPolicy"        ':= PBuiltinList (PAsData PCurrencySymbol)
+                 , "DAOPolicy"        ':= PBuiltinList (PAsData PStakingCredential)
                  , "lqBound"          ':= PInteger
                  , "treasuryAddress"  ':= PValidatorHash
                  ]
@@ -233,7 +235,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
                 #$ pdcons @"treasuryFee" @PInteger # pdata prevTreasuryFeeNum
                 #$ pdcons @"treasuryX" @PInteger # pdata newTreasuryX
                 #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
-                #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PCurrencySymbol)) # pdata prevDAOPolicy
+                #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"lqBound" @PInteger # pdata prevLqBound
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
                     # pdnil)
@@ -257,12 +259,12 @@ findPoolOutput =
 
 validDAOAction :: ClosedTerm (PoolConfig :--> PTxInfo :--> PBool)
 validDAOAction = plam $ \cfg txInfo -> unTermCont $ do
-  valueMint <- tletField @"mint" txInfo
-  policies  <- tletField @"DAOPolicy" cfg
+  wdrl     <- tletField @"wdrl" txInfo
+  policies <- tletField @"DAOPolicy" cfg
   let 
-      policyCS = pfromData $ phead # policies
-      mintedAc = assetClass # policyCS # poolStakeChangeMintTokenNameP
-  pure $ assetClassValueOf # valueMint # mintedAc #== 1
+      policySC = pfromData $ phead # policies
+      headWithdrawl = plookup # policySC # wdrl
+  pure $ Maybe.pisJust # headWithdrawl
 
 parseDatum :: ClosedTerm (PDatum :--> PoolConfig)
 parseDatum = plam $ \newDatum -> unTermCont $ do
