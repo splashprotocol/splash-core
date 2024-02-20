@@ -20,8 +20,6 @@ use splash/rational.{Rational, rational}
 const tpe = #[0]
 
 type SpotOrderConfig {
-  /// Beacon used to track progress.
-  beacon: PolicyId,
   /// What we receive.
   input: Asset,
   /// Tradable amount of Lovelace.
@@ -133,8 +131,6 @@ fn validation_step(
           // Execution step is worth it.
           let min_marginal_output = conf.min_marginal_output
           let valid_marginal_output = output_added >= min_marginal_output
-          let beacon_preserved =
-            quantity_of(successor.value, conf.beacon, beacon_name) == 1
           // Script preserved.
           let script_preserved = self.address == successor.address
           let expected_successor_conf =
@@ -150,7 +146,7 @@ fn validation_step(
           let remaining_ex_budget = input_1 - tradable_input_1
           let order_exhausted_or_satisfied =
             remaining_ex_budget < cost_per_ex_step || tradable_input_1 == 0
-          !order_exhausted_or_satisfied && valid_marginal_output && beacon_preserved && script_preserved && config_preserved && valid_exchange
+          !order_exhausted_or_satisfied && valid_marginal_output && script_preserved && config_preserved && valid_exchange
         }
       }
 
@@ -223,7 +219,6 @@ fn make_order(
       redeemer_reward_pkh,
       permitted_executors,
       extension: SpotOrderConfig {
-        beacon: test_beacon_policy,
         tradable_input,
         cost_per_ex_step,
         min_marginal_output,
@@ -348,8 +343,7 @@ test valid_full_swap_at_base_price() {
   let removed_tradable_input = tradable_input
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = fee * removed_tradable_input / tradable_input
-  let allowed_executors =
-    [pkh1]
+  let allowed_executors = []
   test_batched_full_swap(
     tradable_input,
     cost_per_ex_step,
@@ -363,7 +357,7 @@ test valid_full_swap_at_base_price() {
     added_output,
     allowed_executors,
     pkh1,
-    91,
+    99,
   )
 }
 
