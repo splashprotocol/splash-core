@@ -1,6 +1,6 @@
+use aiken/builtin
 use aiken/dict
 use aiken/list
-use aiken/builtin
 use aiken/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
   Transaction, TransactionId,
@@ -10,8 +10,7 @@ use aiken/transaction/credential.{
   VerificationKeyCredential, from_script,
 }
 use aiken/transaction/value.{
-  PolicyId, ada_asset_name, ada_policy_id, add, from_lovelace,
-  quantity_of,
+  PolicyId, ada_asset_name, ada_policy_id, add, from_lovelace, quantity_of,
 }
 use splash/orders/spot.{beacon_name}
 use splash/orders/types.{OrderConf}
@@ -19,11 +18,6 @@ use splash/plutus.{Asset, VerificationKeyHash, mk_asset}
 use splash/rational.{Rational, rational}
 
 const tpe = #[0]
-
-type Action {
-  Exec
-  Cancel
-}
 
 type SpotOrderConfig {
   /// Beacon used to track progress.
@@ -45,15 +39,11 @@ type SpotOrderConfig {
 }
 
 validator(witness: Referenced<Credential>) {
-  fn spot_order(
-    conf: OrderConf<Data>,
-    action: Action,
-    ctx: ScriptContext,
-  ) -> Bool {
+  fn spot_order(conf: OrderConf<Data>, action: Bool, ctx: ScriptContext) -> Bool {
     let tx = ctx.transaction
     when action is {
-      Exec -> dict.has_key(ctx.transaction.withdrawals, witness)
-      Cancel -> list.has(tx.extra_signatories, conf.redeemer_reward_pkh)
+      True -> dict.has_key(tx.withdrawals, witness)
+      False -> list.has(tx.extra_signatories, conf.redeemer_reward_pkh)
     }
   }
 }
@@ -105,17 +95,6 @@ fn validation_step(
     let fee_0 = conf.fee
     let base_price = conf.base_price
 
-    let validate_exchange =
-      fn(tradable_input_removed, fee_removed) {
-        let valid_exchange_rate =
-          output_added * base_price.denom >= tradable_input_removed * base_price.num
-        let valid_fee =
-          fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
-        let valid_input_delta_total =
-          input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
-        valid_exchange_rate && valid_fee && valid_input_delta_total
-      }
-
     // Stake cred preserved.
     let valid_stake_cred =
       successor.address.stake_credential == self.address.stake_credential
@@ -123,7 +102,16 @@ fn validation_step(
       when successor.address.payment_credential is {
         VerificationKeyCredential(successor_cred) -> {
           let redeemer_correct = annotated.redeemer_reward_pkh == successor_cred
-          let valid_exchange = validate_exchange(conf.tradable_input, conf.fee)
+          let tradable_input_removed = conf.tradable_input
+          let fee_removed = conf.fee
+          let valid_exchange_rate =
+            output_added * base_price.denom >= tradable_input_removed * base_price.num
+          let valid_fee =
+            fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
+          let valid_input_delta_total =
+            input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
+          let valid_exchange =
+            valid_exchange_rate && valid_fee && valid_input_delta_total
           // Order is satisfied or exhausted and accumulated funds are transferred to the right address.
           redeemer_correct? && valid_exchange?
         }
@@ -134,8 +122,14 @@ fn validation_step(
           let tradable_input_1 = successor_conf.tradable_input
           let tradable_input_removed = tradable_input_0 - tradable_input_1
           let fee_removed = fee_0 - successor_conf.fee
+          let valid_exchange_rate =
+            output_added * base_price.denom >= tradable_input_removed * base_price.num
+          let valid_fee =
+            fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
+          let valid_input_delta_total =
+            input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
           let valid_exchange =
-            validate_exchange(tradable_input_removed, fee_removed)
+            valid_exchange_rate && valid_fee && valid_input_delta_total
           // Execution step is worth it.
           let min_marginal_output = conf.min_marginal_output
           let valid_marginal_output = output_added >= min_marginal_output
@@ -338,7 +332,7 @@ fn test_batched_full_swap(
   list.foldl(
     list.range(0, size),
     True,
-    fn(_x, acc) { acc && spot_order(wit, opaque_iconf, Exec, ctx) },
+    fn(_x, acc) { acc && spot_order(wit, opaque_iconf, True, ctx) },
   ) && batch_witness(0, ctx)
 }
 
@@ -401,6 +395,6 @@ test invalid_full_swap_bad_exchange_rate() {
     added_output,
     allowed_executors,
     pkh3,
-    91
+    91,
   )
 }
