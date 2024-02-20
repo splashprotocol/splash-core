@@ -52,12 +52,17 @@ validator {
         let self = self_input.output
         expect Some(successor) = list.at(transaction.outputs, successor_ix)
 
-        let output_policy = conf.output.policy
-        let input_0 = lovelace_of(self.value)
-        let output_0 = quantity_of(self.value, output_policy, conf.output.name)
-        let input_1 = lovelace_of(successor.value)
-        let output_1 =
-          quantity_of(successor.value, output_policy, conf.output.name)
+        let self_value = self.value
+        let successor_value = successor.value
+
+        let output = conf.output
+        let output_name = output.name
+        let output_policy = output.policy
+        
+        let input_0 = lovelace_of(self_value)
+        let output_0 = quantity_of(self_value, output_policy, output_name)
+        let input_1 = lovelace_of(successor_value)
+        let output_1 = quantity_of(successor_value, output_policy, output_name)
 
         let output_added = output_1 - output_0
         let input_removed = input_0 - input_1
@@ -99,7 +104,8 @@ validator {
               expect successor_conf: ConfigNativeToToken = successor_datum
               let tradable_input_1 = successor_conf.tradable_input
               let tradable_input_removed = tradable_input_0 - tradable_input_1
-              let fee_removed = fee_0 - successor_conf.fee
+              let fee_1 = successor_conf.fee
+              let fee_removed = fee_0 - fee_1
               let valid_exchange =
                 validate_exchange(tradable_input_removed, fee_removed)
               // Execution step is worth it.
@@ -109,9 +115,14 @@ validator {
                 quantity_of(successor.value, conf.beacon, beacon_name) == 1
               // Script preserved.
               let script_preserved = self.address == successor.address
+              let expected_successor_conf =
+                ConfigNativeToToken {
+                  ..conf,
+                  tradable_input: tradable_input_1,
+                  fee: fee_1,
+                }
               // Immutable field are unchanged.
-              let config_preserved =
-                conf.beacon == successor_conf.beacon && conf.output == successor_conf.output && base_price == successor_conf.base_price && cost_per_ex_step == successor_conf.cost_per_ex_step && min_marginal_output == successor_conf.min_marginal_output && conf.redeemer_reward_pkh == successor_conf.redeemer_reward_pkh && permitted_executors == successor_conf.permitted_executors
+              let config_preserved = expected_successor_conf == successor_conf
               let remaining_ex_budget = input_1 - tradable_input_1
               let order_exhausted_or_satisfied =
                 remaining_ex_budget < cost_per_ex_step || tradable_input_1 == 0
@@ -136,10 +147,9 @@ validator {
   }
 }
 
-const policy_y =
-  #"0000000000000000000000000000000000000000000000000000000000000002"
+const policy_y = "policy_y"
 
-const name_y = "usd"
+const name_y = "y"
 
 const hex32 = #"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50"
 
