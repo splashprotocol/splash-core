@@ -1,5 +1,6 @@
 use aiken/dict
 use aiken/list
+use aiken/builtin
 use aiken/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
   Transaction, TransactionId,
@@ -162,8 +163,10 @@ fn validation_step(
     let valid_authorization =
       when annotated.permitted_executors is {
         [] -> True
-        non_empty_executors ->
-          list.any(non_empty_executors, fn(pkh) { list.has(signatories, pkh) })
+        non_empty_executors -> {
+          let executor_cred = builtin.head_list(signatories)
+          list.has(non_empty_executors, executor_cred)
+        }
       }
 
     valid_successor && valid_stake_cred && valid_exchange_direction && valid_authorization

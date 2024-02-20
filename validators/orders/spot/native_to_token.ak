@@ -58,7 +58,6 @@ validator {
         let output = conf.output
         let output_name = output.name
         let output_policy = output.policy
-        
         let input_0 = lovelace_of(self_value)
         let output_0 = quantity_of(self_value, output_policy, output_name)
         let input_1 = lovelace_of(successor_value)
