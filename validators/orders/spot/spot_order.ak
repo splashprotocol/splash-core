@@ -444,7 +444,7 @@ test valid_batched_full_swap_at_base_price() {
     added_output,
     allowed_executors,
     pkh1,
-    99,
+    50,
   )
 }
 
@@ -537,6 +537,6 @@ test invalid_full_swap_bad_exchange_rate() {
     added_output,
     allowed_executors,
     pkh3,
-    91,
+    50,
   )
 }
