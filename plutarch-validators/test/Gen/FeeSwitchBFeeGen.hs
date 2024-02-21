@@ -84,8 +84,8 @@ instance ToTxInfo Pool where
       , txInInfoResolved = txOut
       }
 
-treasuryFeeNumLowerLimit = 1
-treasuryFeeNumUpperLimit = 500
+treasuryFeeNumLowerLimit = 100
+treasuryFeeNumUpperLimit = 5000
 
 poolFeeNumLowerLimit = 3000
 poolFeeNumUpperLimit = 9999
