@@ -209,15 +209,13 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
         (newTreasuryX - prevTreasuryX)
         (newTreasuryY - prevTreasuryY)
 
-    c1 = feeDen * treasuryFeeDen
-
     c2 = 
       pif
         (zero #< dx)
-        (dx * prevTreasuryFee * (feeDen - prevFeeNum))
-        (dy * prevTreasuryFee * (feeDen - prevFeeNum))
+        (dx * prevTreasuryFee)
+        (dy * prevTreasuryFee)
         
-    validTreasuryChange = (c1 * dt #<= c2) #&& (c2 #< c1 * (dt + 1))
+    validTreasuryChange = (treasuryFeeDen * dt #<= c2) #&& (c2 #< treasuryFeeDen * (dt + 1))
 
     anotherTokenTreasuryCorrect =
       pif
@@ -341,24 +339,24 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                     scriptPreserved = succAddr #== selfAddr -- validator, staking cred preserved
                     valid = pmatch action $ \case
                         Swap -> unTermCont $ do
-                            feeNum  <- tletField @"feeNum" conf
-                            feeDen' <- tlet feeDen
-                            lqBound <- tletField @"lqBound" conf
+                            feeNum   <- tletField @"feeNum" conf
+                            tFeeNum  <- tletField @"treasuryFee" conf
+                            feeDen'  <- tlet feeDen
+                            lqBound  <- tletField @"lqBound" conf
                             let
                                 newConfig     = parseDatum # succD
                                 validTreasury = correctSwapConfig # conf # newConfig # dx # dy
 
                                 swapAllowed = lqBound #<= (rx0 * 2)
 
-                                dxf = dx * feeNum
-                                dyf = dy * feeNum
+                                dxf = dx * (feeNum - tFeeNum)
+                                dyf = dy * (feeNum - tFeeNum)
 
                                 validSwap =
                                     pif
                                         (zero #< dx)
                                         (-dy * (rx0 * feeDen' + dxf) #<= ry0 * dxf)
                                         (-dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
-
                             pure $ noMoreTokens #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
                         DAOAction -> validDAOAction # conf # txinfo'
                         _ -> unTermCont $ do

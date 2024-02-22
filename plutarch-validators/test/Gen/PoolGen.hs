@@ -32,33 +32,33 @@ calculateXtoYSwap :: Integer -> Integer -> Integer -> (Integer, Integer)
 calculateXtoYSwap prevXPool prevYPool xToSwap =
   let
     yFromSwapWithoutFee = prevYPool - (prevXPool * prevYPool) `div` (prevXPool + xToSwap)
-  in ((prevXPool + xToSwap), prevYPool - (yFromSwapWithoutFee * 995 `div` 1000) + 1)
+  in ((prevXPool + xToSwap), prevYPool - (yFromSwapWithoutFee * 99500 `div` 100000) + 1)
 
-calculateY :: Integer -> Integer -> Integer -> Integer -> Integer
-calculateY prevXPool prevYPool xToSwap feeNum =
-  ((prevYPool * xToSwap * feeNum) `div` (prevXPool * 10000 + xToSwap * feeNum))
+calculateY :: Integer -> Integer -> Integer -> Integer -> Integer -> Integer
+calculateY prevXPool prevYPool xToSwap feeNum treasuryNum =
+  ((prevYPool * xToSwap * (feeNum - treasuryNum)) `div` (prevXPool * 100000 + xToSwap * feeNum))
 
 calculateTreasury :: Integer -> Integer -> Integer -> Integer
 calculateTreasury token2swap feeNum treasuryFeeNum =
-  (token2swap * (10000 - feeNum) `div` 10000) * treasuryFeeNum `div` 10000
+  token2swap * treasuryFeeNum `div` 100000
 
 calculateWithFee :: Integer -> Integer -> Integer -> Integer
 calculateWithFee prevXPool prevYPool xToSwap =
   let
     yFromSwapWithoutFee = prevYPool - (prevXPool * prevYPool) `div` (prevXPool + xToSwap)
-  in yFromSwapWithoutFee * 9997 `div` 10000
+  in yFromSwapWithoutFee * 99970 `div` 100000
 
 calculateLqFee :: Integer -> Integer -> Integer -> Integer
 calculateLqFee prevXPool prevYPool xToSwap =
   let
     yFromSwapWithoutFee = prevYPool - (prevXPool * prevYPool) `div` (prevXPool + xToSwap)
-  in (yFromSwapWithoutFee * 3 `div` 10000)
+  in (yFromSwapWithoutFee * 30 `div` 100000)
 
 calculateLqFeeXtoYSwap :: Integer -> Integer -> Integer -> Integer
 calculateLqFeeXtoYSwap prevXPool prevYPool xToSwap =
   let
     yFromSwapWithoutFee = prevYPool - (prevXPool * prevYPool) `div` (prevXPool + xToSwap)
-  in (yFromSwapWithoutFee * 3 `div` 10000) `div` 10000
+  in (yFromSwapWithoutFee * 30 `div` 100000) `div` 100000
 
 genPConfigWithUpdatedTreasury :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> [CurrencySymbol] -> Integer -> ValidatorHash -> (Data, OutputDatum)
 genPConfigWithUpdatedTreasury x y nft lq fee treasuryFeeNum newTreasuryX newTreasuryY daoPolicy lqBound treasuryAddress =
