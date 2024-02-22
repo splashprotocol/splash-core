@@ -66,7 +66,7 @@ newtype PoolConfig (s :: S)
         )
     deriving stock (GHC.Generic)
     deriving
-        (PIsData, PDataFields, PlutusType)
+        (PIsData, PDataFields, PlutusType, PEq)
 
 instance DerivePlutusType PoolConfig where type DPTStrat _ = PlutusTypeData
 
@@ -185,10 +185,10 @@ readPoolState = phoistAcyclic $
 correctSwapConfig :: Term s (PoolConfig :--> PoolConfig :--> PInteger :--> PInteger :--> PBool)
 correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
   prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] prevDatum
-  newConfig  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] newDatum
+  newConfig  <- pletFieldsC @'["treasuryX", "treasuryY"] newDatum
   
   let
-    prevPoolNft = getField @"poolNft"  prevConfig
+    prevPoolNft = getField @"poolNft" prevConfig
     prevPoolX   = getField @"poolX"  prevConfig
     prevPoolY   = getField @"poolY"  prevConfig
     prevPoolLq  = getField @"poolLq" prevConfig
@@ -200,17 +200,8 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     prevLqBound   = getField @"lqBound" prevConfig
     prevTreasuryAddress = getField @"treasuryAddress" prevConfig
 
-    newPoolNft = getField @"poolNft"  newConfig
-    newPoolX   = getField @"poolX"  newConfig
-    newPoolY   = getField @"poolY"  newConfig
-    newPoolLq  = getField @"poolLq" newConfig
-    newFeeNum  = getField @"feeNum" newConfig
-    newTreasuryFee = getField @"treasuryFee" newConfig
     newTreasuryX = getField @"treasuryX" newConfig
     newTreasuryY = getField @"treasuryY" newConfig
-    newDAOPolicy = getField @"DAOPolicy" newConfig
-    newLqBound   = getField @"lqBound" newConfig
-    newTreasuryAddress = getField @"treasuryAddress" newConfig
 
     dt = 
       pif
@@ -233,17 +224,23 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
         (zero #< dx)
         (prevTreasuryY #== newTreasuryY)
         (prevTreasuryX #== newTreasuryX)
-        
-    validConfig =
-        prevPoolNft #== newPoolNft #&&
-        prevPoolX   #== newPoolX #&&
-        prevPoolY   #== newPoolY #&&
-        prevPoolLq  #== newPoolLq #&&
-        prevFeeNum  #== newFeeNum #&&
-        prevTreasuryFee #== newTreasuryFee #&&
-        prevDAOPolicy #== newDAOPolicy #&&
-        prevLqBound   #== newLqBound #&&
-        prevTreasuryAddress #== newTreasuryAddress
+
+  expectedConfig <-
+        tcon $ (PoolConfig $
+            pdcons @"poolNft" @PAssetClass # pdata prevPoolNft
+                #$ pdcons @"poolX" @PAssetClass # pdata prevPoolX
+                #$ pdcons @"poolY" @PAssetClass # pdata prevPoolY
+                #$ pdcons @"poolLq" @PAssetClass # pdata prevPoolLq
+                #$ pdcons @"feeNum" @PInteger # pdata prevFeeNum
+                #$ pdcons @"treasuryFee" @PInteger # pdata prevTreasuryFee
+                #$ pdcons @"treasuryX" @PInteger # pdata newTreasuryX
+                #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
+                #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PCurrencySymbol)) # pdata prevDAOPolicy
+                #$ pdcons @"lqBound" @PInteger # pdata prevLqBound
+                #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
+                    # pdnil)
+
+  let validConfig = expectedConfig #== newDatum
 
   pure $ validConfig #&& validTreasuryChange #&& anotherTokenTreasuryCorrect
 
