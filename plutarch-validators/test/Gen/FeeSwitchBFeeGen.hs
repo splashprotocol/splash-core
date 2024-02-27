@@ -87,7 +87,7 @@ instance ToTxInfo Pool where
 treasuryFeeNumLowerLimit = 1000
 treasuryFeeNumUpperLimit = 50000
 
-poolFeeNumLowerLimit = 30000
+poolFeeNumLowerLimit = 1
 poolFeeNumUpperLimit = 99999
 
 treasuryFeeDen = 100000

@@ -56,7 +56,7 @@ treasuryFeeNumUpperLimit :: Term s PInteger
 treasuryFeeNumUpperLimit = pconstant 20000
 
 poolFeeNumLowerLimit :: Term s PInteger
-poolFeeNumLowerLimit = pconstant 30000
+poolFeeNumLowerLimit = pconstant 1
 
 poolFeeNumUpperLimit :: Term s PInteger
 poolFeeNumUpperLimit = pconstant 99999
