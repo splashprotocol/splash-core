@@ -44,22 +44,22 @@ burnLqInitial :: Term s PInteger
 burnLqInitial = pconstant P.burnLqInitial
 
 feeDen :: Term s PInteger
-feeDen = pconstant 10000
+feeDen = pconstant 100000
 
 treasuryFeeDen :: Term s PInteger
-treasuryFeeDen = pconstant 10000
+treasuryFeeDen = pconstant 100000
 
 treasuryFeeNumLowerLimit :: Term s PInteger
 treasuryFeeNumLowerLimit = pconstant 1
 
 treasuryFeeNumUpperLimit :: Term s PInteger
-treasuryFeeNumUpperLimit = pconstant 500
+treasuryFeeNumUpperLimit = pconstant 20000
 
 poolFeeNumLowerLimit :: Term s PInteger
-poolFeeNumLowerLimit = pconstant 3000
+poolFeeNumLowerLimit = pconstant 1
 
 poolFeeNumUpperLimit :: Term s PInteger
-poolFeeNumUpperLimit = pconstant 9999
+poolFeeNumUpperLimit = pconstant 99999
 
 zero :: Term s PInteger
 zero = pconstant 0

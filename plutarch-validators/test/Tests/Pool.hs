@@ -235,7 +235,7 @@ successPoolSwap = withShrinks 1 $ withTests 10 $ property $ do
   prevPoolX       <- forAll $ integral (Range.constant 10000000000 10000000000000)
   prevPoolY       <- forAll $ integral (Range.constant 10000000000 10000000000000)
   xToSwap         <- forAll $ integral (Range.constant 1 ((prevPoolX `div` 2) - 1))
-  feeNum          <- forAll $ integral (Range.constant 3000 9999)
+  feeNum          <- forAll $ integral (Range.constant 3000 99999)
   treasuryNum     <- forAll $ integral (Range.constant 1 3000)
   let
     (cfgData, dh) = genSConfig x y nft 9950 500000 1 pkh 10 4
@@ -244,7 +244,7 @@ successPoolSwap = withShrinks 1 $ withTests 10 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    yToSwap  = calculateY prevPoolX prevPoolY xToSwap feeNum
+    yToSwap  = calculateY prevPoolX prevPoolY xToSwap feeNum treasuryNum 
     treasury = calculateTreasury xToSwap feeNum treasuryNum
 
     (pcfg, pdh)       = genPConfig x y nft lq feeNum treasuryNum [] 0 treasuryAddress
@@ -281,7 +281,7 @@ incorrectPoolYTreasury = withShrinks 1 $ withTests 10 $ property $ do
   
   poolTxRef <- forAll genTxOutRef
   let
-    yToSwap  = calculateY prevPoolX prevPoolY xToSwap feeNum
+    yToSwap  = calculateY prevPoolX prevPoolY xToSwap feeNum treasuryNum 
     treasury = calculateTreasury xToSwap feeNum treasuryNum
 
     (pcfg, pdh)       = genPConfig x y nft lq feeNum treasuryNum [] 0 treasuryAddress

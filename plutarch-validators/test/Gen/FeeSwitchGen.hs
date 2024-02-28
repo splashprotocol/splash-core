@@ -85,13 +85,13 @@ instance ToTxInfo Pool where
       }
 
 treasuryFeeNumLowerLimit = 1
-treasuryFeeNumUpperLimit = 500
+treasuryFeeNumUpperLimit = 20000
 
-poolFeeNumLowerLimit = 3000
-poolFeeNumUpperLimit = 9999
+poolFeeNumLowerLimit = 30000
+poolFeeNumUpperLimit = 99999
 
-treasuryFeeDen = 10000
-poolFeeNumDen  = 10000
+treasuryFeeDen = 100000
+poolFeeNumDen  = 100000
 
 genPool :: MonadGen f => [PubKeyHash] -> Integer -> Bool -> f Pool
 genPool adminsPkhs threshold lpFeeIsEditable = do
