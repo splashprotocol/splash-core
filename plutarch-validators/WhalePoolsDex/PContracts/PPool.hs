@@ -193,7 +193,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     prevPoolY   = getField @"poolY"  prevConfig
     prevPoolLq  = getField @"poolLq" prevConfig
     prevFeeNum  = getField @"feeNum" prevConfig
-    prevTreasuryFee = getField @"treasuryFee" prevConfig
+    prevTreasuryFeeNum = getField @"treasuryFee" prevConfig
     prevTreasuryX = getField @"treasuryX" prevConfig
     prevTreasuryY = getField @"treasuryY" prevConfig
     prevDAOPolicy = getField @"DAOPolicy" prevConfig
@@ -212,8 +212,8 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     c2 = 
       pif
         (zero #< dx)
-        (dx * prevTreasuryFee)
-        (dy * prevTreasuryFee)
+        (dx * prevTreasuryFeeNum)
+        (dy * prevTreasuryFeeNum)
         
     validTreasuryChange = (treasuryFeeDen * dt #<= c2) #&& (c2 #< treasuryFeeDen * (dt + 1))
 
@@ -230,7 +230,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
                 #$ pdcons @"poolY" @PAssetClass # pdata prevPoolY
                 #$ pdcons @"poolLq" @PAssetClass # pdata prevPoolLq
                 #$ pdcons @"feeNum" @PInteger # pdata prevFeeNum
-                #$ pdcons @"treasuryFee" @PInteger # pdata prevTreasuryFee
+                #$ pdcons @"treasuryFee" @PInteger # pdata prevTreasuryFeeNum
                 #$ pdcons @"treasuryX" @PInteger # pdata newTreasuryX
                 #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PCurrencySymbol)) # pdata prevDAOPolicy
