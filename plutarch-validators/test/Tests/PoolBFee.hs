@@ -528,19 +528,15 @@ successPoolChangeStakePartCorrectMinting = withTests 1 $ property $ do
   let
     previousSc = Just $ StakingHash (PubKeyCredential stakeAdminPkh)
     newSc      = Just $ StakingHash (PubKeyCredential newPkhForSC)
-    mintingCS  = CurrencySymbol $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 1 True))
+    sc  = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 1 True))
 
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, pdh) = genPBConfig x y nft lq 1 [mintingCS] 0 treasuryAddress
+    (pcfg, pdh) = genPBConfig x y nft lq 1 [sc] 0 treasuryAddress
     poolTxIn    = genPTxInWithSC poolTxRef previousSc pdh x 10 y 10 lq 9223372036854775797 nft 1 10000
     poolTxOut   = genPTxOutWithSC pdh newSc x 10 y 10 lq 9223372036854775797 nft 1 10000
 
-    scMintAssetClass = mkAssetClass mintingCS poolStakeChangeMintTokenName
-
-    mintValue = mkValue scMintAssetClass 1
-
-    txInfo  = mkTxInfoWithSignaturesAndMinting [poolTxIn] poolTxOut [stakeAdminPkh] mintValue
+    txInfo  = mkTxInfoWithSignaturesAndMinting [poolTxIn] poolTxOut [stakeAdminPkh] sc
     purpose = mkPurpose poolTxRef
 
     cxtToData        = toData $ mkContext txInfo purpose
@@ -560,17 +556,19 @@ failedPoolChangeStakePartIncorrectMinting = withTests 1 $ property $ do
   let 
     previousSc = Just $ StakingHash (PubKeyCredential stakeAdminPkh)
     newSc      = Just $ StakingHash (PubKeyCredential newPkhForSC)
-    mintingCS  = CurrencySymbol $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 1 True))
+
+    correctDAO    = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 1 True))
+    incorrectDAO  = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 4 True))
   
   poolTxRef <- forAll genTxOutRef
   let
-    (pcfg, previousPdh) = genPBConfig x y nft lq 1 [mintingCS] 0 treasuryAddress
+    (pcfg, previousPdh) = genPBConfig x y nft lq 1 [correctDAO] 0 treasuryAddress
 
-    (_, newPdh) = genPBConfig x y nft lq 1 [mintingCS] 0 treasuryAddress
+    (_, newPdh) = genPBConfig x y nft lq 1 [correctDAO] 0 treasuryAddress
     poolTxIn    = genPTxInWithSC poolTxRef previousSc previousPdh x 10 y 10 lq 9223372036854775797 nft 1 10000
     poolTxOut   = genPTxOutWithSC newPdh newSc x 10 y 10 lq 9223372036854775797 nft 1 10000
   
-    txInfo  = mkTxInfoWithSignaturesAndMinting [poolTxIn] poolTxOut [stakeAdminPkh] mempty
+    txInfo  = mkTxInfoWithSignaturesAndMinting [poolTxIn] poolTxOut [stakeAdminPkh] incorrectDAO
     purpose = mkPurpose poolTxRef
 
     cxtToData        = toData $ mkContext txInfo purpose
