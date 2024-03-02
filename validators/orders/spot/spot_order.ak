@@ -3,15 +3,16 @@ use aiken/dict
 use aiken/list
 use aiken/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
-  Transaction, TransactionId,
+  Transaction, TransactionId, find_input,
 }
 use aiken/transaction/credential.{
-  Address, Credential, Inline, Referenced, ScriptCredential,
-  VerificationKeyCredential, from_script,
+  Address, Credential, Inline, Referenced, ScriptCredential, from_script,
+  from_verification_key,
 }
 use aiken/transaction/value.{
-  ada_asset_name, ada_policy_id, add, from_lovelace, quantity_of,
+  PolicyId, ada_asset_name, ada_policy_id, add, from_lovelace, quantity_of,
 }
+use splash/lovelace.{lovelace_of}
 use splash/orders/spot.{beacon_name}
 use splash/orders/types.{OrderType}
 use splash/plutus.{Asset, VerificationKeyHash, mk_asset}
@@ -21,6 +22,8 @@ const this_tag = #[0]
 
 type SpotOrderConfig {
   tag: OrderType,
+  /// Beacon used to track progress.
+  beacon: PolicyId,
   /// An extension of the config speific to order type.
   /// What we receive.
   input: Asset,
@@ -36,8 +39,10 @@ type SpotOrderConfig {
   base_price: Rational,
   /// How much fee we pay to executor for whole swap.
   fee: Int,
-  /// Redeemer PKH.
-  redeemer_reward_pkh: VerificationKeyHash,
+  /// Where the output from the order must go.
+  redeemer_address: Address,
+  /// PKH authorized to cancel order.
+  cancellation_pkh: VerificationKeyHash,
   /// Executors permitted to execute this order.
   permitted_executors: List<VerificationKeyHash>,
 }
@@ -47,18 +52,27 @@ validator(witness: Referenced<Credential>) {
     let tx = ctx.transaction
     when action is {
       True -> dict.has_key(tx.withdrawals, witness)
-      False -> list.has(tx.extra_signatories, conf.redeemer_reward_pkh)
+      False -> {
+        let is_authorized =
+          list.has(tx.extra_signatories, conf.cancellation_pkh)
+        expect Spend(spent_utxo_reference) = ctx.purpose
+        expect Some(self_input) = find_input(tx.inputs, spent_utxo_reference)
+        let output = builtin.head_list(tx.outputs)
+        let value_returned = self_input.output.value == output.value
+        let correct_redeemer = output.address == conf.redeemer_address
+        is_authorized && value_returned && correct_redeemer
+      }
     }
   }
 }
 
 validator {
   fn batch_witness(_: Data, ctx: ScriptContext) -> Bool {
-    let ScriptContext { transaction, .. } = ctx
+    let tx = ctx.transaction
     left_biased_zip_validate(
-      transaction.inputs,
-      transaction.outputs,
-      transaction.extra_signatories,
+      tx.inputs,
+      tx.outputs,
+      tx.extra_signatories,
       True,
       validation_step,
     )
@@ -86,15 +100,35 @@ fn validation_step(
     let input_tn = conf.input.name
     let output_policy = conf.output.policy
     let output_tn = conf.output.name
+
+    let ada_is_input = input_policy == ada_policy_id
+    let ada_is_output = output_policy == ada_policy_id
+
     let input_0 = quantity_of(self_value, input_policy, input_tn)
     let output_0 = quantity_of(self_value, output_policy, output_tn)
     let input_1 = quantity_of(successor_value, input_policy, input_tn)
     let output_1 = quantity_of(successor_value, output_policy, output_tn)
 
-    let output_added = output_1 - output_0
-    let input_removed = input_0 - input_1
+    let lovelace_0 =
+      if ada_is_input {
+        input_0
+      } else if ada_is_output {
+        output_0
+      } else {
+        lovelace_of(self_value)
+      }
+    let lovelace_1 =
+      if ada_is_input {
+        input_1
+      } else if ada_is_output {
+        output_1
+      } else {
+        lovelace_of(self_value)
+      }
 
-    let valid_exchange_direction = output_added > 0
+    let output_delta = output_1 - output_0
+    let input_removed = input_0 - input_1
+    let lovelace_delta = lovelace_1 - lovelace_0
 
     let cost_per_ex_step = conf.cost_per_ex_step
     let tradable_input_0 = conf.tradable_input
@@ -106,57 +140,66 @@ fn validation_step(
     // Stake cred preserved.
     let valid_stake_cred =
       successor_address.stake_credential == self_address.stake_credential
-    let valid_successor =
-      when successor_address.payment_credential is {
-        VerificationKeyCredential(successor_cred) -> {
-          let redeemer_correct = conf.redeemer_reward_pkh == successor_cred
-          let tradable_input_removed = conf.tradable_input
-          let fee_removed = conf.fee
-          let valid_exchange_rate =
-            output_added * base_price.denom >= tradable_input_removed * base_price.num
-          let valid_fee =
-            fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
-          let valid_input_delta_total =
+
+    let is_terminated = successor_address == conf.redeemer_address
+    let valid_execution =
+      if is_terminated {
+        let tradable_input_removed = conf.tradable_input
+        let fee_removed = conf.fee
+        let output_added =
+          if ada_is_output {
+            output_delta + fee_removed + cost_per_ex_step
+          } else {
+            output_delta
+          }
+        let valid_exchange_rate =
+          output_added * base_price.denom >= tradable_input_removed * base_price.num
+        let valid_fee =
+          fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
+        let overall_integrity =
+          if ada_is_input {
             input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
-          let valid_exchange =
-            valid_exchange_rate && valid_fee && valid_input_delta_total
-          // Order is satisfied or exhausted and accumulated funds are transferred to the right address.
-          redeemer_correct? && valid_exchange?
-        }
-        ScriptCredential(_) -> {
-          // Validate exchange.
-          expect InlineDatum(successor_datum) = successor.datum
-          expect successor_conf: SpotOrderConfig = successor_datum
-          let tradable_input_1 = successor_conf.tradable_input
-          let tradable_input_removed = tradable_input_0 - tradable_input_1
-          let fee_1 = successor_conf.fee
-          let fee_removed = fee_0 - fee_1
-          let valid_exchange_rate =
-            output_added * base_price.denom >= tradable_input_removed * base_price.num
-          let valid_fee =
-            fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
-          let valid_input_delta_total =
+          } else {
+            input_removed <= tradable_input_removed && lovelace_delta <= fee_removed + cost_per_ex_step
+          }
+        valid_exchange_rate && valid_fee && overall_integrity
+      } else {
+        expect InlineDatum(successor_datum) = successor.datum
+        expect successor_conf: SpotOrderConfig = successor_datum
+        let tradable_input_1 = successor_conf.tradable_input
+        let tradable_input_removed = tradable_input_0 - tradable_input_1
+        let fee_1 = successor_conf.fee
+        let fee_removed = fee_0 - fee_1
+        let output_added =
+          if ada_is_output {
+            output_delta + fee_removed + cost_per_ex_step
+          } else {
+            output_delta
+          }
+        let valid_exchange_rate =
+          output_added * base_price.denom >= tradable_input_removed * base_price.num
+        let valid_fee =
+          fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
+        let overall_integrity =
+          if ada_is_input {
             input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
-          let valid_exchange =
-            valid_exchange_rate && valid_fee && valid_input_delta_total
-          // Execution step is worth it.
-          let min_marginal_output = conf.min_marginal_output
-          let valid_marginal_output = output_added >= min_marginal_output
-          // Script preserved.
-          let script_preserved = self_address == successor_address
-          let expected_successor_conf =
-            SpotOrderConfig {
-              ..conf,
-              tradable_input: tradable_input_1,
-              fee: fee_1,
-            }
-          // Immutable field are unchanged.
-          let config_preserved = conf == expected_successor_conf
-          let remaining_ex_budget = input_1 - tradable_input_1
-          let order_exhausted_or_satisfied =
-            remaining_ex_budget < cost_per_ex_step || tradable_input_1 == 0
-          !order_exhausted_or_satisfied && valid_marginal_output && script_preserved && config_preserved && valid_exchange
-        }
+          } else {
+            input_removed <= tradable_input_removed && lovelace_delta <= fee_removed + cost_per_ex_step
+          }
+        // Execution step is worth it.
+        let min_marginal_output = conf.min_marginal_output
+        let valid_marginal_output = output_added >= min_marginal_output
+        // Script preserved.
+        let script_preserved = self_address == successor_address
+        let expected_successor_conf =
+          SpotOrderConfig {
+            ..conf,
+            tradable_input: tradable_input_1,
+            fee: fee_1,
+          }
+        // Immutable field are unchanged.
+        let config_preserved = conf == expected_successor_conf
+        valid_exchange_rate && valid_fee && overall_integrity && valid_marginal_output && script_preserved && config_preserved
       }
 
     let valid_authorization =
@@ -168,7 +211,7 @@ fn validation_step(
         }
       }
 
-    valid_successor && valid_stake_cred && valid_exchange_direction && valid_authorization
+    valid_execution && valid_stake_cred && valid_authorization
   } else {
     True
   }
@@ -212,6 +255,8 @@ const policy_y = #"f2"
 
 const name_y = "a"
 
+const beacon = "beacon"
+
 fn make_order(
   tradable_input: Int,
   cost_per_ex_step: Int,
@@ -225,6 +270,7 @@ fn make_order(
   let conf =
     SpotOrderConfig {
       tag: this_tag,
+      beacon,
       tradable_input,
       cost_per_ex_step,
       min_marginal_output,
@@ -232,7 +278,8 @@ fn make_order(
       output: mk_asset(policy_y, name_y),
       base_price,
       fee,
-      redeemer_reward_pkh,
+      redeemer_address: from_verification_key(redeemer_reward_pkh),
+      cancellation_pkh: redeemer_reward_pkh,
       permitted_executors,
     }
   let address = from_script(test_order_validator_sh)
@@ -311,12 +358,7 @@ fn test_mixed_full_swap(
     }
   let order_output =
     Output {
-      address: Address {
-        payment_credential: VerificationKeyCredential(
-          initial_conf.redeemer_reward_pkh,
-        ),
-        stake_credential: None,
-      },
+      address: initial_conf.redeemer_address,
       value: add(
         add(initial_order_utxo.value, policy_y, name_y, added_output),
         ada_policy_id,
@@ -379,12 +421,7 @@ fn test_batched_full_swap(
     removed_tradable_input + removed_ex_fee + removed_ex_budget
   let order_output =
     Output {
-      address: Address {
-        payment_credential: VerificationKeyCredential(
-          initial_conf.redeemer_reward_pkh,
-        ),
-        stake_credential: None,
-      },
+      address: initial_conf.redeemer_address,
       value: add(
         add(initial_order_utxo.value, policy_y, name_y, added_output),
         ada_policy_id,
@@ -444,7 +481,7 @@ test valid_batched_full_swap_at_base_price() {
     added_output,
     allowed_executors,
     pkh1,
-    50,
+    45,
   )
 }
 
