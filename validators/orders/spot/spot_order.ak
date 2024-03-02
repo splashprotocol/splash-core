@@ -144,8 +144,8 @@ fn validation_step(
     let is_terminated = successor_address == conf.redeemer_address
     let valid_execution =
       if is_terminated {
-        let tradable_input_removed = conf.tradable_input
-        let fee_removed = conf.fee
+        let tradable_input_removed = tradable_input_0
+        let fee_removed = fee_0
         let output_added =
           if ada_is_output {
             output_delta + fee_removed + cost_per_ex_step
@@ -154,15 +154,13 @@ fn validation_step(
           }
         let valid_exchange_rate =
           output_added * base_price.denom >= tradable_input_removed * base_price.num
-        let valid_fee =
-          fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
         let overall_integrity =
           if ada_is_input {
-            input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
+            input_removed <= tradable_input_removed + fee_0 + cost_per_ex_step
           } else {
             input_removed <= tradable_input_removed && lovelace_delta <= fee_removed + cost_per_ex_step
           }
-        valid_exchange_rate && valid_fee && overall_integrity
+        valid_exchange_rate && overall_integrity
       } else {
         expect InlineDatum(successor_datum) = successor.datum
         expect successor_conf: SpotOrderConfig = successor_datum
