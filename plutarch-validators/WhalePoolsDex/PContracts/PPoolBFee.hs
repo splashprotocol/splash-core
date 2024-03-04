@@ -29,7 +29,7 @@ import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
 
 import qualified WhalePoolsDex.Contracts.PoolBFee  as P
 import           WhalePoolsDex.PContracts.PPool    hiding (PoolConfig(..))
-import           WhalePoolsDex.PContracts.PApi     (burnLqInitial, feeDen, treasuryFeeDen, maxLqCap, tletUnwrap, zero, containsSignature)
+import           WhalePoolsDex.PContracts.PApi     (burnLqInitial, feeDen, maxLqCap, tletUnwrap, zero, containsSignature)
 import           WhalePoolsDex.PConstants
 
 import Plutarch.Trace
@@ -106,8 +106,8 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     c1 =
       pif
         (zero #< dx)
-        (prevFeeNumY * treasuryFeeDen)
-        (prevFeeNumX * treasuryFeeDen)
+        (prevFeeNumY * feeDen)
+        (prevFeeNumX * feeDen)
 
     c2 =
       pif

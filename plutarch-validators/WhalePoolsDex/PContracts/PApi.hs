@@ -12,7 +12,6 @@ module WhalePoolsDex.PContracts.PApi (
     maxLqCap,
     burnLqInitial,
     feeDen,
-    treasuryFeeDen,
     treasuryFeeNumLowerLimit,
     treasuryFeeNumUpperLimit,
     poolFeeNumUpperLimit,
@@ -45,9 +44,6 @@ burnLqInitial = pconstant P.burnLqInitial
 
 feeDen :: Term s PInteger
 feeDen = pconstant 100000
-
-treasuryFeeDen :: Term s PInteger
-treasuryFeeDen = pconstant 100000
 
 treasuryFeeNumLowerLimit :: Term s PInteger
 treasuryFeeNumLowerLimit = pconstant 1
