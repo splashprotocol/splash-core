@@ -30,7 +30,7 @@ import PExtra.List                  (pelemAt)
 import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
 
 import qualified WhalePoolsDex.Contracts.Pool     as P
-import           WhalePoolsDex.PContracts.PApi    (burnLqInitial, feeDen, treasuryFeeDen, maxLqCap, tletUnwrap, zero, containsSignature)
+import           WhalePoolsDex.PContracts.PApi    (burnLqInitial, feeDen, maxLqCap, tletUnwrap, zero, containsSignature)
 import           WhalePoolsDex.PConstants
 
 import Plutarch.Trace
@@ -215,7 +215,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
         (dx * prevTreasuryFeeNum)
         (dy * prevTreasuryFeeNum)
         
-    validTreasuryChange = (treasuryFeeDen * dt #<= c2) #&& (c2 #< treasuryFeeDen * (dt + 1))
+    validTreasuryChange = (feeDen * dt #<= c2) #&& (c2 #< feeDen * (dt + 1))
 
     anotherTokenTreasuryCorrect =
       pif

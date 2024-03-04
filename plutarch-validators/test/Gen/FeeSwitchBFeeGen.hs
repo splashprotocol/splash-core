@@ -90,8 +90,7 @@ treasuryFeeNumUpperLimit = 50000
 poolFeeNumLowerLimit = 1
 poolFeeNumUpperLimit = 99999
 
-treasuryFeeDen = 100000
-poolFeeNumDen  = 100000
+feeDen = 100000
 
 genPool :: MonadGen f => [PubKeyHash] -> Integer -> Bool -> f Pool
 genPool adminsPkhs threshold lpFeeIsEditable = do
@@ -209,7 +208,7 @@ incorrectTreasuryFee :: MonadGen m => TestAction m -- Pool -> m Pool
 incorrectTreasuryFee = 
   let
     action prevPool@Pool{..} = do
-      newIncorrectTreasuryFee <- integral (Range.constant (treasuryFeeNumUpperLimit + 1) treasuryFeeDen)
+      newIncorrectTreasuryFee <- integral (Range.constant (treasuryFeeNumUpperLimit + 1) feeDen)
       let
         newConfig = config {
           treasuryFee = newIncorrectTreasuryFee
@@ -291,7 +290,7 @@ incorrectChangePoolFee :: MonadGen m => TestAction m
 incorrectChangePoolFee = 
   let
     action prevPool@Pool{..} = do
-      incorrectPoolFee <- integral (Range.constant (poolFeeNumUpperLimit + 1) poolFeeNumDen)
+      incorrectPoolFee <- integral (Range.constant (poolFeeNumUpperLimit + 1) feeDen)
       let
         newConfig = config {
           poolFeeNumX = incorrectPoolFee,
