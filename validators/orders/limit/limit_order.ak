@@ -3,7 +3,7 @@ use aiken/dict
 use aiken/list
 use aiken/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
-  Transaction, TransactionId, find_input,
+  Transaction, TransactionId, WithdrawFrom, find_input,
 }
 use aiken/transaction/credential.{
   Address, Credential, Inline, Referenced, ScriptCredential, from_script,
@@ -13,14 +13,13 @@ use aiken/transaction/value.{
   PolicyId, ada_asset_name, ada_policy_id, add, from_lovelace, quantity_of,
 }
 use splash/lovelace.{lovelace_of}
-use splash/orders/spot.{beacon_name}
 use splash/orders/types.{OrderType}
 use splash/plutus.{Asset, VerificationKeyHash, mk_asset}
 use splash/rational.{Rational, rational}
 
 const this_tag = #[0]
 
-type SpotOrderConfig {
+type LimitOrderConfig {
   tag: OrderType,
   /// Beacon used to track progress.
   beacon: PolicyId,
@@ -48,10 +47,14 @@ type SpotOrderConfig {
 }
 
 validator(witness: Referenced<Credential>) {
-  fn spot_order(conf: SpotOrderConfig, action: Bool, ctx: ScriptContext) -> Bool {
+  fn limit_order(
+    conf: LimitOrderConfig,
+    action: Bool,
+    ctx: ScriptContext,
+  ) -> Bool {
     let tx = ctx.transaction
     when action is {
-      True -> dict.has_key(tx.withdrawals, witness)
+      True -> dict.has_key(tx.withdrawals, witness)?
       False -> {
         let is_authorized =
           list.has(tx.extra_signatories, conf.cancellation_pkh)
@@ -75,7 +78,7 @@ validator {
       tx.extra_signatories,
       True,
       validation_step,
-    )
+    )?
   }
 }
 
@@ -90,7 +93,7 @@ fn validation_step(
   let tag: Data = builtin.head_list(fields)
   let this_tag: Data = this_tag
   if tag == this_tag {
-    expect conf: SpotOrderConfig = datum
+    expect conf: LimitOrderConfig = datum
     let successor = output
 
     let self_value = self.value
@@ -123,7 +126,7 @@ fn validation_step(
       } else if ada_is_output {
         output_1
       } else {
-        lovelace_of(self_value)
+        lovelace_of(successor_value)
       }
 
     let output_delta = output_1 - output_0
@@ -156,14 +159,18 @@ fn validation_step(
           output_added * base_price.denom >= tradable_input_removed * base_price.num
         let overall_integrity =
           if ada_is_input {
-            input_removed <= tradable_input_removed + fee_0 + cost_per_ex_step
+            input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
           } else {
-            input_removed <= tradable_input_removed && lovelace_delta <= fee_removed + cost_per_ex_step
+            if ada_is_output {
+              input_removed <= tradable_input_removed
+            } else {
+              input_removed <= tradable_input_removed && -lovelace_delta <= fee_removed + cost_per_ex_step
+            }
           }
-        valid_exchange_rate && overall_integrity
+        valid_exchange_rate? && overall_integrity?
       } else {
         expect InlineDatum(successor_datum) = successor.datum
-        expect successor_conf: SpotOrderConfig = successor_datum
+        expect successor_conf: LimitOrderConfig = successor_datum
         let tradable_input_1 = successor_conf.tradable_input
         let tradable_input_removed = tradable_input_0 - tradable_input_1
         let fee_1 = successor_conf.fee
@@ -182,7 +189,11 @@ fn validation_step(
           if ada_is_input {
             input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
           } else {
-            input_removed <= tradable_input_removed && lovelace_delta <= fee_removed + cost_per_ex_step
+            if ada_is_output {
+              input_removed <= tradable_input_removed
+            } else {
+              input_removed <= tradable_input_removed && -lovelace_delta <= fee_removed + cost_per_ex_step
+            }
           }
         // Execution step is worth it.
         let min_marginal_output = conf.min_marginal_output
@@ -190,14 +201,14 @@ fn validation_step(
         // Script preserved.
         let script_preserved = self_address == successor_address
         let expected_successor_conf =
-          SpotOrderConfig {
+          LimitOrderConfig {
             ..conf,
             tradable_input: tradable_input_1,
             fee: fee_1,
           }
         // Immutable field are unchanged.
-        let config_preserved = conf == expected_successor_conf
-        valid_exchange_rate && valid_fee && overall_integrity && valid_marginal_output && script_preserved && config_preserved
+        let config_preserved = successor_conf == expected_successor_conf
+        valid_exchange_rate? && valid_fee? && overall_integrity? && valid_marginal_output? && script_preserved? && config_preserved?
       }
 
     let valid_authorization =
@@ -209,7 +220,7 @@ fn validation_step(
         }
       }
 
-    valid_execution && valid_stake_cred && valid_authorization
+    valid_execution? && valid_stake_cred? && valid_authorization?
   } else {
     True
   }
@@ -243,12 +254,6 @@ const test_redeemer = #"a2"
 
 const test_order_validator_sh = #"a4"
 
-const test_beacon_policy = #"a8"
-
-const policy_x = #"f4"
-
-const name_x = "b"
-
 const policy_y = #"f2"
 
 const name_y = "a"
@@ -264,15 +269,15 @@ fn make_order(
   base_price: Rational,
   redeemer_reward_pkh: VerificationKeyHash,
   permitted_executors: List<VerificationKeyHash>,
-) -> (Output, SpotOrderConfig) {
+) -> (Output, LimitOrderConfig) {
   let conf =
-    SpotOrderConfig {
+    LimitOrderConfig {
       tag: this_tag,
       beacon,
       tradable_input,
       cost_per_ex_step,
       min_marginal_output,
-      input: mk_asset(policy_x, name_x),
+      input: mk_asset(ada_policy_id, ada_asset_name),
       output: mk_asset(policy_y, name_y),
       base_price,
       fee,
@@ -282,8 +287,7 @@ fn make_order(
     }
   let address = from_script(test_order_validator_sh)
   let lovelace_in = tradable_input + fee + cost_per_ex_step * max_ex_steps
-  let value =
-    add(from_lovelace(lovelace_in), test_beacon_policy, beacon_name, 1)
+  let value = from_lovelace(lovelace_in)
   let output =
     Output { address, value, datum: InlineDatum(conf), reference_script: None }
   (output, conf)
@@ -306,6 +310,237 @@ fn dummy_compare(_lhs: a, _rhs: a) -> Ordering {
 type Foo {
   a: Int,
   b: ByteArray,
+}
+
+test normal_partial_swap_ada_to_token() {
+  let tradable_input0 = 1_000_000
+  let fee0 = 5000
+  let cost_per_ex_step = 10000
+  let steps = 5
+  let price = rational(1, 2)
+  let tradable_input_removed = 200_000
+  let tradable_input1 = tradable_input0 - tradable_input_removed
+  let input_amount0 = tradable_input0 + fee0 + cost_per_ex_step * steps
+  let fee_removed = fee0 * tradable_input_removed / input_amount0
+  let fee1 = fee0 - fee_removed
+  let input_removed = tradable_input_removed + fee_removed + cost_per_ex_step
+  let output_amount0 = 10_000
+  let input_amount1 = input_amount0 - input_removed
+  let output_added = tradable_input_removed * price.num / price.denom
+  let output_amount1 = output_amount0 + output_added
+  test_partial_swap(
+    input: mk_asset(ada_policy_id, ada_asset_name),
+    output: mk_asset("x", "x"),
+    input_amount: (input_amount0, input_amount1),
+    output_amount: (output_amount0, output_amount1),
+    lovelace_amount: (input_amount0, input_amount1),
+    tradable_input: (tradable_input0, tradable_input1),
+    fee: (fee0, fee1),
+    cost_per_ex_step: cost_per_ex_step,
+    min_marginal_output: 1000,
+    base_price: price,
+  )
+}
+
+test normal_partial_swap_token_to_ada() {
+  let tradable_input0 = 1_000_000
+  let fee0 = 5000
+  let cost_per_ex_step = 10000
+  let steps = 5
+  let price = rational(1, 2)
+  let tradable_input_removed = 200_000
+  let tradable_input1 = tradable_input0 - tradable_input_removed
+  let input_amount0 = tradable_input0
+  let fee_removed = fee0 * tradable_input_removed / input_amount0
+  let fee1 = fee0 - fee_removed
+  let input_removed = tradable_input_removed
+  let tradable_output0 = 10_000
+  let output_amount0 = tradable_output0 + fee0 + cost_per_ex_step * steps
+  let input_amount1 = input_amount0 - input_removed
+  let output_added =
+    tradable_input_removed * price.num / price.denom - fee_removed - cost_per_ex_step
+  let output_amount1 = output_amount0 + output_added
+  test_partial_swap(
+    input: mk_asset("x", "x"),
+    output: mk_asset(ada_policy_id, ada_asset_name),
+    input_amount: (input_amount0, input_amount1),
+    output_amount: (output_amount0, output_amount1),
+    lovelace_amount: (output_amount0, output_amount1),
+    tradable_input: (tradable_input0, tradable_input1),
+    fee: (fee0, fee1),
+    cost_per_ex_step: cost_per_ex_step,
+    min_marginal_output: 1000,
+    base_price: price,
+  )
+}
+
+test normal_partial_swap_token_to_token() {
+  let tradable_input0 = 1_000_000
+  let fee0 = 5000
+  let cost_per_ex_step = 10000
+  let steps = 5
+  let price = rational(1, 2)
+  let tradable_input_removed = 200_000
+  let tradable_input1 = tradable_input0 - tradable_input_removed
+  let input_amount0 = tradable_input0
+  let fee_removed = fee0 * tradable_input_removed / input_amount0
+  let fee1 = fee0 - fee_removed
+  let input_removed = tradable_input_removed
+  let tradable_output0 = 10_000
+  let output_amount0 = tradable_output0
+  let lovelace0 = fee0 + cost_per_ex_step * steps
+  let lovelace1 = lovelace0 - fee_removed - cost_per_ex_step
+  let input_amount1 = input_amount0 - input_removed
+  let output_added = tradable_input_removed * price.num / price.denom
+  let output_amount1 = output_amount0 + output_added
+  test_partial_swap(
+    input: mk_asset("x", "x"),
+    output: mk_asset("y", "y"),
+    input_amount: (input_amount0, input_amount1),
+    output_amount: (output_amount0, output_amount1),
+    lovelace_amount: (lovelace0, lovelace1),
+    tradable_input: (tradable_input0, tradable_input1),
+    fee: (fee0, fee1),
+    cost_per_ex_step: cost_per_ex_step,
+    min_marginal_output: 1000,
+    base_price: price,
+  )
+}
+
+fn test_partial_swap(
+  input: Asset,
+  output: Asset,
+  input_amount: (Int, Int),
+  output_amount: (Int, Int),
+  lovelace_amount: (Int, Int),
+  tradable_input: (Int, Int),
+  fee: (Int, Int),
+  cost_per_ex_step: Int,
+  min_marginal_output: Int,
+  base_price: Rational,
+) -> Bool {
+  let conf0 =
+    LimitOrderConfig {
+      tag: this_tag,
+      beacon: "beacon",
+      tradable_input: tradable_input.1st,
+      cost_per_ex_step,
+      min_marginal_output,
+      input,
+      output,
+      base_price,
+      fee: fee.1st,
+      redeemer_address: from_verification_key("redeemer"),
+      cancellation_pkh: "canceller",
+      permitted_executors: [],
+    }
+  let address = from_script("spending_script")
+  let ada_is_input = input.policy == ada_policy_id
+  let ada_is_output = output.policy == ada_policy_id
+  let value0 =
+    if ada_is_input {
+      add(
+        from_lovelace(lovelace_amount.1st),
+        output.policy,
+        output.name,
+        output_amount.1st,
+      )
+    } else if ada_is_output {
+      add(
+        from_lovelace(lovelace_amount.1st),
+        input.policy,
+        input.name,
+        input_amount.1st,
+      )
+    } else {
+      add(
+        add(
+          from_lovelace(lovelace_amount.1st),
+          output.policy,
+          output.name,
+          output_amount.1st,
+        ),
+        input.policy,
+        input.name,
+        input_amount.1st,
+      )
+    }
+  let value1 =
+    if ada_is_input {
+      add(
+        from_lovelace(lovelace_amount.2nd),
+        output.policy,
+        output.name,
+        output_amount.2nd,
+      )
+    } else if ada_is_output {
+      add(
+        from_lovelace(lovelace_amount.2nd),
+        input.policy,
+        input.name,
+        input_amount.2nd,
+      )
+    } else {
+      add(
+        add(
+          from_lovelace(lovelace_amount.2nd),
+          output.policy,
+          output.name,
+          output_amount.2nd,
+        ),
+        input.policy,
+        input.name,
+        input_amount.2nd,
+      )
+    }
+  let output0 =
+    Output {
+      address,
+      value: value0,
+      datum: InlineDatum(conf0),
+      reference_script: None,
+    }
+  let order_input_ref =
+    OutputReference { transaction_id: TransactionId(hex32), output_index: 0 }
+  let order_input = Input { output_reference: order_input_ref, output: output0 }
+  let order_output =
+    Output {
+      address,
+      value: value1,
+      datum: InlineDatum(
+        LimitOrderConfig {
+          ..conf0,
+          tradable_input: tradable_input.2nd,
+          fee: fee.2nd,
+        },
+      ),
+      reference_script: None,
+    }
+  let witness = Inline(ScriptCredential("batch_wit"))
+  let spending_ctx =
+    ScriptContext {
+      purpose: Spend(order_input_ref),
+      transaction: Transaction {
+        ..transaction.placeholder(),
+        inputs: [order_input],
+        outputs: [order_output],
+        withdrawals: dict.new()
+          |> dict.insert(witness, 0, dummy_compare),
+      },
+    }
+  let withdrawal_ctx =
+    ScriptContext {
+      purpose: WithdrawFrom(witness),
+      transaction: Transaction {
+        ..transaction.placeholder(),
+        inputs: [order_input],
+        outputs: [order_output],
+      },
+    }
+  limit_order(witness, conf0, True, spending_ctx) && batch_witness(
+    0,
+    withdrawal_ctx,
+  )
 }
 
 fn test_mixed_full_swap(
@@ -382,7 +617,7 @@ fn test_mixed_full_swap(
              }
            },
     }
-  spot_order(wit, initial_conf, True, ctx) && batch_witness(0, ctx)
+  limit_order(wit, initial_conf, True, ctx) && batch_witness(0, ctx)
 }
 
 fn test_batched_full_swap(
@@ -448,7 +683,7 @@ fn test_batched_full_swap(
   list.foldl(
     list.range(0, size),
     True,
-    fn(_x, acc) { acc && spot_order(wit, initial_conf, True, ctx) },
+    fn(_x, acc) { acc && limit_order(wit, initial_conf, True, ctx) },
   ) && batch_witness(0, ctx)
 }
 
@@ -479,7 +714,7 @@ test valid_batched_full_swap_at_base_price() {
     added_output,
     allowed_executors,
     pkh1,
-    45,
+    46,
   )
 }
 
