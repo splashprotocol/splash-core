@@ -39,6 +39,7 @@ validator(dao_voting_witness: ScriptHash) {
     ctx: ScriptContext,
   ) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
+    let Transaction { inputs, outputs, .. } = transaction
     expect Spend(pool_in_utxo_reference) = purpose
     let (pool_in_ix, pool_out_ix) =
       when action is {
@@ -48,44 +49,66 @@ validator(dao_voting_witness: ScriptHash) {
       }
 
     // ==================================== POOL INPUT ==================================== //
-    expect Some(pool_input) = list.at(transaction.inputs, pool_in_ix)
-    let pool_in_output = pool_input.output
-    let input_value = pool_in_output.value
-
+    expect Some(pool_input) = list.at(inputs, pool_in_ix)
     // Pool input params:
+    let Input {
+      output: pool_input_output,
+      output_reference: pool_output_reference,
+    } = pool_input
+    let Output { value: input_value, address: pool_in_address, .. } =
+      pool_input_output
+
+    let PoolData {
+      pool_nft: pool_nft_in,
+      n: n_in,
+      tradable_assets: tradable_assets_in,
+      tradable_tokens_multipliers: tradable_tokens_multipliers_in,
+      lp_token: lp_token_in,
+      ampl_coeff: ampl_coeff_in,
+      dao_stabe_proxy_witness: dao_stabe_proxy_witness_in,
+      ..
+    } = input_datum
+
     let pool_in_tokens_policies = value.policies(input_value)
-    let pool_in_address = pool_in_output.address
 
     // ==================================== POOL OUTPUT ==================================== //
-    expect Some(pool_out_output) = list.at(transaction.outputs, pool_out_ix)
+    expect Some(pool_out_output) = list.at(outputs, pool_out_ix)
     // Pool out params:
-    let output_value = pool_out_output.value
-    let pool_out_tokens_policies = value.policies(output_value)
-    let pool_out_address = pool_out_output.address
-
-    // Pool out datum:
-    expect InlineDatum(pool_out_datum) = pool_out_output.datum
+    expect Output {
+      value: output_value,
+      address: pool_out_address,
+      datum: InlineDatum(pool_out_datum),
+      ..
+    } = pool_out_output
     expect output_datum: PoolData = pool_out_datum
+    let pool_out_tokens_policies = value.policies(output_value)
+
+    let PoolData {
+      pool_nft: pool_nft_out,
+      n: n_out,
+      tradable_assets: tradable_assets_out,
+      tradable_tokens_multipliers: tradable_tokens_multipliers_out,
+      lp_token: lp_token_out,
+      ampl_coeff: ampl_coeff_out,
+      ..
+    } = output_datum
+
     // ==================================== POOL SELF VALIDATIONS ==================================== //
     // 1. Pool input is valid:
-    let valid_pool_input: Bool =
-      pool_in_utxo_reference == pool_input.output_reference
+    let valid_pool_input: Bool = pool_in_utxo_reference == pool_output_reference
 
     // 2. Pool address is preserved:
     let pool_address_preserved: Bool = pool_in_address == pool_out_address
     // 3. Pool NFT is preserved:
+    let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft_in
     let pool_nft_preserved: Bool =
-      value.quantity_of(
-        output_value,
-        input_datum.pool_nft.policy,
-        input_datum.pool_nft.name,
-      ) == 1
+      value.quantity_of(output_value, pool_nft_policy, pool_nft_name) == 1
 
     // 4. Pool config params are preserved:
     let pool_config_preserved: Bool =
-      input_datum.pool_nft == output_datum.pool_nft && input_datum.n == output_datum.n && input_datum.tradable_assets == output_datum.tradable_assets && input_datum.tradable_tokens_multipliers == output_datum.tradable_tokens_multipliers && input_datum.lp_token == output_datum.lp_token && input_datum.ampl_coeff == output_datum.ampl_coeff
+      pool_nft_in == pool_nft_out && n_in == n_out && tradable_assets_in == tradable_assets_out && tradable_tokens_multipliers_in == tradable_tokens_multipliers_out && lp_token_in == lp_token_out && ampl_coeff_in == ampl_coeff_out
     // 5. No extra tokens in the pool's value:
-    let allowed_num_tokens = input_datum.n + n_non_tradable_tokens
+    let allowed_num_tokens = n_in + n_non_tradable_tokens
     let no_more_tokens_in_pool_out: Bool =
       pool_in_tokens_policies == pool_out_tokens_policies && list.length(
         pool_out_tokens_policies,
@@ -93,7 +116,7 @@ validator(dao_voting_witness: ScriptHash) {
 
     // 6. Pool out tokens balances are positive:
     let pool_out_tokens_balances =
-      utils.extract_target_balances(input_datum.tradable_assets, output_value)
+      utils.extract_target_balances(tradable_assets_in, output_value)
     let positive_pool_out_balances: Bool =
       utils.list_is_positive(pool_out_tokens_balances)
     // 7. Action is valid:
@@ -111,7 +134,7 @@ validator(dao_voting_witness: ScriptHash) {
 
         PDAOAction(..) -> {
           expect Some(dao_stabe_proxy_witness) =
-            list.at(input_datum.dao_stabe_proxy_witness, 0)
+            list.at(dao_stabe_proxy_witness_in, 0)
           let valid_dao_action: Bool =
             utils.contains_withdrawal(
               transaction.withdrawals,
@@ -142,33 +165,45 @@ fn validate_amm_operation(
 ) -> Bool {
   // ==================================== INPUT DATA ==================================== //
   // Pool config constants for calculations | Input:
-  let n = input_datum.n
-  let lp_token = input_datum.lp_token
-  let tradable_tokens = input_datum.tradable_assets
-  let tradable_tokens_multipliers = input_datum.tradable_tokens_multipliers
-  let a = input_datum.ampl_coeff
-  let lp_fee_num = input_datum.lp_fee_num
-  let protocol_fee_num = input_datum.protocol_fee_num
+  let PoolData {
+    n,
+    tradable_assets,
+    tradable_tokens_multipliers,
+    lp_token,
+    ampl_coeff,
+    lp_fee_num,
+    protocol_fee_num,
+    dao_stabe_proxy_witness,
+    treasury_address,
+    protocol_fees: availible_protocol_fees0,
+    inv: inv0,
+    ..
+  } = input_datum
 
-  // Actual balance of collected protocol fees (accumulated in the pool) | Input:
-  let availible_protocol_fees0 = input_datum.protocol_fees
+  let Asset { policy: lp_token_policy, name: lp_token_name } = lp_token
 
-  // ==================================== OUTPUT DATA ==================================== //
-  // Actual balance of collected protocol fees (accumulated in the pool) | Output:
-  let availible_protocol_fees1 = output_datum.protocol_fees
-
+  // Pool data | Output:
+  let PoolData {
+    lp_fee_num: lp_fee_num1,
+    protocol_fee_num: protocol_fee_num1,
+    dao_stabe_proxy_witness: dao_stabe_proxy_witness1,
+    treasury_address: treasury_address1,
+    protocol_fees: availible_protocol_fees1,
+    inv: inv1,
+    ..
+  } = output_datum
   // ==================================== CALCULATING DELTAS ==================================== //
   // LP tokens:
   let lp_amount0 =
-    value.quantity_of(input_value, lp_token.policy, lp_token.name)
+    value.quantity_of(input_value, lp_token_policy, lp_token_name)
   let lp_amount1 =
-    value.quantity_of(output_value, lp_token.policy, lp_token.name)
+    value.quantity_of(output_value, lp_token_policy, lp_token_name)
   let delta_lp = lp_amount1 - lp_amount0
   // Total balances:
   let balances_total0 =
-    utils.extract_target_balances(tradable_tokens, input_value)
+    utils.extract_target_balances(tradable_assets, input_value)
   let balances_total1 =
-    utils.extract_target_balances(tradable_tokens, output_value)
+    utils.extract_target_balances(tradable_assets, output_value)
 
   // Tradable balances:
   // We exclude current protocol fees from the total balances for deposit/swap/redeem actions!
@@ -184,16 +219,11 @@ fn validate_amm_operation(
   // ==================================== AMM-ACTION VALIDATIONS ==================================== //
   // 1. Pool adjustable params are preserved:
   let pool_adjustable_params_preserved: Bool =
-    a == output_datum.ampl_coeff && lp_fee_num == output_datum.lp_fee_num && protocol_fee_num == output_datum.protocol_fee_num && input_datum.dao_stabe_proxy_witness == output_datum.dao_stabe_proxy_witness && input_datum.treasury_address == output_datum.treasury_address
+    lp_fee_num == lp_fee_num1 && protocol_fee_num == protocol_fee_num1 && dao_stabe_proxy_witness == dao_stabe_proxy_witness1 && treasury_address == treasury_address1
   // 2. Checking if AMM-action is valid.
   // Widely used constants:
   let nn = math.pow(n, n)
-  let ann = a * nn
-
-  // Invariant values:
-  let inv0 = input_datum.inv
-
-  let inv1 = output_datum.inv
+  let ann = ampl_coeff * nn
 
   // Converting all balances to the equal precision:
   let tradable_balances_calc1 =
@@ -2125,5 +2155,141 @@ test test_random_swap_to_min_decimals() {
     output_pool_data_wrong_inv,
     base_ind,
     quote_ind,
+  )
+}
+
+fn uniform_reserves_valid_swap_math_template_clean(
+  n: Int,
+  base_amount: Int,
+  lp_fee_num_before: Int,
+  protocol_fee_num_before: Int,
+  base_ind: Int,
+  quote_ind: Int,
+) -> Bool {
+  let min_value = 1_000_000
+  let default_decimal = 1_000_000
+  let default_token_value = min_value * default_decimal
+
+  let tradable_assets =
+    generate_tradable_assets(@"some_pool_token", @"some_pool_token_name", n)
+
+  // Input data:
+  let total_balances_before = list.repeat(default_token_value, n)
+  let tradable_decimals_before = list.repeat(default_decimal, n)
+  let collected_protocol_fees_before = list.repeat(0, n)
+  let a_before = 1000
+
+  let inv_before = default_token_value * n
+  let lp_balance_before = lp_emission - inv_before
+
+  let (input_pool_data, _) =
+    pool_state(
+      total_balances_before,
+      lp_balance_before,
+      @"pool_nft_policy",
+      @"pool_nft_name",
+      n,
+      tradable_assets,
+      tradable_decimals_before,
+      @"pool_lp_policy",
+      @"pool_lp_name",
+      a_before,
+      lp_fee_num_before,
+      protocol_fee_num_before,
+      @"dao_stable_policy",
+      @"tr_policy",
+      collected_protocol_fees_before,
+      inv_before,
+    )
+  // Output data:
+  // Output data:
+  let quote_lp_fees = base_amount * input_pool_data.lp_fee_num / denom
+  let quote_protocol_fees =
+    base_amount * input_pool_data.protocol_fee_num / denom
+
+  let total_balances_after =
+    list.indexed_map(
+      total_balances_before,
+      fn(i, b) {
+        if i == base_ind {
+          b + base_amount
+        } else if i == quote_ind {
+          b - base_amount + quote_lp_fees + quote_protocol_fees
+        } else {
+          b
+        }
+      },
+    )
+
+  let collected_protocol_fees_after =
+    list.indexed_map(
+      collected_protocol_fees_before,
+      fn(i, b) {
+        if i == quote_ind {
+          b + quote_protocol_fees
+        } else {
+          b
+        }
+      },
+    )
+
+  let inv_after = inv_before + quote_lp_fees + quote_protocol_fees
+
+  let (_, _) =
+    pool_state(
+      total_balances_after,
+      lp_balance_before,
+      @"pool_nft_policy",
+      @"pool_nft_name",
+      n,
+      tradable_assets,
+      tradable_decimals_before,
+      @"pool_lp_policy",
+      @"pool_lp_name",
+      a_before,
+      lp_fee_num_before,
+      protocol_fee_num_before,
+      @"dao_stable_policy",
+      @"tr_policy",
+      collected_protocol_fees_after,
+      inv_after,
+    )
+  // Validation:
+  True
+}
+
+test test_swap_one() {
+  // Swap 0 -> 1
+  let base_ind0 = 0
+  let quote_ind0 = 1
+  let protocol_fee_num = 2000
+  let base = 30000000
+  let n = 3
+  let swap_fee = 250
+  uniform_reserves_valid_swap_math_template(
+    n,
+    base,
+    swap_fee,
+    protocol_fee_num,
+    base_ind0,
+    quote_ind0,
+  )
+}
+
+test test_swap_no() {
+  // Swap 0 -> 1
+  let base_ind0 = 0
+  let quote_ind0 = 1
+  let protocol_fee_num = 2150
+  let base = 30_000_000_323
+  let n = 3
+  let swap_fee = 2324
+  uniform_reserves_valid_swap_math_template_clean(
+    n,
+    base,
+    swap_fee,
+    protocol_fee_num,
+    base_ind0,
+    quote_ind0,
   )
 }
