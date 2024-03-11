@@ -1,6 +1,5 @@
 use aiken/list
-use aiken/transaction.{
-  InlineDatum, Input, Output, ScriptContext, Spend, Transaction,
+use aiken/transaction.{Input, Output, ScriptContext, Spend, Transaction,
 }
 use aiken/transaction/value.{Value}
 use splash/stableswap/types.{DAOAction, DAODatum, PoolData}
@@ -31,11 +30,7 @@ validator {
     let pool_in_output = pool_input.output
     let pool_in_value = pool_in_output.value
 
-    expect input_datum: PoolData =
-      when pool_in_output.datum is {
-        InlineDatum(d) -> d
-        _ -> utils.find_script_datum(transaction.datums, pool_in_output.datum)
-      }
+    expect input_datum: PoolData = utils.extract_datum(pool_in_output.datum)
     // DAO input:
     expect Some(dao_input) = list.at(transaction.inputs, action.dao_in_ix)
     let dao_in_output = dao_input.output
@@ -50,11 +45,7 @@ validator {
     expect Some(pool_out_output) =
       list.at(transaction.outputs, action.pool_out_ix)
     let pool_out_value = pool_out_output.value
-    expect output_datum: PoolData =
-      when pool_out_output.datum is {
-        InlineDatum(d) -> d
-        _ -> utils.find_script_datum(transaction.datums, pool_out_output.datum)
-      }
+    expect output_datum: PoolData = utils.extract_datum(pool_out_output.datum)
 
     // DAO output:
     expect Some(dao_out_output) =
@@ -62,10 +53,7 @@ validator {
     let dao_out_value = dao_out_output.value
 
     expect proxy_dao_out_datum: DAODatum =
-      when dao_out_output.datum is {
-        InlineDatum(d) -> d
-        _ -> utils.find_script_datum(transaction.datums, dao_out_output.datum)
-      }
+      utils.extract_datum(dao_out_output.datum)
 
     // DAO output params:
     let dao_out_tokens_policies = value.policies(dao_out_value)

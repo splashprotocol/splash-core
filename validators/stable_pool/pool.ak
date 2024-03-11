@@ -64,11 +64,7 @@ validator(dao_voting_witness: ScriptHash) {
     let pool_out_address = pool_out_output.address
 
     // Pool out datum:
-    expect output_datum: PoolData =
-      when pool_out_output.datum is {
-        InlineDatum(d) -> d
-        _ -> utils.find_script_datum(transaction.datums, pool_out_output.datum)
-      }
+    expect output_datum: PoolData = utils.extract_datum(pool_out_output.datum)
 
     // ==================================== POOL SELF VALIDATIONS ==================================== //
     // 1. Pool input is valid:

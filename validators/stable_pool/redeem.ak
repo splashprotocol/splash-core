@@ -1,5 +1,5 @@
 use aiken/list
-use aiken/transaction.{InlineDatum, ScriptContext}
+use aiken/transaction.{ScriptContext}
 use aiken/transaction/credential.{ScriptCredential, VerificationKeyCredential}
 use aiken/transaction/value.{quantity_of}
 use splash/stableswap/types.{
@@ -19,11 +19,7 @@ validator {
         // Input pool data:
         expect Some(pool_input) = list.at(ctx.transaction.inputs, pool_in_ix)
         let pool = pool_input.output
-        expect pool_data: PoolData =
-          when pool.datum is {
-            InlineDatum(d) -> d
-            _ -> utils.find_script_datum(ctx.transaction.datums, pool.datum)
-          }
+        expect pool_data: PoolData = utils.extract_datum(pool.datum)
 
         // Output user data:
         expect Some(user_output) =

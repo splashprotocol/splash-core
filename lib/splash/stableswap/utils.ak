@@ -4,7 +4,7 @@ use aiken/math
 use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
 use aiken/transaction/credential.{Inline, ScriptCredential, StakeCredential}
 use aiken/transaction/value.{Value}
-use splash/plutus.{Asset, DatumHashMap, ScriptHash}
+use splash/plutus.{Asset, ScriptHash}
 
 /// Calculates element-wise subtraction of two lists.
 pub fn lists_diff(lst0: List<Int>, lst1: List<Int>) -> List<Int> {
@@ -503,14 +503,12 @@ test test_check_invariant_extremum_for_asset() {
   )
 }
 
-/// Finds script datum in output.
-pub fn find_script_datum(datums: DatumHashMap, datum: Datum) -> Data {
+/// Extracts datum from the output.
+pub fn extract_datum(datum: Datum) -> Data {
   let datum_opt =
     when datum is {
       NoDatum -> None
-      DatumHash(dh) ->
-        datums
-          |> dict.get(dh)
+      DatumHash(_) -> None
       InlineDatum(data) -> Some(data)
     }
   expect Some(datum) = datum_opt
