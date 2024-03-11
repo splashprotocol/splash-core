@@ -76,13 +76,9 @@ validator(dao_voting_witness: ScriptHash) {
     // 3. Pool NFT is preserved:
     let pool_nft_preserved: Bool =
       value.quantity_of(
-        input_value,
+        output_value,
         input_datum.pool_nft.policy,
         input_datum.pool_nft.name,
-      ) == 1 && value.quantity_of(
-        output_value,
-        output_datum.pool_nft.policy,
-        output_datum.pool_nft.name,
       ) == 1
 
     // 4. Pool config params are preserved:
