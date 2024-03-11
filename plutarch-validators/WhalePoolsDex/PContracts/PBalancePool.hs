@@ -6,7 +6,7 @@ import qualified GHC.Generics as GHC
 import           Generics.SOP (Generic, I (I))
 
 import Plutarch
-import Plutarch.Api.V2              (PScriptHash(..), PMaybeData (..), PTxOut, POutputDatum(..), PAddress(..), PPubKeyHash(..), PDatum(..), PValue(..), KeyGuarantees(..), AmountGuarantees(..), PCurrencySymbol(..))
+import Plutarch.Api.V2              (PScriptHash(..), PMaybeData (..), PTxOut, POutputDatum(..), PAddress(..), PPubKeyHash(..), PDatum(..), PValue(..), KeyGuarantees(..), AmountGuarantees(..), PStakingCredential(..))
 import Plutarch.Api.V2.Contexts     (PScriptContext, PScriptPurpose (PSpending), PTxInfo(..))
 import Plutarch.DataRepr
 import Plutarch.Lift
@@ -19,6 +19,8 @@ import Plutarch.TryFrom             (PTryFrom (PTryFromExcess, ptryFrom'))
 import Plutarch.Api.V1.Scripts      (PValidatorHash)
 import Plutarch.Rational
 import Plutarch.Num                 ((#*))
+import Plutarch.Extra.Maybe         as Maybe
+import Plutarch.Api.V1.AssocMap
 
 import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromData, assetClass, pValueLength, tletUnwrap)
 import PExtra.List                  (pelemAt)
@@ -45,7 +47,7 @@ newtype BalancePoolConfig (s :: S)
                  , "treasuryFee"      ':= PInteger
                  , "treasuryX"        ':= PInteger
                  , "treasuryY"        ':= PInteger
-                 , "DAOPolicy"        ':= PBuiltinList (PAsData PCurrencySymbol)
+                 , "DAOPolicy"        ':= PBuiltinList (PAsData PStakingCredential)
                  , "treasuryAddress"  ':= PValidatorHash
                  , "invariant"        ':= PInteger
                  ]
@@ -285,7 +287,7 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
                 #$ pdcons @"treasuryFee" @PInteger # pdata treasuryFee
                 #$ pdcons @"treasuryX" @PInteger # pdata newTreasuryX
                 #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
-                #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PCurrencySymbol)) # pdata prevDAOPolicy
+                #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
                 #$ pdcons @"invariant" @PInteger # pdata prevInvariant
                     # pdnil)
@@ -298,14 +300,14 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
         #&& (dlq #== zero)
         )
 
--- validDAOAction :: ClosedTerm (BalancePoolConfig :--> PTxInfo :--> PBool)
--- validDAOAction = plam $ \cfg txInfo -> unTermCont $ do
---   valueMint <- tletField @"mint" txInfo
---   policies  <- tletField @"DAOPolicy" cfg
---   let 
---       policyCS = pfromData $ phead # policies
---       mintedAc = assetClass # policyCS # poolStakeChangeMintTokenNameP
---   pure $ assetClassValueOf # valueMint # mintedAc #== 1
+validDAOAction :: ClosedTerm (BalancePoolConfig :--> PTxInfo :--> PBool)
+validDAOAction = plam $ \cfg txInfo -> unTermCont $ do
+  wdrl     <- tletField @"wdrl" txInfo
+  policies <- tletField @"DAOPolicy" cfg
+  let 
+      policySC = pfromData $ phead # policies
+      headWithdrawl = plookup # policySC # wdrl
+  pure $ Maybe.pisJust # headWithdrawl
 
 correctLpTokenOut ::
     ClosedTerm 
@@ -391,7 +393,7 @@ validDepositAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfi
                 #$ pdcons @"treasuryFee" @PInteger # pdata treasuryFee
                 #$ pdcons @"treasuryX" @PInteger # pdata prevTreasuryX
                 #$ pdcons @"treasuryY" @PInteger # pdata prevTreasuryY
-                #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PCurrencySymbol)) # pdata prevDAOPolicy
+                #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
                 #$ pdcons @"invariant" @PInteger # pdata newInvariant
                     # pdnil)
@@ -526,7 +528,7 @@ singleDepositIsValid =
                     #$ pdcons @"treasuryFee" @PInteger # pdata treasuryFee
                     #$ pdcons @"treasuryX" @PInteger # pdata newTreasuryX
                     #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
-                    #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PCurrencySymbol)) # pdata prevDAOPolicy
+                    #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                     #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
                     #$ pdcons @"invariant" @PInteger # pdata finalInvariant
                     # pdnil
@@ -541,6 +543,65 @@ singleDepositIsValid =
             #&& correctTreasuryUpdate
             #&& (newExpectedConfig #== newPoolConfig)
             )
+
+singleRedeemIsValid ::
+    ClosedTerm 
+        (    BalancePoolState 
+        :--> BalancePoolState 
+        :--> BalancePoolConfig 
+        :--> BalancePoolConfig 
+        :--> PInteger
+        :--> PInteger
+        :--> PInteger
+        :--> PInteger
+        :--> PInteger
+        :--> PInteger
+        :--> PInteger
+        :--> PInteger
+        :--> PInteger
+        :--> PInteger
+        :--> PInteger
+        :--> PInteger
+        :--> PBool
+        )
+singleRedeemIsValid = 
+    plam $ \prevState' newState' prevPoolConfig newPoolConfig tokenXGWF tokenYGWF tokenXTWF tokenYTWF tokenXGLP tokenYGLP tokenXTLP tokenYTLP tokenXGT tokenYGT tokenXTT tokenYTT -> unTermCont $ do
+        prevState  <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] prevState'
+        newState   <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] newState'
+        prevConfig <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant"] prevPoolConfig
+        newConfig  <- pletFieldsC @'["treasuryX", "treasuryY"] newPoolConfig
+        let
+            prevPoolNft = getField @"poolNft" prevConfig
+            prevPoolX   = getField @"poolX"  prevConfig
+            weightX     = getField @"weightX" prevConfig
+            prevPoolY   = getField @"poolY"  prevConfig
+            weightY     = getField @"weightY" prevConfig
+            prevPoolLq  = getField @"poolLq" prevConfig
+            feeNum      = getField @"feeNum" prevConfig
+            treasuryFee = getField @"treasuryFee" prevConfig
+            prevTreasuryX = getField @"treasuryX" prevConfig
+            prevTreasuryY = getField @"treasuryY" prevConfig
+            prevDAOPolicy = getField @"DAOPolicy" prevConfig
+            prevTreasuryAddress = getField @"treasuryAddress" prevConfig
+
+            newTreasuryX = getField @"treasuryX" newConfig
+            newTreasuryY = getField @"treasuryY" newConfig
+
+            prevX  = pfromData $ getField @"reservesX" prevState
+            prevY  = pfromData $ getField @"reservesY" prevState
+            prevLq = pfromData $ getField @"liquidity" prevState
+
+            newX  = pfromData $ getField @"reservesX" newState
+            newY  = pfromData $ getField @"reservesY" newState
+            newLq = pfromData $ getField @"liquidity" newState
+
+            dx  = newX - prevX
+            dy  = newY - prevY
+            dlq = newLq - prevLq
+
+        --todo: fix
+
+        undefined
              
 correctLpTokenRedeem ::
     ClosedTerm 
@@ -626,7 +687,7 @@ validRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfig
                 #$ pdcons @"treasuryFee" @PInteger # pdata treasuryFee
                 #$ pdcons @"treasuryX" @PInteger # pdata prevTreasuryX
                 #$ pdcons @"treasuryY" @PInteger # pdata prevTreasuryY
-                #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PCurrencySymbol)) # pdata prevDAOPolicy
+                #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
                 #$ pdcons @"invariant" @PInteger # pdata newInvariant
                     # pdnil)
@@ -763,6 +824,22 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                 tx <- tletUnwrap $ phead # tList
                 ty <- tletUnwrap $ pelemAt # (pconstant 1) # tList
                 pure $ noMoreTokens #&& scriptPreserved #&& (validRedeemAllTokens # s0 # s1 # conf # newConfig # gx # tx # gy # ty)
-            RedeemSingle -> undefined
-            DAOAction -> undefined -- validDAOAction # conf # txinfo'
+            RedeemSingle -> unTermCont $ do
+                gXWF <- tletUnwrap $ phead # gList
+                tXWF <- tletUnwrap $ phead # tList
+                gYWF <- tletUnwrap $ pelemAt # (pconstant 1) # gList
+                tYWF <- tletUnwrap $ pelemAt # (pconstant 1) # tList
+
+                gXLP <- tletUnwrap $ pelemAt # (pconstant 2) # gList
+                gYLP <- tletUnwrap $ pelemAt # (pconstant 3) # gList
+                tXLP <- tletUnwrap $ pelemAt # (pconstant 2) # tList
+                tYLP <- tletUnwrap $ pelemAt # (pconstant 3) # tList
+
+                gXT <- tletUnwrap $ pelemAt # (pconstant 4) # gList
+                gYT <- tletUnwrap $ pelemAt # (pconstant 5) # gList
+                tXT <- tletUnwrap $ pelemAt # (pconstant 4) # tList
+                tYT <- tletUnwrap $ pelemAt # (pconstant 5) # tList
+                
+                pure $ noMoreTokens #&& scriptPreserved #&& (singleRedeemIsValid # s0 # s1 # conf # newConfig # gXWF # tXWF # tYWF # gYWF # gXLP # tXLP # tYLP # gYLP # gXT # tXT # tYT # gYT)
+            DAOAction -> validDAOAction # conf # txinfo'
         )
