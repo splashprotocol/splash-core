@@ -1,7 +1,6 @@
 use aiken/dict.{Dict}
 use aiken/list
 use aiken/math
-use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
 use aiken/transaction/credential.{Inline, ScriptCredential, StakeCredential}
 use aiken/transaction/value.{Value}
 use splash/plutus.{Asset, ScriptHash}
@@ -501,18 +500,6 @@ test test_check_invariant_extremum_for_asset() {
     1,
     1,
   )
-}
-
-/// Extracts datum from the output.
-pub fn extract_datum(datum: Datum) -> Data {
-  let datum_opt =
-    when datum is {
-      NoDatum -> None
-      DatumHash(_) -> None
-      InlineDatum(data) -> Some(data)
-    }
-  expect Some(datum) = datum_opt
-  datum
 }
 
 /// Extract tokens balances from the given value.
