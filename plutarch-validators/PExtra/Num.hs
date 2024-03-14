@@ -9,7 +9,7 @@ module PExtra.Num (
 
 import Plutarch.Prelude
 
-import Plutarch.Rational (PRational (..))
+import Plutarch.Rational
 
 import PExtra.Integer (podd)
 import PExtra.Monadic (tcon, tmatch)

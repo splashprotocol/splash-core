@@ -2,7 +2,9 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module WhalePoolsDex.Contracts.BalancePool (
-    BalancePoolConfig (..)
+    BalancePoolConfig (..),
+    BalancePoolAction (..),
+    BalancePoolRedeemer (..)
 ) where
 
 import PlutusTx.Builtins
@@ -44,7 +46,7 @@ instance PlutusTx.FromData BalancePoolAction where
             | i == 2 = Just Redeem
             | i == 3 = Just RedeemSingle
             | i == 4 = Just Swap
-            | i == 4 = Just DAOAction
+            | i == 5 = Just DAOAction
             | otherwise = Nothing
 
 instance PlutusTx.UnsafeFromData BalancePoolAction where
@@ -59,13 +61,14 @@ instance PlutusTx.ToData BalancePoolAction where
         Redeem -> 2
         RedeemSingle -> 3
         Swap -> 4
-        DAOAction -> 4
+        DAOAction -> 5
 
 data BalancePoolRedeemer = BalancePoolRedeemer
     { action :: BalancePoolAction
     , selfIx :: Integer
     , g :: [Integer]
-    , t :: [Integer]     
+    , t :: [Integer]
+    , maxDen :: Integer
     }
     deriving (Show)
 

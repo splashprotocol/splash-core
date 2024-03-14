@@ -1,7 +1,8 @@
 module PExtra.Integer (
     podd,
     peven,
-    ppow
+    ppow,
+    ppowR
 ) where
 
 import Plutarch.Prelude
@@ -14,6 +15,14 @@ peven = phoistAcyclic $ plam $ \n -> (pmod # n # 2) #== 0
 
 ppow :: Term s (PInteger :--> PInteger :--> PInteger)
 ppow = phoistAcyclic $
+    pfix #$ plam $ \self a power ->
+        pif
+            (power #== 0)
+            1
+            $ a * (self # a # (power - 1))
+
+ppowR :: Term s (PRational :--> PInteger :--> PRational)
+ppowR = phoistAcyclic $
     pfix #$ plam $ \self a power ->
         pif
             (power #== 0)
