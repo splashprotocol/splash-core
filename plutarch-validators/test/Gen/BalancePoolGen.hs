@@ -120,17 +120,17 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
 
   stakeHash <- genPkh
   
-  (xQty :: Int) <- integral (Range.constant 10000000000 10000000000000)
-  (yQty :: Int) <- integral (Range.constant 10000000000 10000000000000)
+  -- todo: error on big values such as 10000000000000000
+  (xQty :: Int) <- integral (Range.constant 10000000000 10000000000000000)
+  (yQty :: Int) <- integral (Range.constant 10000000000 10000000000000000)
 
- -- xWeight <- integral (Range.constant 1 9)
+  -- todo: doesn't work for non 2/8 pools
+  --xWeight <- integral (Range.constant 1 9)
 
   poolFee <- integral (Range.constant 0 1000)
 
   treasuryAddress <- genValidatorHash
   let
-    -- xQty = 4000356
-    -- yQty = 1000000
     xWeight = 2
     yWeight = 10 - xWeight
     nftQty = 1
@@ -166,6 +166,71 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
 
 --- Test utils ---
 
+-- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> BaseIn -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, quoteOut)
+calculateGandTSwap :: Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> (Integer, Integer, Integer, Integer, Integer)
+calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit baseIn lpFee treasuryFee prevInvariant =
+  let
+      xValueFloat = (fromIntegral baseAssetBalance) :: Double
+      invariantFloat = fromIntegral prevInvariant :: Double
+      xWeightFloat = (fromIntegral baseAssetWeight) :: Double
+      yValueFloat = (fromIntegral quoteAssetBalance) :: Double
+      yWeightFloat = (fromIntegral quoteAssetWeghit) :: Double
+      treasuryFeeNum = (fromIntegral treasuryFee) :: Double
+      lpFeeNum = (fromIntegral lpFee) :: Double
+
+      xInInvariant = fromIntegral $ baseAssetBalance + round ((fromIntegral baseIn) * ((lpFeeNum - treasuryFeeNum) / feeDen))
+      xInInvariantWithDegree = (xInInvariant :: Double) ** (xWeightFloat / (10 :: Double)) -- g
+      xInInvariantWith1Degree = (xInInvariant :: Double) ** (1 / (10 :: Double)) -- t
+      xInInvariantWith1WeightDegree = (xInInvariantWith1Degree) ** xWeightFloat
+      maxDen = 15
+
+      gX = ((read $ List.delete '.' $ showFFloat (Just maxDen) xInInvariantWithDegree "") :: Integer)
+      tX = ((read $ List.delete '.' $ showFFloat (Just maxDen) xInInvariantWith1Degree "") :: Integer)
+
+      xInInvariaintDownDegree = xInInvariantWithDegree ** (10 / xWeightFloat)
+      invDivision = invariantFloat / xInInvariantWithDegree
+      invDivisionInReverseDegree = invDivision ** ((fromIntegral 10 :: Double) / yWeightFloat)
+      yToSwap = quoteAssetBalance - (ceiling invDivisionInReverseDegree)
+
+      gYDouble = (fromIntegral $ quoteAssetBalance - yToSwap) ** (yWeightFloat / (10 :: Double)) -- g
+      tGDouble = (fromIntegral $ quoteAssetBalance - yToSwap) ** (1 / (10 :: Double)) -- g
+
+      gY = ((read $ List.delete '.' $ showFFloat (Just maxDen) gYDouble "") :: Integer)
+      tY = ((read $ List.delete '.' $ showFFloat (Just maxDen) tGDouble "") :: Integer)
+  in (gX, tX, gY, tY, yToSwap)
+
+-- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> BaseIn -> lqSupply -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, quoteToDeposit, lqOut)
+-- calculateGandTDeposit :: Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> (Integer, Integer, Integer, Integer, Integer, Integer)
+-- calculateGandTDeposit baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit baseIn lqSupply lpFee treasuryFee prevInvariant =
+--   let
+--       xValueFloat = (fromIntegral baseAssetBalance) :: Double
+--       invariantFloat = fromIntegral prevInvariant :: Double
+--       xWeightFloat = (fromIntegral baseAssetWeight) :: Double
+--       yValueFloat = (fromIntegral quoteAssetBalance) :: Double
+--       yWeightFloat = (fromIntegral quoteAssetWeghit) :: Double
+--       treasuryFeeNum = (fromIntegral treasuryFee) :: Double
+--       lpFeeNum = (fromIntegral lpFee) :: Double
+
+--       xInInvariant = fromIntegral $ (baseAssetBalance + baseIn)
+--       xInInvariantWithDegree = (xInInvariant :: Double) ** (xWeightFloat / (10 :: Double)) -- g
+--       xInInvariantWith1Degree = (xInInvariant :: Double) ** (1 / (10 :: Double)) -- t
+--       xInInvariantWith1WeightDegree = (xInInvariantWith1Degree) ** xWeightFloat
+--       maxDen = 15
+
+--       gX = ((read $ List.delete '.' $ showFFloat (Just maxDen) xInInvariantWithDegree "") :: Integer)
+--       tX = ((read $ List.delete '.' $ showFFloat (Just maxDen) xInInvariantWith1Degree "") :: Integer)
+
+--       lqIssued = (baseIn * lqSupply) / baseAssetBalance
+
+--       yToDeposit = (((lqSupply + lqIssued) / lqSupply) - 1) * quoteAssetBalance
+
+--       gYDouble = (fromIntegral $ quoteAssetBalance + yToDeposit) ** (yWeightFloat / (10 :: Double)) -- g
+--       tGDouble = (fromIntegral $ quoteAssetBalance + yToDeposit) ** (1 / (10 :: Double)) -- g
+
+--       gY = ((read $ List.delete '.' $ showFFloat (Just maxDen) gYDouble "") :: Integer)
+--       tY = ((read $ List.delete '.' $ showFFloat (Just maxDen) tGDouble "") :: Integer)
+--   in (gX, tX, gY, tY, yToDeposit, lqIssued)
+
 --- Test cases ---
 
 cutFloat :: Double -> Int -> Integer
@@ -173,6 +238,8 @@ cutFloat toCut maxInt = let
     strValue = T.pack $ showFFloat (Just maxInt) toCut ""
     splitted = splitOn "." strValue
   in read $ T.unpack . Prelude.head $ splitted
+
+-- Swap cases start --
 
 correctSwap :: MonadGen m => BalancePoolTestAction m
 correctSwap = 
@@ -183,153 +250,13 @@ correctSwap =
         (xCS, xTN) = unAssetClass (poolX config)
         (yCS, yTN) = unAssetClass (poolY config)
         xValue = valueOf value xCS xTN
-        xValueFloat = (fromIntegral xValue) :: Double
-        invariantFloat = fromIntegral (invariant config) :: Double
-        xWeightFloat = (fromIntegral (weightX config)) :: Double
         yValue = valueOf value yCS yTN
-        yValueFloat = (fromIntegral yValue) :: Double
-        yWeightFloat = (fromIntegral (weightY config)) :: Double
-        treasuryFeeNum = (fromIntegral $ treasuryFee config) :: Double
-        lpFeeNum = (fromIntegral $ poolFeeNum config) :: Double
 
-        xLength = RIO.length (show xValue)
-        yLength = RIO.length (show yValue)
-        -- maxDen = if (xLength > yLength) then xLength else yLength
-     -- xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
-
-
-      --
-
-      -- fullLpFeeInContract = reverseFullFee / feeDen
-
-      --
-
+      xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
 
       let
-        xToSwap = 1557301
-        -- 32562 * (99997 / 100000)
-        xInInvariant = fromIntegral $ xValue + round ((fromIntegral xToSwap) * ((lpFeeNum - treasuryFeeNum) / feeDen))
-        xInInvariantWithDegree = (xInInvariant :: Double) ** (xWeightFloat / (10 :: Double)) -- g
-        xInInvariantWith1Degree = (xInInvariant :: Double) ** (1 / (10 :: Double)) -- t
-        xInInvariantWith1WeightDegree = (xInInvariantWith1Degree) ** xWeightFloat
-        maxDen = 15
+        (gX, tX, gY, tY, yToSwap) = calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
 
-        gX = ((read $ List.delete '.' $ showFFloat (Just maxDen) xInInvariantWithDegree "") :: Integer)
-        tX = ((read $ List.delete '.' $ showFFloat (Just maxDen) xInInvariantWith1Degree "") :: Integer)
-
-        xInInvariaintDownDegree = xInInvariantWithDegree ** (10 / xWeightFloat)
-        invDivision = invariantFloat / xInInvariantWithDegree
-        invDivisionInReverseDegree = invDivision ** ((fromIntegral 10 :: Double) / yWeightFloat)
-        yToSwap = yValue - (ceiling invDivisionInReverseDegree)
-
-        gYDouble = (fromIntegral $ yValue - yToSwap) ** (yWeightFloat / (10 :: Double)) -- g
-        tGDouble = (fromIntegral $ yValue - yToSwap) ** (1 / (10 :: Double)) -- g
-
-        gY = ((read $ List.delete '.' $ showFFloat (Just maxDen) gYDouble "") :: Integer)
-        tY = ((read $ List.delete '.' $ showFFloat (Just maxDen) tGDouble "") :: Integer)
-
-        -- gY = (yValue - yToSwap) ** (yWeightFloat / (10 :: Double))
-        -- tY = (yValue - yToSwap) ** (yWeightFloat / (10 :: Double))
-    
-      -- traceM $ ("--------------")
-
-
-      -- traceM $ T.pack . show $ ((2000 ** 0.2) * (2000 ** 0.8))
-      -- traceM $ T.pack . show $ xToSwap
-
-      -- traceM $ "xTOSwap"
-      -- traceM $ T.pack . show $ xToSwap
-
-      -- traceM $ "maxDen"
-      -- traceM $ T.pack . show $ maxDen
-
-      -- traceM $ "(fromIntegral xInInvariant)"
-      -- traceM $ T.pack . show $ xInInvariant
-      -- traceM $ "xInInvariantWithDegree (g)" -- знаменатель дроби должен быть 10^18
-      -- traceM $ T.pack . show $ xInInvariantWithDegree
-      -- traceM $ "xInInvariantWithDegree (g) decode float" -- знаменатель дроби должен быть 10^18
-      -- traceM $ T.pack . show $ ((read $ List.delete '.' $ showFFloat (Just maxDen) xInInvariantWithDegree "") :: Integer)
-      -- traceM $ "xInInvariantWith1Degree (t)" -- знаменатель дроби должен быть 10^18
-      -- traceM $ T.pack . show $ xInInvariantWith1Degree
-      -- traceM $ "xInInvariantWith1Degree (t) decode float" -- знаменатель дроби должен быть 10^18
-      -- traceM $ T.pack . show $ ((read $ List.delete '.' $ showFFloat (Just maxDen) xInInvariantWith1Degree "") :: Integer)
-      -- traceM $ "xInInvariantWith1WeightDegree (t ^ w)"
-      -- traceM $ T.pack . show $ xInInvariantWith1WeightDegree
-      -- traceM $ "xInInvariantWith1WeightDegree (t ^ w) decode float"
-      -- traceM $ T.pack . show $ ((read $ List.delete '.' $ showFFloat (Just maxDen) xInInvariantWith1WeightDegree "") :: Integer)
-      -- traceM $ "xInInvariaintDownDegree"
-      -- traceM $ T.pack . show $ xInInvariaintDownDegree
-
-
-      -- traceM $ "(fromIntegral xToSwap)"
-      -- traceM $ T.pack . show $ (fromIntegral xToSwap)
-      -- traceM $ "(lpFeeNum - treasuryFeeNum) / feeDen)"
-      -- traceM $ T.pack . show $ ((lpFeeNum - treasuryFeeNum) / feeDen)
-      -- traceM $ "((fromIntegral xToSwap) * ((lpFeeNum - treasuryFeeNum) / feeDen))"
-      -- traceM $ T.pack . show $ (((fromIntegral xToSwap) * ((lpFeeNum - treasuryFeeNum) / feeDen)))
-
-      -- traceM $ "Prev invariant: "
-      -- traceM $ T.pack . show $ invariantFloat
-      -- traceM $ "balanceX"
-      -- traceM $ T.pack . show $ xValue
-      -- traceM $ "balanceX + with fee"
-      -- traceM $ T.pack . show $ xValueFloat*((lpFeeNum - treasuryFeeNum) / feeDen)
-      -- traceM $ "balanceX^weight"
-      -- traceM $ T.pack . show $ (((xValueFloat*((lpFeeNum - treasuryFeeNum) / feeDen))**(xWeightFloat / 10)))
-      -- traceM $ "xweight"
-      -- traceM $ T.pack . show $ (xWeightFloat / 10)
-
-      traceM $ ("--------------")
-
-      -- traceM $ ("y weight: ")
-      -- traceM $ T.pack . show $ (yWeightFloat)
-      -- traceM $ ("right side: ")
-      -- traceM $ T.pack . show $ ((round $ ((invariantFloat / (((xValueFloat*((lpFeeNum - treasuryFeeNum) / feeDen))**(xWeightFloat / 10)))) ** ((fromIntegral 10 :: Double) / yWeightFloat))))
-      -- traceM $ ("((fromIntegral 10 :: Double) / yWeightFloat): ")
-      -- traceM $ T.pack . show $ (((fromIntegral 10 :: Double) / yWeightFloat))
-      -- traceM $ ("right side in root: ")
-      -- traceM $ T.pack . show $ ((invariantFloat / (xValueFloat**(xWeightFloat / 10))) ** ((fromIntegral 10 :: Double) / yWeightFloat))
-      -- traceM $ ("prev y value: ")
-      -- traceM $ T.pack . show $ (yValue)
-
-      let
-        newGX = round $ xInInvariantWithDegree
-        newGY = round $ ((yValueFloat - (fromIntegral yToSwap)) ** (yWeightFloat / (fromIntegral 10 :: Double)))
-
-        newTX = round $ (xInInvariant) ** ((fromIntegral 1 :: Double) / (fromIntegral 10 :: Double))
-        newTY = round $ (yValueFloat - (fromIntegral yToSwap)) ** ((fromIntegral 1 :: Double) / (fromIntegral 10 :: Double))
-
-        newTXWeight = (fromIntegral newTX :: Double) ** xWeightFloat
-        newTYWeight = (fromIntegral newTY :: Double) ** yWeightFloat
-
-        newInvariant = newGX * newGY
-
-      -- traceM $ ("yValueFloat: ")
-      -- traceM $ T.pack . show $ (yValueFloat)
-      -- traceM $ ("(fromIntegral yToSwap): ")
-      -- traceM $ T.pack . show $ (yToSwap)
-      -- traceM $ ("yValueFloat - (fromIntegral yToSwap): ")
-      -- traceM $ T.pack . show $ (yValue - (yToSwap))
-      -- traceM $ ("newGX: ")
-      -- traceM $ T.pack . show $ (newGX)
-      -- traceM $ ("newTX: ")
-      -- traceM $ T.pack . show $ (newTX)
-      -- traceM $ ("newTXWeight: ")
-      -- traceM $ T.pack . show $ (newTXWeight)
-      -- traceM $ ("newGY: ")
-      -- traceM $ T.pack . show $ (newGY)
-      -- traceM $ ("newTY: ")
-      -- traceM $ T.pack . show $ (newTY)
-      -- traceM $ ("newTYWeight: ")
-      -- traceM $ T.pack . show $ (newTYWeight)
-
-      -- traceM $ ("prevInvariant: ")
-      -- traceM $ T.pack . show $ ((invariant config))
-
-      -- traceM $ ("newInvariant: ")
-      -- traceM $ T.pack . show $ (newInvariant)
-
-      let
         -- going to withdraw all pool x and y value
         newPoolConfig = config 
           { treasuryX = 0
@@ -343,3 +270,137 @@ correctSwap =
 
       pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY] (toInteger 15)
   in BalancePoolTestAction "Correct swap" testAction
+
+incorrectSwapGT :: MonadGen m => BalancePoolTestAction m
+incorrectSwapGT = 
+  let
+    testAction prevPool@BalancePool{..} = do
+
+      let
+        (xCS, xTN) = unAssetClass (poolX config)
+        (yCS, yTN) = unAssetClass (poolY config)
+        xValue = valueOf value xCS xTN
+        yValue = valueOf value yCS yTN
+
+      xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
+
+      let
+        (gX, tX, gY, tY, yToSwap) = calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap + 10) (poolFeeNum config) (treasuryFee config) (invariant config)
+
+        -- going to withdraw all pool x and y value
+        newPoolConfig = config 
+          { treasuryX = 0
+          , treasuryY = 0
+          }
+
+        newPool = prevPool 
+          { config = newPoolConfig
+          , value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate yToSwap))
+          }
+
+      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY] (toInteger 15)
+  in BalancePoolTestAction "Incorrect swap GT" testAction
+
+incorrectSwapPoolFinalXValue :: MonadGen m => BalancePoolTestAction m
+incorrectSwapPoolFinalXValue = 
+  let
+    testAction prevPool@BalancePool{..} = do
+      let
+        (xCS, xTN) = unAssetClass (poolX config)
+        (yCS, yTN) = unAssetClass (poolY config)
+        xValue = valueOf value xCS xTN
+        yValue = valueOf value yCS yTN
+
+      xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
+      incorrectXSwapValue <- integral (Range.constant 1 ((xValue `div` 2) - 1))
+
+      let
+        (gX, tX, gY, tY, yToSwap) = calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+
+        -- going to withdraw all pool x and y value
+        newPoolConfig = config 
+          { treasuryX = 0
+          , treasuryY = 0
+          }
+
+        newPool = prevPool 
+          { config = newPoolConfig
+          , value  = value <> (assetClassValue (poolX config) (incorrectXSwapValue)) <> (assetClassValue (poolY config) (negate yToSwap))
+          }
+
+      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY] (toInteger 15)
+  in BalancePoolTestAction "Incorrect pool x final value" testAction
+
+incorrectSwapPoolFinalYValue :: MonadGen m => BalancePoolTestAction m
+incorrectSwapPoolFinalYValue = 
+  let
+    testAction prevPool@BalancePool{..} = do
+
+      let
+        (xCS, xTN) = unAssetClass (poolX config)
+        (yCS, yTN) = unAssetClass (poolY config)
+        xValue = valueOf value xCS xTN
+        yValue = valueOf value yCS yTN
+
+      xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
+      incorrectYFinalValue <- integral (Range.constant 1 (yValue - 1))
+
+      let
+        (gX, tX, gY, tY, yToSwap) = calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+
+        -- going to withdraw all pool x and y value
+        newPoolConfig = config 
+          { treasuryX = 0
+          , treasuryY = 0
+          }
+
+        newPool = prevPool 
+          { config = newPoolConfig
+          , value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate incorrectYFinalValue))
+          }
+
+      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY] (toInteger 15)
+  in BalancePoolTestAction "Incorrect pool y final value" testAction
+
+-- Swap cases end --
+
+-- Deposit cases start --
+
+-- correctDeposit :: MonadGen m => BalancePoolTestAction m
+-- correctDeposit = 
+--   let
+--     testAction prevPool@BalancePool{..} = do
+
+--       let
+--         (xCS, xTN) = unAssetClass (poolX config)
+--         (yCS, yTN) = unAssetClass (poolY config)
+--         (lqCS, lqTN) = unAssetClass (poolLq config)
+--         xValue = valueOf value xCS xTN
+--         yValue = valueOf value yCS yTN
+--         lqValue = valueOf value lqCS lqCS
+
+--       xToDeposit <- integral (Range.constant 1 ((xValue `div` 2) - 1))
+
+--       let
+--         lqIssued = 0x7fffffffffffffff - (round lqValue)
+
+--         (gX, tX, gY, tY, yToDeposit, lqIssued) = calculateGandTDeposit xValue (weightX config) yValue (weightY config) (xToSwap) lqIssued (poolFeeNum config) (treasuryFee config) (invariant config)
+
+--         newInvariant = gX * gY
+
+--         -- going to withdraw all pool x and y value
+--         newPoolConfig = config 
+--           { treasuryX = 0
+--           , treasuryY = 0
+--           , invariant = newInvariant
+--           }
+
+--         newPool = prevPool 
+--           { config = newPoolConfig
+--           , value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate lqIssued))
+--           }
+
+--       pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY] (toInteger 15)
+--   in BalancePoolTestAction "Correct deposit all tokens" testAction
+
+-- Deposit cases end --

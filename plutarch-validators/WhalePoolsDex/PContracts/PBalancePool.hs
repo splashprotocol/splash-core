@@ -215,27 +215,40 @@ verifyGTValues ::
         :--> PInteger
         :--> PBool
         )
-verifyGTValues = plam $ \prevTokenBalance tokenWeight tokenG tokenT ->
+verifyGTValues = plam $ \tokenBalance tokenWeight tokenG tokenT -> unTermCont $ do
     let 
         -- Precision will be equals to qty of digits in prevTokenBalance value
-        tokenPrecision = pIntLength # prevTokenBalance
+        -- todo: should be calculated with greather token value
+        -- for test: 7
+        tokenPrecision = pIntLength # tokenBalance
 
-        tokenGNum = pround # (pcon $ PRational tokenG (ptryPositive # (ppow # 10 # (gtPrecision - tokenPrecision))) )
+        --- 6172836716237612638761237861263671267386712863
 
-        tokenTPowNum = 
+        -- (gtPrecision - tokenPrecision) - incorrect for cases when tokenPrecision > 15
+        --tokenGNum = pround # (pcon $ PRational tokenG (ptryPositive # (ppow # 10 # (gtPrecision - tokenPrecision))) )
+
+        tokenTPowNum =
             pround # (pcon $ PRational (ppow # tokenT # tokenWeight) (ptryPositive # (ppow # 10 # ((gtPrecision * tokenWeight) - tokenPrecision))))
 
         -- We should "truncate" tokenGRational and tokenTPowRational to first tokenPrecision digits
 
-        tokenGRationalLength = pIntLength # tokenGNum
+        tokenGRationalLength = pIntLength # tokenG
 
-        finalLeftValue = pround # (pcon $ PRational tokenGNum (ptryPositive # (ppow # 10 # (tokenGRationalLength - tokenPrecision))))
+        --todo: check
+        finalLeftValue = pround # (pcon $ PRational tokenG (ptryPositive # (ppow # 10 # (tokenGRationalLength - tokenPrecision))))
 
         tokenTPowNumLength = pIntLength # tokenTPowNum
 
         finalRightValue = pround # (pcon $ PRational tokenTPowNum (ptryPositive # (ppow # 10 # (tokenTPowNumLength - tokenPrecision))))
 
-    in finalLeftValue #== finalRightValue
+    ptraceC $ "tokenPrecision"
+    ptraceC $ pshow tokenPrecision
+    ptraceC $ "finalLeftValue"
+    ptraceC $ pshow finalLeftValue
+    ptraceC $ "finalRightValue"
+    ptraceC $ pshow finalRightValue
+
+    pure $ finalLeftValue #== finalRightValue
 
 verifyGEquality ::
     ClosedTerm
@@ -246,7 +259,7 @@ verifyGEquality ::
         :--> PInteger
         :--> PBool
         )
-verifyGEquality = plam $ \leftSideMultiplicator rightSideNum prevTokenBalance tokenG tokenWeight ->
+verifyGEquality = plam $ \leftSideMultiplicator rightSideNum prevTokenBalance tokenG tokenWeight -> unTermCont $ do
     let
         tokenBalanceIntLength = pIntLength # prevTokenBalance
 
@@ -260,7 +273,11 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideNum prevTokenBalance to
         leftSide  = pround # (pcon $ PRational leftSideNum leftSideDenum)
         rightSide = pround # (pcon $ PRational rightSideNum rightSideDen)
 
-    in leftSide #== rightSide
+    ptraceC $ "leftSide verifyGEquality"
+    ptraceC $ pshow $ leftSide
+    ptraceC $ "rightSide verifyGEquality"
+    ptraceC $ pshow $ rightSide
+    pure $ leftSide #== rightSide
 
 verifyTExpEquality ::
     ClosedTerm
@@ -295,7 +312,7 @@ validGTAndTokenDeltaWithFeesTest ::
         )
 validGTAndTokenDeltaWithFeesTest = plam $ \prevTokenBalance tokenWeight tokenDelta tokenG tokenT fees denOrig den -> unTermCont $ do
     let
-        correctGandT = verifyGTValues # prevTokenBalance # tokenWeight # tokenG # tokenT
+        correctGandT = verifyGTValues # (prevTokenBalance + tokenDelta) # tokenWeight # tokenG # tokenT
 
         correctTokenValue = pif
             ( (pmod # pDen # tokenWeight) #== 0 )
@@ -328,12 +345,12 @@ validGTAndTokenDeltaWithFeesTest = plam $ \prevTokenBalance tokenWeight tokenDel
     -- ptraceC $ pshow tokenTPowRational
     -- ptraceC $ "tokenTPowRational round"
     -- ptraceC $ pshow $ pround # tokenTPowRational
-    -- ptraceC $ "correctGandT"
-    -- ptraceC $ pshow $ correctGandT
+    ptraceC $ "correctGandT"
+    ptraceC $ pshow $ correctGandT
     -- ptraceC $ "firstCaseLeftPartTest #== firstCaseRightPartTest"
     -- ptraceC $ pshow $ (firstCaseLeftPartTest #== firstCaseRightPartTest)
-    -- ptraceC $ "correctTokenValue"
-    -- ptraceC $ pshow $ correctTokenValue
+    ptraceC $ "correctTokenValue"
+    ptraceC $ pshow $ correctTokenValue
     pure $ correctGandT #&& correctTokenValue
 
 -- Common task is validate G against T and new token value 
@@ -439,6 +456,9 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
         newGxRational = pcon $ PRational newGX den
         newGyRational = pcon $ PRational newGY den
 
+
+        -- todo: check
+
         newInvariantWithoutRound = (newGxRational #* newGyRational)
         newInvariantRational = pround # (newGxRational #* newGyRational)
 
@@ -451,7 +471,7 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
         correctTokensUpdate =
             pif
                 ( zero #< dx )
-                ( (validGTAndTokenDeltaWithFeesTest  # prevX # weightX # dx # newGX # newTx # (feeNum + treasuryFee) #(ppow # 10 # maxDen) # den) #&& (validGTAndTokenDeltaWithoutFees # prevY # weightY # dy # newGY # newTy) )
+                ( (validGTAndTokenDeltaWithFeesTest # prevX # weightX # dx # newGX # newTx # (feeNum + treasuryFee) #(ppow # 10 # maxDen) # den) #&& (validGTAndTokenDeltaWithoutFees # prevY # weightY # dy # newGY # newTy) )
                 ( (validGTAndTokenDeltaWithoutFees # prevX # weightX # dx # newGX # newTx) #&& (validGTAndTokenDeltaWithFeesTest # prevY # weightY # dy # newGY # newTy # (feeNum + treasuryFee) # (ppow # 10 # maxDen) # den) )
 
         -- Due to rounding newInvariant should be greather or equals to prevValue
@@ -514,16 +534,16 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
     -- ptraceC $ "newInvariant"
     -- ptraceC $ pshow newInvariant
     
-    -- ptraceC $ "newInvariantIsCorrect"
-    -- ptraceC $ pshow newInvariantIsCorrect
-    -- ptraceC $ "correctTokensUpdate"
-    -- ptraceC $ pshow correctTokensUpdate
-    -- ptraceC $ "correctTreasuryUpdate"
-    -- ptraceC $ pshow correctTreasuryUpdate
-    -- ptraceC $ "(newPoolConfig #== newExpectedConfig)"
-    -- ptraceC $ pshow (newPoolConfig #== newExpectedConfig)
-    -- ptraceC $ "(dlq #== zero)"
-    -- ptraceC $ pshow (dlq #== zero)
+    ptraceC $ "newInvariantIsCorrect"
+    ptraceC $ pshow newInvariantIsCorrect
+    ptraceC $ "correctTokensUpdate"
+    ptraceC $ pshow correctTokensUpdate
+    ptraceC $ "correctTreasuryUpdate"
+    ptraceC $ pshow correctTreasuryUpdate
+    ptraceC $ "(newPoolConfig #== newExpectedConfig)"
+    ptraceC $ pshow (newPoolConfig #== newExpectedConfig)
+    ptraceC $ "(dlq #== zero)"
+    ptraceC $ pshow (dlq #== zero)
 
     pure $
         (   newInvariantIsCorrect 

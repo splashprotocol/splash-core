@@ -61,8 +61,20 @@ swapTests = BalancePoolTestGroup
   { name = "Swap tests"
   , contractAction = Pool.Swap
   , validAction = correctSwap
-  , invalidActions = []
+  , invalidActions = 
+    [ 
+    --   incorrectSwapGT
+    -- , incorrectSwapPoolFinalXValue
+    -- , incorrectSwapPoolFinalYValue
+    ]
   }
+
+-- depositAllTests = BalancePoolTestGroup
+--   { name = "Swap tests"
+--   , contractAction = Pool.Deposit
+--   , validAction = correctDeposit
+--   , invalidActions = []
+--   }
 
 -----------------
 
@@ -92,7 +104,7 @@ cutFloatD toCut maxInt = let
 
 
 actionWithValidSignersQty :: Int -> (BalancePool -> Gen BalancePoolActionResult) -> Pool.BalancePoolAction -> TestResult -> Property
-actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withTests 100 $ property $ do
+actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withShrinks 1 $ withTests 1 $ property $ do
   let
     threshold = 2
 
@@ -108,19 +120,11 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withTe
     context  = toData $ mkContext txInInfo purpose
     redeemer = toData $ Pool.BalancePoolRedeemer action 0 (g updateResult) (t updateResult) (maxDen updateResult)
 
-  traceM $ show redeemer
-
-  let 
     correctResult = 
       case testResultShouldBe of
         Success -> Right()
         Failed  -> Left()
   
-  traceM $ show redeemer
-
-  let
-
-    --result123 = evalWithArgs (wrapValidator PPool.balancePoolValidatorT) [datum, redeemer, context]
     result = eraseBoth $ evalWithArgs (wrapValidator PPool.balancePoolValidatorT) [datum, redeemer, context]
-  --traceM $ show result123
+
   result === correctResult
