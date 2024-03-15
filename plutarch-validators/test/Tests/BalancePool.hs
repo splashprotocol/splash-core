@@ -111,12 +111,15 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withSh
   (pkh1, pkh2, pkh3)  <- forAll $ tuple3 genPkh
   prevPool            <- forAll $ genBalancePool [pkh1, pkh2, pkh3] threshold True
   updateResult        <- forAll $ poolUpdater prevPool
-
+  traceM $ show "updateResult"
   --poolTxInInfo <- forAll $ toTxInInfo . toTxOut $ prevPool
   txInInfo <- forAll $ createTxInfo prevPool updateResult (take sigsQty [pkh1, pkh2, pkh3])
+  traceM $ show "updateResult"
   let
     purpose  = mkPurpose (txInInfoOutRef . head . txInfoInputs $ txInInfo)
+  let
     datum    = toData $ (config prevPool)
+  let
     context  = toData $ mkContext txInInfo purpose
     redeemer = toData $ Pool.BalancePoolRedeemer action 0 (g updateResult) (t updateResult) (maxDen updateResult)
 
@@ -126,5 +129,7 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withSh
         Failed  -> Left()
   
     result = eraseBoth $ evalWithArgs (wrapValidator PPool.balancePoolValidatorT) [datum, redeemer, context]
+
+  traceM $ show result
 
   result === correctResult

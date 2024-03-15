@@ -181,3 +181,4 @@ test-suite cardano-dex-contracts-test
     , plutus-core
     , serialise
     , hw-hedgehog
+    , HasBigDecimal
