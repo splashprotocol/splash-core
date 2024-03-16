@@ -117,6 +117,13 @@ createTxInfo prevPool@BalancePool{..} BalancePoolActionResult{..} adminPkhs = do
     , txInfoId = "b0"
     }
 
+
+takeNBigDecimal :: BigDecimal -> Integer -> Integer
+takeNBigDecimal toCut n =
+  let
+    inString = T.unpack (T.take (fromInteger n) (T.pack . show $ (Data.BigDecimal.getValue toCut)))
+  in (read inString) :: Integer
+
 genBalancePool :: MonadGen f => [PubKeyHash] -> Integer -> Bool -> f BalancePool
 genBalancePool adminsPkhs threshold lpFeeIsEditable = do
   (x, y, lq, nft) <- tuple4 genAssetClass
@@ -124,30 +131,43 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
   stakeHash <- genPkh
   
   -- todo: error on big values such as 10000000000000000
-  (xQty :: Int) <- integral (Range.constant 10000000000 10000000000000000)
+  (xQty :: Integer) <- integral (Range.constant 10000000000 10000000000000000)
   -- (yQty :: Int) <- integral (Range.constant 10000000000 10000000000000000)
 
   -- todo: doesn't work for non 2/8 pools
-  --xWeight <- integral (Range.constant 1 9)
+  -- (xWeight :: Integer) <- integral (Range.constant 1 9)
 
   poolFee <- integral (Range.constant 0 1000)
 
   treasuryAddress <- genValidatorHash
   let
-    yQty = xQty * 8
-    xWeight = 2
+    -- xQty = 56000010004005123213
+    xWeight = 3
     yWeight = 10 - xWeight
+    yQty = xQty * yWeight
     nftQty = 1
     xQtyFloat = (fromIntegral xQty) :: Double
-    xWeightFloat = (fromIntegral xWeight) :: Double
+    -- xWeightFloat = (fromIntegral xWeight) :: Double
     yQtyFloat = (fromIntegral yQty) :: Double
-    yWeightFloat = (fromIntegral yWeight) :: Double
-    invariant = (xQtyFloat**(xWeightFloat / 10)) * (yQtyFloat**(yWeightFloat / 10))
-    lqQty  = 0x7fffffffffffffff - (round invariant)
+    -- yWeightFloat = (fromIntegral yWeight) :: Double
+
+    yPartLength  = toInteger $ RIO.length . show $ xQty
+    xValueLength = toInteger $ RIO.length . show $ yQty
+
+    maxPrecision = (if (yPartLength > xValueLength) then yPartLength else xValueLength)
+
+    -- invariant = (xQtyFloat**(xWeightFloat / 10)) * (yQtyFloat**(yWeightFloat / 10))
+    invariantT = ((BigDecimal xQty 0) ** (fromRational $ (fromIntegral xWeight) / 10)) * ( (BigDecimal yQty 0) ** (fromRational $ (fromIntegral yWeight) / 10))
+    invariant = takeNBigDecimal invariantT maxPrecision
+    lqQty  = 0x7fffffffffffffff - invariant
 
     daoContract =
         StakingHash . ScriptCredential . ValidatorHash . getScriptHash . scriptHash $ (unMintingPolicyScript (daoMintPolicyValidator nft adminsPkhs threshold lpFeeIsEditable))
 
+  traceM $ T.pack $ "invariantT:" ++ show invariantT
+  traceM $ T.pack $ "invariant:" ++ show invariant
+
+  let
     poolConfig = BalancePoolConfig
       { poolNft = nft
       , poolX   = x
@@ -161,7 +181,7 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
       , treasuryY  = 0
       , daoPolicy  = [daoContract]
       , treasuryAddress = treasuryAddress
-      , invariant  = round invariant
+      , invariant  = invariant
       }
 
     poolValue = mkValues ((\(ac, qty) -> mkValue ac (fromIntegral qty)) `RIO.map` [(x, xQty), (y, yQty), (nft, nftQty), (lq, lqQty)]) mempty
@@ -170,18 +190,18 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
 
 --- Test utils ---
 
-takeNBigDecimal :: BigDecimal -> Integer -> Integer
-takeNBigDecimal toCut n =
-  let
-    inString = T.unpack (T.take (fromInteger n) (T.pack . show $ (Data.BigDecimal.getValue toCut)))
-  in (read inString) :: Integer
-
 -- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> BaseIn -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, quoteOut)
 calculateGandTSwap :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer, Integer, Integer, Integer)
 calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit baseIn lpFee treasuryFee prevInvariant = do
   let
-      xValueLength = toInteger $ RIO.length . show $ baseAssetBalance
+      yPartLength = toInteger $ RIO.length . show $ quoteAssetBalance
+      xValueLength = toInteger $ RIO.length . show $ (baseAssetBalance + baseIn)
+
+      maxPrecision = (if (yPartLength > xValueLength) then yPartLength else xValueLength) + 5
+
       xValuePrecise = 10 ^ xValueLength
+
+      invariantLength = toInteger $ RIO.length . show $ prevInvariant
 
       xValueFloat = (fromIntegral baseAssetBalance) :: Double
       invariantFloat = fromIntegral prevInvariant :: BigDecimal
@@ -195,36 +215,57 @@ calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAsset
       -- no decimals after point
       xInInvariantBigDecimal = BigDecimal xInInvariant 0
       -- xInInvariantBigDecimal in degree `(xWieght / 10)`
-      xInInvariantWithDegree = (xInInvariantBigDecimal ** (xWeightFloat / (10 :: BigDecimal))) -- g
-      xInInvariantWith1Degree = (xInInvariantBigDecimal) ** (1 / (10 :: BigDecimal)) -- t
-      xInInvariantWith1WeightDegree = (xInInvariantWith1Degree) ** xWeightFloat
-      maxDen = 15
+      xInInvariantWithDegree = (xInInvariantBigDecimal ** (fromRational $ ((fromIntegral baseAssetWeight) / 10))) -- g
+      xInInvariantWith1Degree = (xInInvariantBigDecimal) ** (fromRational $ (1 / 10)) -- t
 
-      gX = ((takeNBigDecimal xInInvariantWithDegree xValueLength) :: Integer)
-      tX = ((takeNBigDecimal xInInvariantWith1Degree xValueLength) :: Integer)
+      gX = ((takeNBigDecimal xInInvariantWithDegree (maxPrecision)) :: Integer)
+      tX = ((takeNBigDecimal xInInvariantWith1Degree (maxPrecision)) :: Integer)
 
-      xInInvariaintDownDegree = xInInvariantWithDegree ** (10 / xWeightFloat)
+      invariantDegreeProcessed = BigDecimal (takeNBigDecimal xInInvariantWithDegree (maxPrecision)) 0
+
+      -- test
+      xInInvariaintDownDegreeT = (fromIntegral xInInvariant :: Double) ** (((10 :: Double)) / (fromIntegral baseAssetWeight)) --BigDecimal (takeNBigDecimal (invariantDegreeProcessed ** 10) (maxPrecision)) 0
+
+      xInInvariaintDownDegree = xInInvariaintDownDegreeT -- xInInvariaintDownDegreeT ** (fromRational $ (1 / fromIntegral baseAssetWeight))
       xInInvariantWithDegreeProcessed = takeNBigDecimal xInInvariantWithDegree xValueLength
-      invDivision = invariantFloat / (BigDecimal xInInvariantWithDegreeProcessed 0)
-      invDivisionProcessed = BigDecimal (takeNBigDecimal invDivision xValueLength) 0
+      invDivision = invariantFloat / xInInvariantWithDegree
+      invDivisionProcessed = (takeNBigDecimal invDivision yPartLength)
       --invDivisionInReverseRoot = (nthRoot invDivisionProcessed 4 (DOWN, (Just . toInteger $ xValuePrecise)))
-      invDivisionInReverseDegree = invDivisionProcessed ** (fromRational $ 10 / (toRational quoteAssetWeghit))
-
-      yPartLength = toInteger $ RIO.length . show $ quoteAssetBalance
+      invDivisionInReverseDegree = round $ (fromInteger invDivisionProcessed :: Double) ** ((10 / (fromInteger quoteAssetWeghit)))
       -- denum = 10 ^ (yPartLength - xValueLength)
         
-      invDivisionInReverseDegreeBigDecimalRounded = takeNBigDecimal invDivisionInReverseDegree yPartLength
+      invDivisionInReverseDegreeBigDecimalRounded = takeNBigDecimal (BigDecimal invDivisionInReverseDegree 0) (yPartLength)
 
       yToSwap = quoteAssetBalance - invDivisionInReverseDegreeBigDecimalRounded
 
-      gYDouble = ((BigDecimal (quoteAssetBalance - yToSwap) 0) ** (yWeightFloat / (10 :: BigDecimal))) :: BigDecimal -- g
+      gYDouble = ((BigDecimal (quoteAssetBalance - yToSwap) 0) ** (fromRational $ (fromIntegral quoteAssetWeghit) / 10)) :: BigDecimal -- g
       tGDouble = (((BigDecimal (quoteAssetBalance - yToSwap) 0) ** (fromRational $ (1 / 10)))) :: BigDecimal -- g
 
-      gY = takeNBigDecimal gYDouble yPartLength -- ((getValue gYDouble))
-      tY = takeNBigDecimal tGDouble yPartLength -- ((getValue tGDouble))
+      gY = takeNBigDecimal gYDouble (maxPrecision) -- ((getValue gYDouble))
+      tY = takeNBigDecimal tGDouble (maxPrecision) -- ((getValue tGDouble))
 
+
+
+  -------- Max test ---------
+
+
+  let
+    testRatio = 
+
+
+  -------- Max test End ---------
+
+  traceM $ T.pack $ "xValueLength:" ++ show xValueLength
+  traceM $ T.pack $ "yPartLength:" ++ show yPartLength
+  traceM $ T.pack $ "maxPrecision:" ++ show maxPrecision
+  traceM $ T.pack $ "x token qty:" ++ show baseAssetBalance
+  traceM $ T.pack $ "y token qty:" ++ show quoteAssetBalance
   traceM $ T.pack $ "gX:" ++ show gX
   traceM $ T.pack $ "tX:" ++ show tX
+  traceM $ T.pack $ "xInInvariantBigDecimal:" ++ show (xInInvariantBigDecimal)
+  traceM $ T.pack $ "invariantDegreeProcessed:" ++ show (invariantDegreeProcessed)
+  traceM $ T.pack $ "(fromRational $ ((fromIntegral 10) / (toRational baseAssetWeight))):" ++ show ((BigDecimal 333 10))
+  traceM $ T.pack $ "xInInvariaintDownDegreeT:" ++ show (xInInvariaintDownDegreeT)
   traceM $ T.pack $ "xInInvariaintDownDegree:" ++ show (xInInvariaintDownDegree)
   traceM $ T.pack $ "invDivision:" ++ show (invDivision)
   traceM $ T.pack $ "invDivisionProcessed:" ++ show (invDivisionProcessed)
@@ -232,12 +273,13 @@ calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAsset
   traceM $ T.pack $ "invDivisionInReverseDegree:" ++ show (invDivisionInReverseDegree)
   traceM $ T.pack $ "invDivisionInReverseDegree:" ++ show (invDivisionInReverseDegree)
   traceM $ T.pack $ "tX:" ++ show (invDivisionInReverseDegreeBigDecimalRounded)
+  traceM $ T.pack $ "quoteAssetBalance:" ++ (show quoteAssetBalance)
+  traceM $ T.pack $ "xToSwap:" ++ (show baseIn)
+  traceM $ T.pack $ "yToSwap:" ++ (show yToSwap)
   -- traceM $ T.pack $ "xInInvariantWithDegree rounded:" ++ (show ((roundBD xInInvariantWithDegree (PRECISE, (Just . toInteger $ xValuePrecise)))))
   -- traceM $ T.pack $ "xInInvariantWith1Degree:" ++ (show xInInvariantWith1Degree)
   -- traceM $ T.pack $ "xInInvariantWith1WeightDegree:" ++ (show xInInvariantWith1WeightDegree)
   traceM $ T.pack $ "tY:" ++ (show tY)
-  traceM $ T.pack $ "quoteAssetBalance:" ++ (show quoteAssetBalance)
-  traceM $ T.pack $ "yToSwap:" ++ (show yToSwap)
 
   pure (gX, tX, gY, tY, yToSwap)
 
@@ -296,7 +338,7 @@ correctSwap =
         xValue = valueOf value xCS xTN
         yValue = valueOf value yCS yTN
 
-      xToSwap <- integral (Range.constant 10 100000000)
+      xToSwap <- integral (Range.constant 10000 10000000)
       (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
       let
         -- going to withdraw all pool x and y value

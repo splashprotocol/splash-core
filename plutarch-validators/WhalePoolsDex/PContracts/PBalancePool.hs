@@ -279,6 +279,8 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideNum prevTokenBalance to
     ptraceC $ pshow $ ((ppow # tokenG # degree) * leftSideMultiplicator)
     ptraceC $ "leftSideNum"
     ptraceC $ pshow $ leftSideNum
+    ptraceC $ "rightSideNum"
+    ptraceC $ pshow $ rightSideNum
     ptraceC $ "leftSide verifyGEquality"
     ptraceC $ pshow $ leftSide
     ptraceC $ "rightSide verifyGEquality"
@@ -291,7 +293,7 @@ verifyTExpEquality ::
         :--> PInteger
         :--> PBool
         )
-verifyTExpEquality = plam $ \tokenT rightSide ->
+verifyTExpEquality = plam $ \tokenT rightSide -> unTermCont $ do
     let
         tokenTWeight = ppow # tokenT # 10
 
@@ -302,7 +304,14 @@ verifyTExpEquality = plam $ \tokenT rightSide ->
         leftRational = pcon $ PRational tokenTWeight (ptryPositive # letfNewDenum)
         leftRounded  = pround # leftRational
 
-    in leftRounded #== rightSide
+    -- ptraceC $ "rightSideNum"
+    -- ptraceC $ pshow $ rightSideNum
+    ptraceC $ "leftRounded verifyTExpEquality"
+    ptraceC $ pshow $ leftRounded
+    ptraceC $ "rightSide verifyTExpEquality"
+    ptraceC $ pshow $ rightSide
+
+    pure $ leftRounded #== rightSide
 
 validGTAndTokenDeltaWithFeesTest ::
     ClosedTerm
@@ -553,10 +562,10 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
 
     pure $
         (   newInvariantIsCorrect 
-        -- #&& correctTokensUpdate 
-        -- #&& correctTreasuryUpdate 
-        -- #&& (newPoolConfig #== newExpectedConfig)
-        -- #&& (dlq #== zero)
+        #&& correctTokensUpdate 
+        #&& correctTreasuryUpdate 
+        #&& (newPoolConfig #== newExpectedConfig)
+        #&& (dlq #== zero)
         )
 
 validDAOAction :: ClosedTerm (BalancePoolConfig :--> PTxInfo :--> PBool)
