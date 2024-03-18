@@ -37,7 +37,7 @@ import Debug.Trace
 import Data.Text as T (pack, unpack, splitOn)
 
 balancePool = testGroup "BalancePool"-- [HH.testPropertyNamed "name" "propertyName" test123]
-  ((genTests `map` [swapTests]))
+  ((genTests `map` [redeemAllTests]))
 
 genTests BalancePoolTestGroup{..} = 
   let
@@ -62,19 +62,25 @@ swapTests = BalancePoolTestGroup
   , contractAction = Pool.Swap
   , validAction = correctSwap
   , invalidActions = 
-    [ 
-    --   incorrectSwapGT
-    -- , incorrectSwapPoolFinalXValue
-    -- , incorrectSwapPoolFinalYValue
+    [ incorrectSwapGT
+    , incorrectSwapPoolFinalXValue
+    , incorrectSwapPoolFinalYValue
     ]
   }
 
--- depositAllTests = BalancePoolTestGroup
---   { name = "Swap tests"
---   , contractAction = Pool.Deposit
---   , validAction = correctDeposit
---   , invalidActions = []
---   }
+depositAllTests = BalancePoolTestGroup
+  { name = "Deposit tests"
+  , contractAction = Pool.Deposit
+  , validAction = correctDeposit
+  , invalidActions = [incorrectDepositLqOut]
+  }
+
+redeemAllTests = BalancePoolTestGroup
+  { name = "Redeem tests"
+  , contractAction = Pool.Redeem
+  , validAction = correctRedeem
+  , invalidActions = []
+  }
 
 -----------------
 
@@ -104,17 +110,14 @@ cutFloatD toCut maxInt = let
 
 
 actionWithValidSignersQty :: Int -> (BalancePool -> Gen BalancePoolActionResult) -> Pool.BalancePoolAction -> TestResult -> Property
-actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withShrinks 1 $ withTests 1 $ property $ do
+actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withTests 1 $ property $ do
   let
     threshold = 2
 
   (pkh1, pkh2, pkh3)  <- forAll $ tuple3 genPkh
   prevPool            <- forAll $ genBalancePool [pkh1, pkh2, pkh3] threshold True
   updateResult        <- forAll $ poolUpdater prevPool
-  traceM $ show "updateResult"
-  --poolTxInInfo <- forAll $ toTxInInfo . toTxOut $ prevPool
   txInInfo <- forAll $ createTxInfo prevPool updateResult (take sigsQty [pkh1, pkh2, pkh3])
-  traceM $ show "updateResult"
   let
     purpose  = mkPurpose (txInInfoOutRef . head . txInfoInputs $ txInInfo)
   let

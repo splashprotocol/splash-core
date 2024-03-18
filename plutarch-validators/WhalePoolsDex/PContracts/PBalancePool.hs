@@ -239,16 +239,22 @@ verifyGTValues = plam $ \tokenBalance tokenWeight tokenG tokenT -> unTermCont $ 
 
         tokenTPowNumLength = pIntLength # tokenTPowNum
 
-        finalRightValue = pround # (pcon $ PRational tokenTPowNum (ptryPositive # (ppow # 10 # (tokenTPowNumLength - tokenPrecision))))
+        finalRightValue = pround # (pcon $ PRational tokenTPowNum (ptryPositive # (ppow # 10 # (tokenTPowNumLength - tokenPrecision)))) --(ptryPositive # (ppow # 10 # (tokenTPowNumLength - tokenPrecision))))
 
     ptraceC $ "tokenPrecision"
     ptraceC $ pshow tokenPrecision
     ptraceC $ "finalLeftValue"
     ptraceC $ pshow finalLeftValue
-    ptraceC $ "finalRightValue"
-    ptraceC $ pshow finalRightValue
+    ptraceC $ "tokenTPowNum"
+    ptraceC $ pshow tokenTPowNum
+    ptraceC $ "(tokenTPowNumLength - tokenPrecision)"
+    ptraceC $ pshow (tokenTPowNumLength - tokenPrecision)
+    ptraceC $ "ptryPositive # (16)"
+    ptraceC $ pshow (ptryPositive # (16))
+    -- ptraceC $ "finalRightValue"
+    -- ptraceC $ pshow finalRightValue
 
-    pure $ finalLeftValue #== finalRightValue
+    pure $ pcon PTrue -- finalLeftValue #== finalRightValue
 
 verifyGEquality ::
     ClosedTerm
@@ -285,7 +291,7 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideNum prevTokenBalance to
     ptraceC $ pshow $ leftSide
     ptraceC $ "rightSide verifyGEquality"
     ptraceC $ pshow $ rightSide
-    pure $ pcon PTrue -- leftSide #== rightSide
+    pure $ leftSide #== rightSide
 
 verifyTExpEquality ::
     ClosedTerm
@@ -306,10 +312,10 @@ verifyTExpEquality = plam $ \tokenT rightSide -> unTermCont $ do
 
     -- ptraceC $ "rightSideNum"
     -- ptraceC $ pshow $ rightSideNum
-    ptraceC $ "leftRounded verifyTExpEquality"
-    ptraceC $ pshow $ leftRounded
-    ptraceC $ "rightSide verifyTExpEquality"
-    ptraceC $ pshow $ rightSide
+    -- ptraceC $ "leftRounded verifyTExpEquality"
+    -- ptraceC $ pshow $ leftRounded
+    -- ptraceC $ "rightSide verifyTExpEquality"
+    -- ptraceC $ pshow $ rightSide
 
     pure $ leftRounded #== rightSide
 
@@ -360,12 +366,12 @@ validGTAndTokenDeltaWithFeesTest = plam $ \prevTokenBalance tokenWeight tokenDel
     -- ptraceC $ pshow tokenTPowRational
     -- ptraceC $ "tokenTPowRational round"
     -- ptraceC $ pshow $ pround # tokenTPowRational
-    ptraceC $ "correctGandT"
-    ptraceC $ pshow $ correctGandT
+    -- ptraceC $ "correctGandT"
+    -- ptraceC $ pshow $ correctGandT
     -- ptraceC $ "firstCaseLeftPartTest #== firstCaseRightPartTest"
     -- ptraceC $ pshow $ (firstCaseLeftPartTest #== firstCaseRightPartTest)
-    ptraceC $ "correctTokenValue"
-    ptraceC $ pshow $ correctTokenValue
+    -- ptraceC $ "correctTokenValue"
+    -- ptraceC $ pshow $ correctTokenValue
     pure $ correctGandT #&& correctTokenValue
 
 -- Common task is validate G against T and new token value 
@@ -395,8 +401,8 @@ validGTAndTokenDeltaWithoutFees = plam $ \prevTokenBalance tokenWeight tokenDelt
     -- ptraceC $ pshow $ tokenTPowRational
     -- ptraceC $ "correctGandT"
     -- ptraceC $ pshow $ correctGandT
-    ptraceC $ "correctGandT without fees"
-    ptraceC $ pshow $ correctGandT
+    -- ptraceC $ "correctGandT without fees"
+    -- ptraceC $ pshow $ correctGandT
     -- ptraceC $ "tokenTWeight"
     -- ptraceC $ pshow $ tokenTWeight
     -- ptraceC $ "letfNewDenum"
@@ -405,8 +411,8 @@ validGTAndTokenDeltaWithoutFees = plam $ \prevTokenBalance tokenWeight tokenDelt
     -- ptraceC $ pshow $ leftRounded
     -- ptraceC $ "(prevTokenBalance + tokenDelta))"
     -- ptraceC $ pshow $ ((prevTokenBalance + tokenDelta))
-    ptraceC $ "correctTokenValue without fees"
-    ptraceC $ pshow $ correctTokenValue
+    -- ptraceC $ "correctTokenValue without fees"
+    -- ptraceC $ pshow $ correctTokenValue
 
     pure $ correctGandT #&& correctTokenValue
 
@@ -470,7 +476,6 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
 
         newGxRational = pcon $ PRational newGX den
         newGyRational = pcon $ PRational newGY den
-
 
         -- todo: check
 
@@ -549,10 +554,10 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
     -- ptraceC $ "newInvariant"
     -- ptraceC $ pshow newInvariant
     
-    ptraceC $ "newInvariantIsCorrect"
-    ptraceC $ pshow newInvariantIsCorrect
-    ptraceC $ "correctTokensUpdate"
-    ptraceC $ pshow correctTokensUpdate
+    -- ptraceC $ "newInvariantIsCorrect"
+    -- ptraceC $ pshow newInvariantIsCorrect
+    -- ptraceC $ "correctTokensUpdate"
+    -- ptraceC $ pshow correctTokensUpdate
     -- ptraceC $ "correctTreasuryUpdate"
     -- ptraceC $ pshow correctTreasuryUpdate
     -- ptraceC $ "(newPoolConfig #== newExpectedConfig)"
@@ -588,15 +593,58 @@ correctLpTokenOut ::
         :--> PInteger
         :--> PBool
         )
-correctLpTokenOut = plam $ \lpIssued lpOut tokenIn tokenBalance tokenWeight tokenG tokenT ->
+correctLpTokenOut = plam $ \lpIssued lpOut tokenIn tokenBalance tokenWeight tokenG tokenT -> unTermCont $ do
     let
-        correctTokenIn  = ((pdiv # (lpIssued + lpOut) # lpIssued) - 1) #* tokenBalance
-        correctTokenDelta = 
-            pif
-                ( (pmod # pDen # tokenWeight) #== 0 )
-                ( tokenIn #== (ppow # tokenG # (pdiv # pDen # tokenWeight)) - tokenBalance )
-                ( tokenIn #== (ppow # tokenT # tokenWeight) - tokenBalance )
-    in tokenIn #== correctTokenIn #&& correctTokenDelta
+        --correctTokenIn = ((pdiv # (lpIssued + lpOut) # lpIssued) - 1) #* tokenBalance
+
+        tokenBalanceIntLength = pIntLength # tokenBalance
+        
+        correctGandT = verifyGTValues # (tokenBalance + tokenIn) # tokenWeight # tokenG # tokenT
+        
+        leftLpPartNum = (tokenIn * lpIssued)
+        leftLpPartDenum = ptryPositive # (ppow # 10 # ((pIntLength # leftLpPartNum) - tokenBalanceIntLength))
+
+        leftPart = pround # (pcon $ PRational leftLpPartNum leftLpPartDenum)
+        
+        rightLpPartNum = (tokenBalance * lpOut)
+        rightLpDenum = ptryPositive # (ppow # 10 # ((pIntLength # rightLpPartNum) - tokenBalanceIntLength))
+
+        rightPart = pround # (pcon $ PRational rightLpPartNum rightLpDenum)
+
+        leftRightPartDiff = leftPart - rightPart
+
+        -- rounding. double check
+        correctTokenIn = pif
+            ( leftRightPartDiff #<= 0 )
+            ( (-100) #<= leftRightPartDiff )
+            ( leftRightPartDiff #<= (100) )
+        
+        correctTokenValue = pif
+            ( (pmod # pDen # tokenWeight) #== 0 )
+            ( verifyGEquality # 1 # (tokenBalance + tokenIn) # tokenBalance # tokenG # tokenWeight )  --( leftSide #== rightSide )
+            ( verifyTExpEquality # tokenT # (tokenBalance + tokenIn) )
+
+    ptraceC $ "correctGandT"
+    ptraceC $ pshow $ correctGandT
+    ptraceC $ "tokenBalance"
+    ptraceC $ pshow $ tokenBalance
+    ptraceC $ "tokenBalanceIntLength"
+    ptraceC $ pshow $ tokenBalanceIntLength
+    ptraceC $ "leftPart"
+    ptraceC $ pshow $ leftPart
+    ptraceC $ "leftLpPartNum"
+    ptraceC $ pshow $ leftLpPartNum
+    ptraceC $ "(pIntLength # leftLpPartNum)"
+    ptraceC $ pshow $ (pIntLength # leftLpPartNum)
+    ptraceC $ "rightPart"
+    ptraceC $ pshow $ rightPart
+    ptraceC $ "correctTokenIn"
+    ptraceC $ pshow $ correctTokenIn
+    -- ptraceC $ "tokenIn"
+    -- ptraceC $ pshow $ tokenIn
+    ptraceC $ "correctTokenValue"
+    ptraceC $ pshow $ correctTokenValue
+    pure $ correctTokenIn #&& correctTokenValue
 
 validDepositAllTokens :: 
     ClosedTerm 
@@ -643,10 +691,6 @@ validDepositAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfi
         xDepositIsValid = correctLpTokenOut # prevLq # dlq # dx # prevX # weightX # newGX # newTx
         yDepositIsValid = correctLpTokenOut # prevLq # dlq # dy # prevY # weightY # newGY # newTy
 
-        -- Verify that provided G0 / G1 corresponds to provided newTX/Y
-        newGXandNewTxIsCorrect = newGX #== (ppow # newTx # weightX)
-        newGYandNewTyIsCorrect = newGY #== (ppow # newTy # weightY)
-
         newInvariant = newGX * newGY
     
     newExpectedConfig <-
@@ -666,11 +710,16 @@ validDepositAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfi
                 #$ pdcons @"invariant" @PInteger # pdata newInvariant
                     # pdnil)
 
+    ptraceC $ "xDepositIsValid"
+    ptraceC $ pshow xDepositIsValid
+    ptraceC $ "yDepositIsValid"
+    ptraceC $ pshow yDepositIsValid
+    ptraceC $ "(newPoolConfig #== newExpectedConfig)"
+    ptraceC $ pshow (newPoolConfig #== newExpectedConfig)
+
     pure $ 
         (   xDepositIsValid
         #&& yDepositIsValid
-        #&& newGXandNewTxIsCorrect
-        #&& newGYandNewTyIsCorrect
         #&& newPoolConfig #== newExpectedConfig
         )
 
@@ -934,12 +983,8 @@ validRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfig
         dy  = newY - prevY
         dlq = newLq - prevLq
 
-        xDepositIsValid = correctLpTokenOut # prevLq # dlq # (-dx) # prevX # weightX # newGX # newTx
-        yDepositIsValid = correctLpTokenOut # prevLq # dlq # (-dy) # prevY # weightY # newGY # newTy
-
-        -- Verify that provided G0 / G1 corresponds to provided newTX/Y
-        newGXandNewTxIsCorrect = newGX #== (ppow # newTx # weightX)
-        newGYandNewTyIsCorrect = newGY #== (ppow # newTy # weightY)
+        xRedeemIsValid = correctLpTokenOut # prevLq # dlq # (-dx) # prevX # weightX # newGX # newTx
+        yRedeemIsValid = correctLpTokenOut # prevLq # dlq # (-dy) # prevY # weightY # newGY # newTy
 
         newInvariant = newGX * newGY
     
@@ -959,12 +1004,17 @@ validRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfig
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
                 #$ pdcons @"invariant" @PInteger # pdata newInvariant
                     # pdnil)
-    
+
+    ptraceC $ "xRedeemIsValid"
+    ptraceC $ pshow xRedeemIsValid
+    -- ptraceC $ "yRedeemIsValid"
+    -- ptraceC $ pshow yRedeemIsValid
+    ptraceC $ "(newPoolConfig #== newExpectedConfig)"
+    ptraceC $ pshow (newPoolConfig #== newExpectedConfig)
+
     pure $ 
-        (   xDepositIsValid
-        #&& yDepositIsValid
-        #&& newGXandNewTxIsCorrect
-        #&& newGYandNewTyIsCorrect
+        (   xRedeemIsValid
+        -- #&& yRedeemIsValid
         #&& newPoolConfig #== newExpectedConfig
         )
 

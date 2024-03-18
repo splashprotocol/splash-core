@@ -19,7 +19,7 @@ evalConfig = Config DoTracing
 evalWithArgs :: ClosedTerm a -> [Data] -> Either Text (ExBudget, [Text], Program DeBruijn DefaultUni DefaultFun ())
 evalWithArgs x args = do
   cmp <- compile evalConfig x
-  traceM $ "Compiled:"
+  --traceM $ "Compiled:"
   let (escr, budg, trc) = evalScriptHuge $ applyArguments cmp args
   traceM $ "Trace: " ++ show trc
   scr <- left (pack . show) escr
