@@ -616,18 +616,26 @@ correctLpTokenOut = plam $ \lpIssued lpOut tokenIn tokenBalance tokenWeight toke
         -- rounding. double check
         correctTokenIn = pif
             ( leftRightPartDiff #<= 0 )
-            ( (-100) #<= leftRightPartDiff )
-            ( leftRightPartDiff #<= (100) )
+            ( (-1) #<= leftRightPartDiff )
+            ( leftRightPartDiff #<= (1) )
         
         correctTokenValue = pif
             ( (pmod # pDen # tokenWeight) #== 0 )
             ( verifyGEquality # 1 # (tokenBalance + tokenIn) # tokenBalance # tokenG # tokenWeight )  --( leftSide #== rightSide )
             ( verifyTExpEquality # tokenT # (tokenBalance + tokenIn) )
 
+    ptraceC $ "leftRightPartDiff"
+    ptraceC $ pshow $ leftRightPartDiff
     ptraceC $ "correctGandT"
     ptraceC $ pshow $ correctGandT
     ptraceC $ "tokenBalance"
     ptraceC $ pshow $ tokenBalance
+    ptraceC $ "tokenIn"
+    ptraceC $ pshow $ tokenIn
+    ptraceC $ "lpIssued"
+    ptraceC $ pshow $ lpIssued
+    ptraceC $ "lpOut"
+    ptraceC $ pshow $ lpOut
     ptraceC $ "tokenBalanceIntLength"
     ptraceC $ pshow $ tokenBalanceIntLength
     ptraceC $ "leftPart"

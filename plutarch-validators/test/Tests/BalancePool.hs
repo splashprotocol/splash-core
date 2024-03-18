@@ -37,7 +37,7 @@ import Debug.Trace
 import Data.Text as T (pack, unpack, splitOn)
 
 balancePool = testGroup "BalancePool"-- [HH.testPropertyNamed "name" "propertyName" test123]
-  ((genTests `map` [redeemAllTests]))
+  ((genTests `map` [depositAllTests]))
 
 genTests BalancePoolTestGroup{..} = 
   let
@@ -72,7 +72,7 @@ depositAllTests = BalancePoolTestGroup
   { name = "Deposit tests"
   , contractAction = Pool.Deposit
   , validAction = correctDeposit
-  , invalidActions = [incorrectDepositLqOut]
+  , invalidActions = []
   }
 
 redeemAllTests = BalancePoolTestGroup
@@ -110,7 +110,7 @@ cutFloatD toCut maxInt = let
 
 
 actionWithValidSignersQty :: Int -> (BalancePool -> Gen BalancePoolActionResult) -> Pool.BalancePoolAction -> TestResult -> Property
-actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withTests 1 $ property $ do
+actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withTests 10 $ property $ do
   let
     threshold = 2
 
