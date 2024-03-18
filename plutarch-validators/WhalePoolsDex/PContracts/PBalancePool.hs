@@ -279,6 +279,12 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideNum prevTokenBalance to
         leftSide  = pround # (pcon $ PRational leftSideNum leftSideDenum)
         rightSide = pround # (pcon $ PRational rightSideNum rightSideDen)
 
+        gEDiff = leftSide - rightSide
+        validGEquality = pif
+            ( gEDiff #<= 0 )
+            ( (-1) #<= gEDiff )
+            ( gEDiff #<= (1) )
+
     ptraceC $ "tokenBalanceIntLength"
     ptraceC $ pshow $ tokenBalanceIntLength
     ptraceC $ "(ppow # tokenG # degree) * leftSideMultiplicator"
@@ -291,7 +297,9 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideNum prevTokenBalance to
     ptraceC $ pshow $ leftSide
     ptraceC $ "rightSide verifyGEquality"
     ptraceC $ pshow $ rightSide
-    pure $ leftSide #== rightSide
+    ptraceC $ "validGEquality"
+    ptraceC $ pshow $ validGEquality
+    pure $ validGEquality
 
 verifyTExpEquality ::
     ClosedTerm
@@ -618,7 +626,6 @@ correctLpTokenOut = plam $ \lpIssued lpOut tokenIn tokenBalance tokenWeight toke
             ( leftRightPartDiff #<= 0 )
             ( (-1) #<= leftRightPartDiff )
             ( leftRightPartDiff #<= (1) )
-        
         correctTokenValue = pif
             ( (pmod # pDen # tokenWeight) #== 0 )
             ( verifyGEquality # 1 # (tokenBalance + tokenIn) # tokenBalance # tokenG # tokenWeight )  --( leftSide #== rightSide )
