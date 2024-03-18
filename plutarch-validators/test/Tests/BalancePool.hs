@@ -37,7 +37,7 @@ import Debug.Trace
 import Data.Text as T (pack, unpack, splitOn)
 
 balancePool = testGroup "BalancePool"-- [HH.testPropertyNamed "name" "propertyName" test123]
-  ((genTests `map` [redeemAllTests]))
+  ((genTests `map` [depositAllTests]))
 
 genTests BalancePoolTestGroup{..} = 
   let
@@ -75,11 +75,18 @@ depositAllTests = BalancePoolTestGroup
   , invalidActions = [incorrectDepositLqOut]
   }
 
+depositSingleTests = BalancePoolTestGroup
+  { name = "Deposit single tests"
+  , contractAction = Pool.DepositSingle
+  , validAction = correctDepositSingle
+  , invalidActions = []
+  }
+
 redeemAllTests = BalancePoolTestGroup
   { name = "Redeem tests"
   , contractAction = Pool.Redeem
   , validAction = correctRedeem
-  , invalidActions = []
+  , invalidActions = [incorrectRedeemLQFinalValue]
   }
 
 -----------------

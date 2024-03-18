@@ -245,16 +245,16 @@ verifyGTValues = plam $ \tokenBalance tokenWeight tokenG tokenT -> unTermCont $ 
     ptraceC $ pshow tokenPrecision
     ptraceC $ "finalLeftValue"
     ptraceC $ pshow finalLeftValue
+    ptraceC $ "tokenT"
+    ptraceC $ pshow tokenT
     ptraceC $ "tokenTPowNum"
     ptraceC $ pshow tokenTPowNum
     ptraceC $ "(tokenTPowNumLength - tokenPrecision)"
     ptraceC $ pshow (tokenTPowNumLength - tokenPrecision)
-    ptraceC $ "ptryPositive # (16)"
-    ptraceC $ pshow (ptryPositive # (16))
-    -- ptraceC $ "finalRightValue"
-    -- ptraceC $ pshow finalRightValue
+    ptraceC $ "finalRightValue"
+    ptraceC $ pshow finalRightValue
 
-    pure $ pcon PTrue -- finalLeftValue #== finalRightValue
+    pure $ finalLeftValue #== finalRightValue
 
 verifyGEquality ::
     ClosedTerm
@@ -279,6 +279,12 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideNum prevTokenBalance to
         leftSide  = pround # (pcon $ PRational leftSideNum leftSideDenum)
         rightSide = pround # (pcon $ PRational rightSideNum rightSideDen)
 
+        gEDiff = leftSide - rightSide
+        validGEquality = pif
+            ( gEDiff #<= 0 )
+            ( (-1) #<= gEDiff )
+            ( gEDiff #<= (1) )
+
     ptraceC $ "tokenBalanceIntLength"
     ptraceC $ pshow $ tokenBalanceIntLength
     ptraceC $ "(ppow # tokenG # degree) * leftSideMultiplicator"
@@ -291,7 +297,9 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideNum prevTokenBalance to
     ptraceC $ pshow $ leftSide
     ptraceC $ "rightSide verifyGEquality"
     ptraceC $ pshow $ rightSide
-    pure $ leftSide #== rightSide
+    ptraceC $ "validGEquality"
+    ptraceC $ pshow $ validGEquality
+    pure $ validGEquality
 
 verifyTExpEquality ::
     ClosedTerm
@@ -401,8 +409,8 @@ validGTAndTokenDeltaWithoutFees = plam $ \prevTokenBalance tokenWeight tokenDelt
     -- ptraceC $ pshow $ tokenTPowRational
     -- ptraceC $ "correctGandT"
     -- ptraceC $ pshow $ correctGandT
-    -- ptraceC $ "correctGandT without fees"
-    -- ptraceC $ pshow $ correctGandT
+    ptraceC $ "correctGandT without fees"
+    ptraceC $ pshow $ correctGandT
     -- ptraceC $ "tokenTWeight"
     -- ptraceC $ pshow $ tokenTWeight
     -- ptraceC $ "letfNewDenum"
@@ -411,8 +419,8 @@ validGTAndTokenDeltaWithoutFees = plam $ \prevTokenBalance tokenWeight tokenDelt
     -- ptraceC $ pshow $ leftRounded
     -- ptraceC $ "(prevTokenBalance + tokenDelta))"
     -- ptraceC $ pshow $ ((prevTokenBalance + tokenDelta))
-    -- ptraceC $ "correctTokenValue without fees"
-    -- ptraceC $ pshow $ correctTokenValue
+    ptraceC $ "correctTokenValue without fees"
+    ptraceC $ pshow $ correctTokenValue
 
     pure $ correctGandT #&& correctTokenValue
 
@@ -616,11 +624,12 @@ correctLpTokenOut = plam $ \lpIssued lpOut tokenIn tokenBalance tokenWeight toke
         -- rounding. double check
         correctTokenIn = pif
             ( leftRightPartDiff #<= 0 )
-            ( (-100) #<= leftRightPartDiff )
-            ( leftRightPartDiff #<= (100) )
+            ( (-1) #<= leftRightPartDiff )
+            ( leftRightPartDiff #<= (1) )
         
         correctTokenValue = pif
             ( (pmod # pDen # tokenWeight) #== 0 )
+            -- todo: on deposit `+ tokenIn`
             ( verifyGEquality # 1 # (tokenBalance + tokenIn) # tokenBalance # tokenG # tokenWeight )  --( leftSide #== rightSide )
             ( verifyTExpEquality # tokenT # (tokenBalance + tokenIn) )
 
@@ -632,18 +641,26 @@ correctLpTokenOut = plam $ \lpIssued lpOut tokenIn tokenBalance tokenWeight toke
     ptraceC $ pshow $ tokenBalanceIntLength
     ptraceC $ "leftPart"
     ptraceC $ pshow $ leftPart
+    ptraceC $ "rightPart"
+    ptraceC $ pshow $ rightPart
     ptraceC $ "leftLpPartNum"
     ptraceC $ pshow $ leftLpPartNum
     ptraceC $ "(pIntLength # leftLpPartNum)"
     ptraceC $ pshow $ (pIntLength # leftLpPartNum)
-    ptraceC $ "rightPart"
-    ptraceC $ pshow $ rightPart
-    ptraceC $ "correctTokenIn"
-    ptraceC $ pshow $ correctTokenIn
+    ptraceC $ "lpOut"
+    ptraceC $ pshow $ lpOut
+    ptraceC $ "rightLpPartNum"
+    ptraceC $ pshow $ rightLpPartNum
+    ptraceC $ "(pIntLength # rightLpPartNum) "
+    ptraceC $ pshow $ (pIntLength # rightLpPartNum) 
+    ptraceC $ "tokenBalanceIntLength "
+    ptraceC $ pshow $ tokenBalanceIntLength
+    -- ptraceC $ "correctTokenIn"
+    -- ptraceC $ pshow $ correctTokenIn
     -- ptraceC $ "tokenIn"
     -- ptraceC $ pshow $ tokenIn
-    ptraceC $ "correctTokenValue"
-    ptraceC $ pshow $ correctTokenValue
+    -- ptraceC $ "correctTokenValue"
+    -- ptraceC $ pshow $ correctTokenValue
     pure $ correctTokenIn #&& correctTokenValue
 
 validDepositAllTokens :: 
@@ -710,6 +727,10 @@ validDepositAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfi
                 #$ pdcons @"invariant" @PInteger # pdata newInvariant
                     # pdnil)
 
+    ptraceC $ "prevLq"
+    ptraceC $ pshow prevLq
+    ptraceC $ "newLq"
+    ptraceC $ pshow newLq
     ptraceC $ "xDepositIsValid"
     ptraceC $ pshow xDepositIsValid
     ptraceC $ "yDepositIsValid"
@@ -851,6 +872,26 @@ singleDepositIsValid =
                     # pdnil
                 )
 
+
+        ptraceC $ "validDeltaInToken"
+        ptraceC $ pshow validDeltaInToken
+        ptraceC $ "invariantWithoutFees"
+        ptraceC $ pshow invariantWithoutFees
+        ptraceC $ "idealInvariant"
+        ptraceC $ pshow idealInvariant
+        ptraceC $ "idealAndWFInvariantAreEquals"
+        ptraceC $ pshow idealAndWFInvariantAreEquals
+        ptraceC $ "validIdealTokenDelta"
+        ptraceC $ pshow validIdealTokenDelta
+        ptraceC $ "validIdealTokenDeltaWithFees"
+        ptraceC $ pshow validIdealTokenDeltaWithFees
+        ptraceC $ "validIdealTokenDeltaWithLPTreasuryFees"
+        ptraceC $ pshow validIdealTokenDeltaWithLPTreasuryFees
+        ptraceC $ "correctTreasuryUpdate"
+        ptraceC $ pshow correctTreasuryUpdate
+        ptraceC $ "(newPoolConfig #== newExpectedConfig)"
+        ptraceC $ pshow (newPoolConfig #== newExpectedConfig)
+
         pure $
             (   validDeltaInToken
             #&& idealAndWFInvariantAreEquals
@@ -879,10 +920,11 @@ singleRedeemIsValid ::
         :--> PInteger
         :--> PInteger
         :--> PInteger
+        :--> PInteger
         :--> PBool
         )
 singleRedeemIsValid = 
-    plam $ \prevState' newState' prevPoolConfig newPoolConfig tokenXGWF tokenYGWF tokenXTWF tokenYTWF tokenXGLP tokenYGLP tokenXTLP tokenYTLP tokenXGT tokenYGT tokenXTT tokenYTT -> unTermCont $ do
+    plam $ \prevState' newState' prevPoolConfig newPoolConfig tokenXGWF tokenYGWF tokenXTWF tokenYTWF tokenXGLP tokenYGLP tokenXTLP tokenYTLP tokenXGT tokenYGT tokenXTT tokenYTT idealDeltaToken -> unTermCont $ do
         prevState  <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] prevState'
         newState   <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] newState'
         prevConfig <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant"] prevPoolConfig
@@ -916,7 +958,84 @@ singleRedeemIsValid =
             dy  = newY - prevY
             dlq = newLq - prevLq
 
-        --todo: fix
+        -- first of all - verifing correctness of invariant without any fees
+        -- 1) verify that delta in deposit token is correct
+            validDeltaInToken =
+                pif
+                    (dx #== zero)
+                    -- Deposit token is Y
+                    ((validGTAndTokenDeltaWithoutFees # prevX # weightX # zero # tokenXGWF # tokenXTWF) #&& (validGTAndTokenDeltaWithoutFees # prevY # weightY # dy # tokenYGWF # tokenYTWF))
+                    -- Deposit token is X
+                    ((validGTAndTokenDeltaWithoutFees # prevX # weightX # dx # tokenXGWF # tokenXTWF) #&& (validGTAndTokenDeltaWithoutFees # prevY # weightY # zero # tokenYGWF # tokenYTWF))
+        -- 2) We should calculate invariant for this single deposit to verify it with ideal invariant
+            invariantWithoutFees = tokenXGWF #* tokenYGWF
+        
+        -- Second step is verifying correctness of values associated with ideal deposit calculations.
+        -- Used for verifying correcntess of lp out.
+        -- 1) verify correctness of ideal invariant and withoutFeesInvariant
+            idealInvariant = tokenXGLP #* tokenYGLP
+
+            idealAndWFInvariantAreEquals = invariantWithoutFees #== idealInvariant
+
+        -- 2) verify correctness of ideal delta in deposit token
+            validIdealTokenDelta =
+                pif (dx #== zero)
+                    -- Deposit token is Y
+                    (validGTAndTokenDeltaWithoutFees # prevY # weightY # idealDeltaToken # tokenYGLP # tokenYTLP)
+                    -- Deposit token is X
+                    (validGTAndTokenDeltaWithoutFees # prevX # weightX # idealDeltaToken # tokenXGLP # tokenXTLP)
+        -- 3) verify correctness of ideal delta with protocol fees (lp + treasury)
+            validIdealTokenDeltaWithFees =
+                pif (dx #== zero)
+                    -- Deposit token is Y
+                    (validGTAndTokenDeltaWithFees # prevY # weightY # idealDeltaToken # tokenYGLP # tokenYTLP # (feeNum + treasuryFee))
+                    -- Deposit token is X
+                    (validGTAndTokenDeltaWithFees # prevX # weightX # idealDeltaToken # tokenXGLP # tokenXTLP # (feeNum + treasuryFee))
+
+        -- Third step is verifying correctness of values associated with final invariant.
+        -- Only treasury fee.
+            validIdealTokenDeltaWithLPTreasuryFees =
+                pif (dx #== zero)
+                    -- Deposit token is Y
+                    (validGTAndTokenDeltaWithFees # prevY # weightY # idealDeltaToken # tokenYGT # tokenYTT # treasuryFee)
+                    -- Deposit token is X
+                    (validGTAndTokenDeltaWithFees # prevX # weightX # idealDeltaToken # tokenXGT # tokenXTT # treasuryFee)
+
+            finalInvariant = tokenXGT * tokenYGT
+
+            correctTreasuryUpdate =
+                pif
+                    ( zero #< dx )
+                    ( ((newTreasuryX * feeDen) #== (prevTreasuryX + (idealDeltaToken * treasuryFee))) #&& (prevTreasuryY #== newTreasuryY) )
+                    ( ((newTreasuryY * feeDen) #== (prevTreasuryY + (idealDeltaToken * treasuryFee))) #&& (prevTreasuryX #== newTreasuryX) )
+
+        newExpectedConfig <-
+            tcon $ (BalancePoolConfig $
+                pdcons @"poolNft" @PAssetClass # pdata prevPoolNft
+                    #$ pdcons @"poolX" @PAssetClass # pdata prevPoolX
+                    #$ pdcons @"weightX" @PInteger # pdata weightX
+                    #$ pdcons @"poolY" @PAssetClass # pdata prevPoolY
+                    #$ pdcons @"weightY" @PInteger # pdata weightY
+                    #$ pdcons @"poolLq" @PAssetClass # pdata prevPoolLq
+                    #$ pdcons @"feeNum" @PInteger # pdata feeNum
+                    #$ pdcons @"treasuryFee" @PInteger # pdata treasuryFee
+                    #$ pdcons @"treasuryX" @PInteger # pdata newTreasuryX
+                    #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
+                    #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
+                    #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
+                    #$ pdcons @"invariant" @PInteger # pdata finalInvariant
+                    # pdnil
+                )
+
+        pure $
+            (   validDeltaInToken
+            #&& idealAndWFInvariantAreEquals
+            #&& validIdealTokenDelta
+            #&& validIdealTokenDeltaWithFees
+            #&& validIdealTokenDeltaWithLPTreasuryFees
+            #&& correctTreasuryUpdate
+            #&& (newExpectedConfig #== newPoolConfig)
+            )
 
         pure $ pconstant False
              
@@ -983,8 +1102,8 @@ validRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfig
         dy  = newY - prevY
         dlq = newLq - prevLq
 
-        xRedeemIsValid = correctLpTokenOut # prevLq # dlq # (-dx) # prevX # weightX # newGX # newTx
-        yRedeemIsValid = correctLpTokenOut # prevLq # dlq # (-dy) # prevY # weightY # newGY # newTy
+        xRedeemIsValid = correctLpTokenOut # prevLq # (-dlq) # (-dx) # prevX # weightX # newGX # newTx
+        yRedeemIsValid = correctLpTokenOut # prevLq # (-dlq) # (-dy) # prevY # weightY # newGY # newTy
 
         newInvariant = newGX * newGY
     
@@ -1014,7 +1133,7 @@ validRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfig
 
     pure $ 
         (   xRedeemIsValid
-        -- #&& yRedeemIsValid
+        #&& yRedeemIsValid
         #&& newPoolConfig #== newExpectedConfig
         )
 
@@ -1143,7 +1262,7 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                 -- temporal solution
                 idealDeposit <- tletUnwrap $ pelemAt # (pconstant 6) # gList
 
-                pure $ noMoreTokens #&& scriptPreserved #&& (singleDepositIsValid # s0 # s1 # conf # newConfig # gXWF # tXWF # tYWF # gYWF # gXLP # tXLP # tYLP # gYLP # gXT # tXT # tYT # gYT # idealDeposit)
+                pure $ noMoreTokens #&& scriptPreserved #&& (singleDepositIsValid # s0 # s1 # conf # newConfig # gXWF # gYWF # tXWF # tYWF # gXLP # gYLP # tXLP # tYLP # gXT # gYT # tXT # tYT # idealDeposit)
             Redeem  -> unTermCont $ do
                 ptraceC $ "Redeem"
                 gx <- tletUnwrap $ phead # gList
@@ -1167,6 +1286,10 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                 gYT <- tletUnwrap $ pelemAt # (pconstant 5) # gList
                 tXT <- tletUnwrap $ pelemAt # (pconstant 4) # tList
                 tYT <- tletUnwrap $ pelemAt # (pconstant 5) # tList
-                pure $ noMoreTokens #&& scriptPreserved #&& (singleRedeemIsValid # s0 # s1 # conf # newConfig # gXWF # tXWF # tYWF # gYWF # gXLP # tXLP # tYLP # gYLP # gXT # tXT # tYT # gYT)
+
+                -- temporal solution
+                idealDeposit <- tletUnwrap $ pelemAt # (pconstant 6) # gList
+
+                pure $ noMoreTokens #&& scriptPreserved #&& (singleRedeemIsValid # s0 # s1 # conf # newConfig # gXWF # gYWF # tXWF # tYWF # gXLP # gYLP # tXLP # tYLP # gXT # gYT # tXT # tYT # idealDeposit)
             DAOAction -> validDAOAction # conf # txinfo'
         )
