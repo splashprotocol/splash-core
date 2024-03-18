@@ -209,12 +209,12 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
 
 --- Test utils ---
 
--- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> BaseIn -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, quoteOut)
+-- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> xToDeposit -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, quoteOut)
 calculateGandTSwap :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer, Integer, Integer, Integer)
-calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit baseIn lpFee treasuryFee prevInvariant = do
+calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit xToDeposit lpFee treasuryFee prevInvariant = do
   let
       yPartLength = toInteger $ RIO.length . show $ quoteAssetBalance
-      xValueLength = toInteger $ RIO.length . show $ (baseAssetBalance + baseIn)
+      xValueLength = toInteger $ RIO.length . show $ (baseAssetBalance + xToDeposit)
 
       maxPrecisionByToken = (if (yPartLength > xValueLength) then yPartLength else xValueLength)
 
@@ -232,7 +232,7 @@ calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAsset
       treasuryFeeNum = (fromIntegral treasuryFee) :: Double
       lpFeeNum = (fromIntegral lpFee) :: Double
 
-      additionalPart = (BigDecimal (fromIntegral baseIn) 0) * (fromRational $ (fromIntegral (lpFee - treasuryFee)) / fromIntegral feeDen) --     xInInvariant = fromIntegral $ baseAssetBalance + round ((fromIntegral baseIn) * ((lpFeeNum - treasuryFeeNum) / fromIntegral feeDen))
+      additionalPart = (BigDecimal (fromIntegral xToDeposit) 0) * (fromRational $ (fromIntegral (lpFee - treasuryFee)) / fromIntegral feeDen) --     xInInvariant = fromIntegral $ baseAssetBalance + round ((fromIntegral xToDeposit) * ((lpFeeNum - treasuryFeeNum) / fromIntegral feeDen))
       -- no decimals after point
       xInInvariantBigDecimal = xValueFloat + additionalPart
       -- xInInvariantBigDecimal in degree `(xWieght / 10)`
@@ -303,7 +303,7 @@ calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAsset
   -- traceM $ T.pack $ "invDivisionInReverseDegree:" ++ show (invDivisionInReverseDegree)
   -- traceM $ T.pack $ "tX:" ++ show (invDivisionInReverseDegreeBigDecimalRounded)
   -- traceM $ T.pack $ "quoteAssetBalance:" ++ (show quoteAssetBalance)
- -- traceM $ T.pack $ "xToSwap:" ++ (show baseIn)
+ -- traceM $ T.pack $ "xToSwap:" ++ (show xToDeposit)
   --traceM $ T.pack $ "yToSwap:" ++ (show yToSwap)
   -- traceM $ T.pack $ "xInInvariantWith1Degree:" ++ (show xInInvariantWith1Degree)
   -- traceM $ T.pack $ "xInInvariantWith1WeightDegree:" ++ (show xInInvariantWith1WeightDegree)
@@ -311,12 +311,17 @@ calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAsset
 
   pure (gX, tX, gY, tY, yToSwap)
 
--- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> BaseIn -> lqSupply -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, quoteToDeposit, lqOut)
-calculateGandTDeposit :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer, Integer, Integer, Integer, Integer)
-calculateGandTDeposit baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit baseIn lqSupply lpFee treasuryFee prevInvariant = do
+-- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> xToDeposit -> lqSupply -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, baseToDeposit, quoteToDeposit, lqOut)
+calculateGandTDeposit :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer, Integer, Integer, Integer, Integer, Integer)
+calculateGandTDeposit baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit lqIssued lqSupply lpFee treasuryFee prevInvariant = do
   let
+      lqIssuedDec = (fromIntegral lqIssued) :: BigDecimal
+      xToDeposit = roundBD ((lqIssuedDec * xValueFloat) / lqSupplyDouble) (UP, (Just . toInteger $ 0))
+      yToDeposit = roundBD ((lqIssuedDec * yValueFloat) / lqSupplyDouble) (UP, (Just . toInteger $ 0))
+
+          -- yToDeposit = (((lqSupplyDouble + lqIssued) / lqSupplyDouble) - 1) * yValueFloat
       yPartLength = toInteger $ RIO.length . show $ quoteAssetBalance
-      xValueLength = toInteger $ RIO.length . show $ (baseAssetBalance + baseIn)
+      xValueLength = toInteger $ RIO.length . show $ (xValueFloat + xToDeposit)
 
       maxPrecisionByToken = (if (yPartLength > xValueLength) then yPartLength else xValueLength)
 
@@ -330,9 +335,8 @@ calculateGandTDeposit baseAssetBalance baseAssetWeight quoteAssetBalance quoteAs
       treasuryFeeNum = (fromIntegral treasuryFee) :: BigDecimal
       lpFeeNum = (fromIntegral lpFee) :: BigDecimal
       lqSupplyDouble = (fromIntegral lqSupply) :: BigDecimal
-      baseInDouble = (BigDecimal (fromIntegral baseIn) 0) :: BigDecimal
-
-      additionalPart = baseInDouble --     xInInvariant = fromIntegral $ baseAssetBalance + round ((fromIntegral baseIn) * ((lpFeeNum - treasuryFeeNum) / fromIntegral feeDen))
+      xToDepositDouble = xToDeposit
+      additionalPart = xToDepositDouble --     xInInvariant = fromIntegral $ baseAssetBalance + round ((fromIntegral xToDeposit) * ((lpFeeNum - treasuryFeeNum) / fromIntegral feeDen))
       -- no decimals after point
       xInInvariantBigDecimal = xValueFloat + additionalPart
       -- xInInvariantBigDecimal in degree `(xWieght / 10)`
@@ -349,18 +353,11 @@ calculateGandTDeposit baseAssetBalance baseAssetWeight quoteAssetBalance quoteAs
   traceM $ T.pack $ "tX:" ++ show tX
   traceM $ T.pack $ "testa:" ++ show xInInvariantWithDegree
   traceM $ T.pack $ "testb:" ++ show test
-
-  let
-      lqIssued = roundBD ((baseInDouble * lqSupplyDouble) / xValueFloat) (DOWN, (Just . toInteger $ 0))
-
-      yToDeposit = roundBD ((lqIssued * yValueFloat) / lqSupplyDouble) (UP, (Just . toInteger $ 0))
-
-      -- yToDeposit = (((lqSupplyDouble + lqIssued) / lqSupplyDouble) - 1) * yValueFloat
-
   traceM $ T.pack $ "x token qty:" ++ show baseAssetBalance
   traceM $ T.pack $ "y token qty:" ++ show quoteAssetBalance
 
-  traceM $ T.pack $ "lqIssued:" ++ show (getDecimalNum lqIssued)
+  traceM $ T.pack $ "lqIssued:" ++ show (getDecimalNum lqIssuedDec)
+  traceM $ T.pack $ "xToDeposit:" ++ show (getDecimalNum xToDeposit)
   traceM $ T.pack $ "yToDeposit:" ++ show (getDecimalNum yToDeposit)
 
   let
@@ -386,15 +383,15 @@ calculateGandTDeposit baseAssetBalance baseAssetWeight quoteAssetBalance quoteAs
 
   traceM $ T.pack $ "gY:" ++ show gY
   traceM $ T.pack $ "tY:" ++ show tY
-  traceM $ T.pack $ "lqIssued:" ++ show (getDecimalNum lqIssued)
+  traceM $ T.pack $ "lqIssued:" ++ show (getDecimalNum lqIssuedDec)
 
-  pure (gX, tX, gY, tY, getDecimalNum yToDeposit, getDecimalNum lqIssued)
+  pure (gX, tX, gY, tY, getDecimalNum xToDeposit, getDecimalNum yToDeposit, getDecimalNum lqIssuedDec)
 
 calculateGandTRedeem :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer, Integer, Integer, Integer, Integer)
 calculateGandTRedeem baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit lqRedeemI lqSupply lpFee treasuryFee prevInvariant = do
   let
       yPartLength = toInteger $ RIO.length . show $ quoteAssetBalance
-      --xValueLength = toInteger $ RIO.length . show $ (baseAssetBalance + baseIn)
+      --xValueLength = toInteger $ RIO.length . show $ (baseAssetBalance + xToDeposit)
       lqLength = toInteger $ RIO.length . show $ lqSupply
 
       maxPrecisionByToken = lqLength
@@ -409,13 +406,13 @@ calculateGandTRedeem baseAssetBalance baseAssetWeight quoteAssetBalance quoteAss
       treasuryFeeNum = (fromIntegral treasuryFee) :: BigDecimal
       lpFeeNum = (fromIntegral lpFee) :: BigDecimal
       lqSupplyDouble = (fromIntegral lqSupply) :: BigDecimal
-      --baseInDouble = (BigDecimal (fromIntegral baseIn) 0) :: BigDecimal
+      --xToDepositDouble = (BigDecimal (fromIntegral xToDeposit) 0) :: BigDecimal
       lqRedeemDouble = (BigDecimal (fromIntegral lqRedeemI) 0) :: BigDecimal
 
       xToRedeem = roundBD ((lqRedeemDouble * xValueFloat) / lqSupplyDouble) (UP, (Just . toInteger $ 0))
       yToRedeem = roundBD ((lqRedeemDouble * yValueFloat) / lqSupplyDouble) (UP, (Just . toInteger $ 0))
 
-      --additionalPart = baseInDouble --     xInInvariant = fromIntegral $ baseAssetBalance + round ((fromIntegral baseIn) * ((lpFeeNum - treasuryFeeNum) / fromIntegral feeDen))
+      --additionalPart = xToDepositDouble --     xInInvariant = fromIntegral $ baseAssetBalance + round ((fromIntegral xToDeposit) * ((lpFeeNum - treasuryFeeNum) / fromIntegral feeDen))
       -- no decimals after point
       xInInvariantBigDecimal = xValueFloat - xToRedeem
       -- xInInvariantBigDecimal in degree `(xWieght / 10)`
@@ -605,11 +602,11 @@ correctDeposit =
         xValue = valueOf value xCS xTN
         yValue = valueOf value yCS yTN
         lqValue = valueOf value lqCS lqTN
-        lqIssued = 0x7fffffffffffffff - lqValue
+        lqSupply = 0x7fffffffffffffff - lqValue
 
-      xToDeposit <- integral (Range.constant 1 ((xValue `div` 2) - 1))
+      lqIssued <- integral (Range.constant 1 ((lqValue `div` 2) - 1))
 
-      (gX, tX, gY, tY, yToDeposit, lqIssued) <- calculateGandTDeposit xValue (weightX config) yValue (weightY config) (xToDeposit) lqIssued (poolFeeNum config) (treasuryFee config) (invariant config)
+      (gX, tX, gY, tY, xToDeposit, yToDeposit, lqIssued) <- calculateGandTDeposit xValue (weightX config) yValue (weightY config) (lqIssued) lqSupply (poolFeeNum config) (treasuryFee config) (invariant config)
 
       let
         -- lqIssued = 0x7fffffffffffffff - (round lqValue)
@@ -643,11 +640,11 @@ incorrectDepositLqOut =
         xValue = valueOf value xCS xTN
         yValue = valueOf value yCS yTN
         lqValue = valueOf value lqCS lqTN
-        lqIssued = 0x7fffffffffffffff - lqValue
+        lqSupply = 0x7fffffffffffffff - lqValue
 
-      xToDeposit <- integral (Range.constant 1 ((xValue `div` 2) - 1))
+      lqIssued <- integral (Range.constant 1 ((lqValue `div` 2) - 1))
 
-      (gX, tX, gY, tY, yToDeposit, lqIssued) <- calculateGandTDeposit xValue (weightX config) yValue (weightY config) (xToDeposit) lqIssued (poolFeeNum config) (treasuryFee config) (invariant config)
+      (gX, tX, gY, tY, xToDeposit, yToDeposit, lqIssued) <- calculateGandTDeposit xValue (weightX config) yValue (weightY config) (lqIssued) lqSupply (poolFeeNum config) (treasuryFee config) (invariant config)
 
       let
         -- lqIssued = 0x7fffffffffffffff - (round lqValue)
