@@ -37,7 +37,7 @@ import Debug.Trace
 import Data.Text as T (pack, unpack, splitOn)
 
 balancePool = testGroup "BalancePool"-- [HH.testPropertyNamed "name" "propertyName" test123]
-  ((genTests `map` [depositAllTests]))
+  ((genTests `map` [depositSingleTests]))
 
 genTests BalancePoolTestGroup{..} = 
   let

@@ -395,7 +395,7 @@ calculateGandTDepositSingle baseAssetBalance baseAssetWeight quoteAssetBalance q
 
       maxPrecisionByToken = (if (yPartLength > xValueLength) then yPartLength else xValueLength)
 
-      maxPrecision = (if (yPartLength > xValueLength) then yPartLength else xValueLength) + 5
+      maxPrecision = (if (yPartLength > xValueLength) then yPartLength else xValueLength) + 10
 
       xValueFloat = (fromIntegral baseAssetBalance) :: BigDecimal
       invariantFloat = fromIntegral prevInvariant :: BigDecimal
@@ -481,7 +481,7 @@ calculateGandTDepositSingle baseAssetBalance baseAssetWeight quoteAssetBalance q
       gXIdeal = ((takeNBigDecimal xInInvariantWithDegree (maxPrecision)) :: Integer)
       tXIdeal = ((takeNBigDecimal xInInvariantWith1Degree (maxPrecision)) :: Integer)
 
-      test = nthRoot (BigDecimal tXIdeal 0) (fromIntegral baseAssetWeight) (UP, (Just . toInteger $ 10)) :: BigDecimal
+      test = (BigDecimal tXIdeal 0) ** (fromIntegral baseAssetWeight) :: BigDecimal
     
   traceM $ T.pack $ "prevInvariant ideal:" ++ show prevInvariant
   traceM $ T.pack $ "gXIdeal:" ++ show gXIdeal
@@ -982,7 +982,7 @@ correctDepositSingle =
           , value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolLq config) (negate (lqIssued)))
           }
 
-      pure $ BalancePoolActionResult newPool [] [gXNonIdeal, gYNonIdeal, gXIdeal, gYIdeal, gXReal, gYReal, gXNonIdeal, gxIdealDeposit] [tXNonIdeal, tYNonIdeal, tXIdeal, tYIdeal, tXReal, tYReal] (toInteger 15)
+      pure $ BalancePoolActionResult newPool [] [gXNonIdeal, gYNonIdeal, gXIdeal, gYIdeal, gXReal, gYReal, gxIdealDeposit] [tXNonIdeal, tYNonIdeal, tXIdeal, tYIdeal, tXReal, tYReal] (toInteger 15)
   in BalancePoolTestAction "Correct deposit single tokens" testAction
 
 -- Deposit single cases end --

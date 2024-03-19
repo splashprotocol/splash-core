@@ -253,6 +253,8 @@ verifyGTValues = plam $ \tokenBalance tokenWeight tokenG tokenT -> unTermCont $ 
     ptraceC $ pshow (tokenTPowNumLength - tokenPrecision)
     ptraceC $ "finalRightValue"
     ptraceC $ pshow finalRightValue
+    ptraceC $ "finalLeftValue == finalRightValue"
+    ptraceC $ pshow (finalLeftValue #== finalRightValue)
 
     pure $ finalLeftValue #== finalRightValue
 
@@ -299,6 +301,12 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideNum prevTokenBalance to
     ptraceC $ pshow $ rightSide
     ptraceC $ "validGEquality"
     ptraceC $ pshow $ validGEquality
+    ptraceC $ "prevTokenBalance"
+    ptraceC $ pshow $ prevTokenBalance
+    ptraceC $ "tokenG"
+    ptraceC $ pshow $ tokenG
+    ptraceC $ "leftSideMultiplicator"
+    ptraceC $ pshow $ leftSideMultiplicator
     pure $ validGEquality
 
 verifyTExpEquality ::
@@ -421,6 +429,10 @@ validGTAndTokenDeltaWithoutFees = plam $ \prevTokenBalance tokenWeight tokenDelt
     -- ptraceC $ pshow $ ((prevTokenBalance + tokenDelta))
     ptraceC $ "correctTokenValue without fees"
     ptraceC $ pshow $ correctTokenValue
+    ptraceC $ "correctTokenValue without fees. prevTokenBalance"
+    ptraceC $ pshow $ prevTokenBalance
+    ptraceC $ "correctTokenValue without fees. tokenDelta"
+    ptraceC $ pshow $ tokenDelta
 
     pure $ correctGandT #&& correctTokenValue
 
@@ -491,10 +503,17 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
         newInvariantRational = pround # (newGxRational #* newGyRational)
 
         -- There is no matter which swap direction is, so we are calculating new invartiant directly
+
+        prevInvariantLength = pIntLength # prevInvariant
+
         newInvariant = newGX #* newGY
 
+        newInvariantDenum = ptryPositive # (ppow # 10 # ((pIntLength # newInvariant) - prevInvariantLength))
+
+        newInvarianRounded = pround # (pcon $ PRational newInvariant newInvariantDenum)
+
         -- Verify that new value of invariant equals to previous
-        newInvariantIsCorrect = prevInvariant #<= newInvariant -- todo: check for rounding
+        newInvariantIsCorrect = prevInvariant #== newInvarianRounded -- todo: check for rounding
 
         correctTokensUpdate =
             pif
@@ -553,14 +572,12 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
     -- ptraceC $ "xTestWithFee"
     -- ptraceC $ pshow xTestWithFee
 
-    -- ptraceC $ "prevInvariant"
-    -- ptraceC $ pshow prevInvariant
-    -- ptraceC $ "newInvariantWithoutRound"
-    -- ptraceC $ pshow newInvariantWithoutRound
-    -- ptraceC $ "newInvariantR"
-    -- ptraceC $ pshow newInvariantRational
-    -- ptraceC $ "newInvariant"
-    -- ptraceC $ pshow newInvariant
+    ptraceC $ "prevInvariant"
+    ptraceC $ pshow prevInvariant
+    ptraceC $ "newInvariant"
+    ptraceC $ pshow newInvariant
+    ptraceC $ "newInvarianRounded"
+    ptraceC $ pshow newInvarianRounded
     
     -- ptraceC $ "newInvariantIsCorrect"
     -- ptraceC $ pshow newInvariantIsCorrect
@@ -803,6 +820,15 @@ singleDepositIsValid =
             dy  = newY - prevY
             dlq = newLq - prevLq
 
+            xBalanceIntLength = pIntLength # newX
+            yBalanceIntLength = pIntLength # newY
+
+            maxPrecision =
+                pif 
+                    (xBalanceIntLength #<= yBalanceIntLength)
+                    (yBalanceIntLength)
+                    (xBalanceIntLength)
+
         -- first of all - verifing correctness of invariant without any fees
         -- 1) verify that delta in deposit token is correct
             validDeltaInToken =
@@ -814,13 +840,24 @@ singleDepositIsValid =
                     ((validGTAndTokenDeltaWithoutFees # prevX # weightX # dx # tokenXGWF # tokenXTWF) #&& (validGTAndTokenDeltaWithoutFees # prevY # weightY # zero # tokenYGWF # tokenYTWF))
         -- 2) We should calculate invariant for this single deposit to verify it with ideal invariant
             invariantWithoutFees = tokenXGWF #* tokenYGWF
+            
+            invariantWithoutFeesDenum = ptryPositive # (ppow # 10 # ((pIntLength # invariantWithoutFees) - maxPrecision))
+
+            invariantWithoutFeesRounded = pround # (pcon $ PRational invariantWithoutFees invariantWithoutFeesDenum)
         
         -- Second step is verifying correctness of values associated with ideal deposit calculations.
         -- Used for verifying correcntess of lp out.
         -- 1) verify correctness of ideal invariant and withoutFeesInvariant
             idealInvariant = tokenXGLP #* tokenYGLP
 
-            idealAndWFInvariantAreEquals = invariantWithoutFees #== idealInvariant
+            idealInvariantDenum = ptryPositive # (ppow # 10 # ((pIntLength # idealInvariant) - maxPrecision))
+
+            idealInvariantRounded = pround # (pcon $ PRational idealInvariant idealInvariantDenum)
+
+            -- ideal invariant and invariantWithoutFees are cacluted with high precision, so
+            -- we should "truncate" them to correct 
+
+            idealAndWFInvariantAreEquals = invariantWithoutFeesRounded #== idealInvariantRounded
 
         -- 2) verify correctness of ideal delta in deposit token
             validIdealTokenDelta =
@@ -881,6 +918,10 @@ singleDepositIsValid =
         ptraceC $ pshow idealInvariant
         ptraceC $ "idealAndWFInvariantAreEquals"
         ptraceC $ pshow idealAndWFInvariantAreEquals
+        ptraceC $ "newX"
+        ptraceC $ pshow newX
+        ptraceC $ "newY"
+        ptraceC $ pshow newY
         ptraceC $ "validIdealTokenDelta"
         ptraceC $ pshow validIdealTokenDelta
         ptraceC $ "validIdealTokenDeltaWithFees"
