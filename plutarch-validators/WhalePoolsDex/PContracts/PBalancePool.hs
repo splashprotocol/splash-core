@@ -518,15 +518,15 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
         correctTokensUpdate =
             pif
                 ( zero #< dx )
-                ( (validGTAndTokenDeltaWithFeesTest # prevX # weightX # dx # newGX # newTx # (feeNum + treasuryFee) #(ppow # 10 # maxDen) # den) #&& (validGTAndTokenDeltaWithoutFees # prevY # weightY # dy # newGY # newTy) )
-                ( (validGTAndTokenDeltaWithoutFees # prevX # weightX # dx # newGX # newTx) #&& (validGTAndTokenDeltaWithFeesTest # prevY # weightY # dy # newGY # newTy # (feeNum + treasuryFee) # (ppow # 10 # maxDen) # den) )
+                ( (validGTAndTokenDeltaWithFeesTest # prevX # weightX # dx # newGX # newTx # (feeNum - treasuryFee) #(ppow # 10 # maxDen) # den) #&& (validGTAndTokenDeltaWithoutFees # prevY # weightY # dy # newGY # newTy) )
+                ( (validGTAndTokenDeltaWithoutFees # prevX # weightX # dx # newGX # newTx) #&& (validGTAndTokenDeltaWithFeesTest # prevY # weightY # dy # newGY # newTy # (feeNum - treasuryFee) # (ppow # 10 # maxDen) # den) )
 
         -- Due to rounding newInvariant should be greather or equals to prevValue
         correctTreasuryUpdate =
             pif
                 ( zero #< dx )
-                ( ((newTreasuryX * feeDen) #== (prevTreasuryX + (dx * treasuryFee))) #&& (prevTreasuryY #== newTreasuryY) )
-                ( ((newTreasuryY * feeDen) #== (prevTreasuryY + (dy * treasuryFee))) #&& (prevTreasuryX #== newTreasuryX) )
+                ( ((feeDen * prevTreasuryX + (dx * treasuryFee)) #<= ((newTreasuryX + 1) * feeDen)) #&& (prevTreasuryY #== newTreasuryY) )
+                ( ( (feeDen * prevTreasuryY + (dy * treasuryFee)) #<= ((newTreasuryY + 1) * feeDen)) #&& (prevTreasuryX #== newTreasuryX) )
 
     newExpectedConfig <-
         tcon $ (BalancePoolConfig $
@@ -571,7 +571,18 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
     -- ptraceC $ pshow xTest
     -- ptraceC $ "xTestWithFee"
     -- ptraceC $ pshow xTestWithFee
-
+    ptraceC $ "NewTrX"
+    ptraceC $ pshow newTreasuryX
+    ptraceC $ "prevTreasuryX"
+    ptraceC $ pshow prevTreasuryX
+    ptraceC $ "dx"
+    ptraceC $ pshow dx
+    ptraceC $ "treasuryFee"
+    ptraceC $ pshow treasuryFee
+    ptraceC $ "(newTreasuryX * feeDen)"
+    ptraceC $ pshow (newTreasuryX * feeDen)
+    ptraceC $ "(feeDen * prevTreasuryX + (dx * treasuryFee))"
+    ptraceC $ pshow (feeDen * prevTreasuryX + (dx * treasuryFee))
     ptraceC $ "prevInvariant"
     ptraceC $ pshow prevInvariant
     ptraceC $ "newInvariant"
@@ -579,16 +590,16 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
     ptraceC $ "newInvarianRounded"
     ptraceC $ pshow newInvarianRounded
     
-    -- ptraceC $ "newInvariantIsCorrect"
-    -- ptraceC $ pshow newInvariantIsCorrect
-    -- ptraceC $ "correctTokensUpdate"
-    -- ptraceC $ pshow correctTokensUpdate
-    -- ptraceC $ "correctTreasuryUpdate"
-    -- ptraceC $ pshow correctTreasuryUpdate
-    -- ptraceC $ "(newPoolConfig #== newExpectedConfig)"
-    -- ptraceC $ pshow (newPoolConfig #== newExpectedConfig)
-    -- ptraceC $ "(dlq #== zero)"
-    -- ptraceC $ pshow (dlq #== zero)
+    ptraceC $ "newInvariantIsCorrect"
+    ptraceC $ pshow newInvariantIsCorrect
+    ptraceC $ "correctTokensUpdate"
+    ptraceC $ pshow correctTokensUpdate
+    ptraceC $ "correctTreasuryUpdate"
+    ptraceC $ pshow correctTreasuryUpdate
+    ptraceC $ "(newPoolConfig #== newExpectedConfig)"
+    ptraceC $ pshow (newPoolConfig #== newExpectedConfig)
+    ptraceC $ "(dlq #== zero)"
+    ptraceC $ pshow (dlq #== zero)
 
     pure $
         (   newInvariantIsCorrect 
@@ -870,9 +881,9 @@ singleDepositIsValid =
             validIdealTokenDeltaWithFees =
                 pif (dx #== zero)
                     -- Deposit token is Y
-                    (validGTAndTokenDeltaWithFees # prevY # weightY # idealDeltaToken # tokenYGLP # tokenYTLP # (feeNum + treasuryFee))
+                    (validGTAndTokenDeltaWithFees # prevY # weightY # idealDeltaToken # tokenYGLP # tokenYTLP # (feeNum - treasuryFee))
                     -- Deposit token is X
-                    (validGTAndTokenDeltaWithFees # prevX # weightX # idealDeltaToken # tokenXGLP # tokenXTLP # (feeNum + treasuryFee))
+                    (validGTAndTokenDeltaWithFees # prevX # weightX # idealDeltaToken # tokenXGLP # tokenXTLP # (feeNum - treasuryFee))
 
         -- Third step is verifying correctness of values associated with final invariant.
         -- Only treasury fee.
@@ -1029,9 +1040,9 @@ singleRedeemIsValid =
             validIdealTokenDeltaWithFees =
                 pif (dx #== zero)
                     -- Deposit token is Y
-                    (validGTAndTokenDeltaWithFees # prevY # weightY # idealDeltaToken # tokenYGLP # tokenYTLP # (feeNum + treasuryFee))
+                    (validGTAndTokenDeltaWithFees # prevY # weightY # idealDeltaToken # tokenYGLP # tokenYTLP # (feeNum - treasuryFee))
                     -- Deposit token is X
-                    (validGTAndTokenDeltaWithFees # prevX # weightX # idealDeltaToken # tokenXGLP # tokenXTLP # (feeNum + treasuryFee))
+                    (validGTAndTokenDeltaWithFees # prevX # weightX # idealDeltaToken # tokenXGLP # tokenXTLP # (feeNum - treasuryFee))
 
         -- Third step is verifying correctness of values associated with final invariant.
         -- Only treasury fee.

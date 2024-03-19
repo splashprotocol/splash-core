@@ -144,8 +144,8 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
   -- todo: doesn't work for non 2/8 pools
   --(xWeight :: Integer) <- integral (Range.constant 1 9)
 
-  poolFee <- integral (Range.constant 0 1000)
-
+  poolFee <- integral (Range.constant 80000 feeDen)
+  trFee <- integral (Range.constant 0 1000)
   treasuryAddress <- genValidatorHash
   let
     --xQty = 1325954420705621
@@ -194,8 +194,8 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
       , poolY   = y
       , weightY = yWeight
       , poolLq  = lq
-      , poolFeeNum  = 99997
-      , treasuryFee = 0
+      , poolFeeNum  = poolFee
+      , treasuryFee = trFee
       , treasuryX  = 0
       , treasuryY  = 0
       , daoPolicy  = [daoContract]
@@ -684,8 +684,9 @@ correctSwap =
       (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
       let
         -- going to withdraw all pool x and y value
+        treasuryFee_ = treasuryFee config
         newPoolConfig = config 
-          { treasuryX = 0
+          { treasuryX = (treasuryFee_ * xToSwap) `div` feeDen
           , treasuryY = 0
           }
 
@@ -711,14 +712,8 @@ incorrectSwapGT =
       xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
       (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap + 1000) (poolFeeNum config) (treasuryFee config) (invariant config)
       let
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { treasuryX = 0
-          , treasuryY = 0
-          }
-
         newPool = prevPool 
-          { config = newPoolConfig
+          { config = config
           , value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate yToSwap))
           }
 
@@ -739,14 +734,8 @@ incorrectSwapPoolFinalXValue =
       incorrectXSwapValue <- integral (Range.constant 1 ((xValue `div` 2) - 1))
       (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
       let
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { treasuryX = 0
-          , treasuryY = 0
-          }
-
         newPool = prevPool 
-          { config = newPoolConfig
+          { config = config
           , value  = value <> (assetClassValue (poolX config) (incorrectXSwapValue)) <> (assetClassValue (poolY config) (negate yToSwap))
           }
 
@@ -769,20 +758,39 @@ incorrectSwapPoolFinalYValue =
       (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
 
       let
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { treasuryX = 0
-          , treasuryY = 0
-          }
-
         newPool = prevPool 
-          { config = newPoolConfig
+          { config = config
           , value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate incorrectYFinalValue))
           }
 
       pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY] (toInteger 15)
   in BalancePoolTestAction "Incorrect pool y final value" testAction
 
+incorrectSwapTrFeeValue :: MonadGen m => BalancePoolTestAction m
+incorrectSwapTrFeeValue = 
+  let
+    testAction prevPool@BalancePool{..} = do
+
+      let
+        (xCS, xTN) = unAssetClass (poolX config)
+        (yCS, yTN) = unAssetClass (poolY config)
+        xValue = valueOf value xCS xTN
+        yValue = valueOf value yCS yTN
+
+      xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
+      (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+      let
+        treasuryFee_ = treasuryFee config
+        newPoolConfig = config 
+          { treasuryX = (treasuryFee_ * (xToSwap)) `div` feeDen - 1
+          }
+        newPool = prevPool 
+          { config = newPoolConfig
+          , value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate yToSwap))
+          }
+
+      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY] (toInteger 15)
+  in BalancePoolTestAction "Incorrect pool treasury X final value" testAction
 -- Swap cases end --
 
 -- Deposit all cases start --
@@ -810,15 +818,8 @@ correctDeposit =
 
         newInvariant = gX * gY
 
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { treasuryX = 0
-          , treasuryY = 0
-          , invariant = newInvariant
-          }
-
         newPool = prevPool 
-          { config = newPoolConfig
+          { config = config
           , value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate lqIssued))
           }
 
@@ -847,16 +848,8 @@ incorrectDepositLqOut =
         -- lqIssued = 0x7fffffffffffffff - (round lqValue)
 
         newInvariant = gX * gY
-
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { treasuryX = 0
-          , treasuryY = 0
-          , invariant = newInvariant
-          }
-
         newPool = prevPool 
-          { config = newPoolConfig
+          { config = config
           , value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate (lqIssued + 1000)))
           }
 
@@ -889,16 +882,8 @@ correctRedeem =
         -- lqIssued = 0x7fffffffffffffff - (round lqValue)
 
         newInvariant = gX * gY
-
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { treasuryX = 0
-          , treasuryY = 0
-          , invariant = newInvariant
-          }
-
         newPool = prevPool 
-          { config = newPoolConfig
+          { config = config
           , value  = value <> (assetClassValue (poolX config) (negate xToRedeem)) <> (assetClassValue (poolY config) (negate yToRedeem)) <> (assetClassValue (poolLq config) (lqToRedeem))
           }
 
