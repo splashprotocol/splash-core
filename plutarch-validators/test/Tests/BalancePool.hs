@@ -37,7 +37,7 @@ import Debug.Trace
 import Data.Text as T (pack, unpack, splitOn)
 
 balancePool = testGroup "BalancePool"-- [HH.testPropertyNamed "name" "propertyName" test123]
-  ((genTests `map` [depositSingleTests]))
+  ((genTests `map` [swapTests]))
 
 genTests BalancePoolTestGroup{..} = 
   let
@@ -62,7 +62,8 @@ swapTests = BalancePoolTestGroup
   , contractAction = Pool.Swap
   , validAction = correctSwap
   , invalidActions = 
-    [ incorrectSwapGT
+    [ incorrectSwapTrFeeValue
+    , incorrectSwapGT
     , incorrectSwapPoolFinalXValue
     , incorrectSwapPoolFinalYValue
     ]
@@ -117,7 +118,7 @@ cutFloatD toCut maxInt = let
 
 
 actionWithValidSignersQty :: Int -> (BalancePool -> Gen BalancePoolActionResult) -> Pool.BalancePoolAction -> TestResult -> Property
-actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withTests 1 $ property $ do
+actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withTests 10 $ property $ do
   let
     threshold = 2
 
