@@ -323,8 +323,8 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
         correctTreasuryUpdate =
             pif
                 ( zero #< dx )
-                ( ((newTreasuryX * feeDen) #== (prevTreasuryX + (dx * treasuryFee))) #&& (prevTreasuryY #== newTreasuryY) )
-                ( ((newTreasuryY * feeDen) #== (prevTreasuryY + (dy * treasuryFee))) #&& (prevTreasuryX #== newTreasuryX) )
+                ( ((feeDen * prevTreasuryX + (dx * treasuryFee)) #<= ((newTreasuryX + 1) * feeDen)) #&& (prevTreasuryY #== newTreasuryY) )
+                ( ((feeDen * prevTreasuryY + (dy * treasuryFee)) #<= ((newTreasuryY + 1) * feeDen)) #&& (prevTreasuryX #== newTreasuryX) )
 
     newExpectedConfig <-
         tcon $ (BalancePoolConfig $

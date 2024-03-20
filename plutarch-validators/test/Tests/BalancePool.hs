@@ -65,6 +65,7 @@ swapTests = BalancePoolTestGroup
     [ incorrectSwapGT
     , incorrectSwapPoolFinalXValue
     , incorrectSwapPoolFinalYValue
+    , incorrectSwapTrFeeValue
     ]
   }
 
