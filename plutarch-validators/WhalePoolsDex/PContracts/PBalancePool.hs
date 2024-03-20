@@ -119,10 +119,8 @@ newtype BalancePoolRedeemer (s :: S)
                 '[ "action" ':= BalancePoolAction
                  , "selfIx" ':= PInteger
                  -- for swap, deposit / redeem (All assets) contains: gX, gY
-                 -- for deposit / redeem (Single asset) contains also ideal deposit at 6 idx
                  , "g"     ':= PBuiltinList (PAsData PInteger)
-                 -- for swap, deposit / redeem (All assets) contains: tX, Y
-                 -- for deposit / redeem (Single asset) contains:
+                 -- for swap, deposit / redeem (All assets) contains: tX, tY
                  , "t"     ':= PBuiltinList (PAsData PInteger)
                  ]
             )
@@ -382,7 +380,6 @@ correctLpTokenDelta = plam $ \lpIssued lpDelta tokenDelta tokenBalance tokenWeig
 
         leftRightPartDiff = leftPart - rightPart
 
-        -- rounding. double check
         correctTokenIn = pif
             ( leftRightPartDiff #<= 0 )
             ( (-1) #<= leftRightPartDiff )
@@ -390,7 +387,6 @@ correctLpTokenDelta = plam $ \lpIssued lpDelta tokenDelta tokenBalance tokenWeig
         
         correctTokenValue = pif
             ( (pmod # pDen # tokenWeight) #== 0 )
-            -- todo: on deposit `+ tokenIn`
             ( verifyGEquality # 1 # (tokenBalance + tokenDelta) # tokenBalance # tokenG # tokenWeight )
             ( verifyTExpEquality # tokenT # (tokenBalance + tokenDelta) )
 
