@@ -26,7 +26,7 @@ import Plutarch.Unsafe (punsafeCoerce)
 import Plutarch.Internal
 
 cfgForValidator :: Config
-cfgForValidator = Config DoTracing
+cfgForValidator = Config NoTracing
 
 wrapValidator ::
     (PIsData dt, PIsData rdmr) =>

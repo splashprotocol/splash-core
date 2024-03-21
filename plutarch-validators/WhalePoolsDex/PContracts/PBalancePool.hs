@@ -186,9 +186,9 @@ verifyGEquality ::
         :--> PInteger
         :--> PBool
         )
-verifyGEquality = plam $ \leftSideMultiplicator rightSideRaw prevTokenBalance tokenG tokenWeight -> unTermCont $ do
+verifyGEquality = plam $ \leftSideMultiplicator rightSideRaw prevTokenBalance tokenG tokenWeight ->
     let
-        tokenBalanceIntLength = pIntLength # prevTokenBalance
+        tokenBalanceIntLength = pIntLength # rightSideRaw
 
         degree = pdiv # pDen # tokenWeight
 
@@ -201,14 +201,10 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideRaw prevTokenBalance to
         gEDiff = leftSide - rightSide
         validGEquality = pif
             ( gEDiff #<= 0 )
-            ( (-2) #<= gEDiff )
-            ( gEDiff #<= (2) )
+            ( (-1) #<= gEDiff )
+            ( gEDiff #<= (1) )
 
-    ptraceC $ "gEDiff"
-    ptraceC $ pshow $ gEDiff
-    ptraceC $ "validGEquality"
-    ptraceC $ pshow $ validGEquality
-    pure validGEquality
+    in validGEquality
 
 verifyTExpEquality ::
     ClosedTerm
@@ -350,15 +346,6 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
                 #$ pdcons @"invariant" @PInteger # pdata prevInvariant
                     # pdnil)
 
-
-    ptraceC $ "prevInvariant"
-    ptraceC $ pshow $ prevInvariant
-    ptraceC $ "newInvarianRounded"
-    ptraceC $ pshow $ newInvarianRounded
-    ptraceC $ "correctTokensUpdate"
-    ptraceC $ pshow $ correctTokensUpdate
-    ptraceC $ "correctTreasuryUpdate"
-    ptraceC $ pshow $ correctTreasuryUpdate
     pure $
         (   newInvariantIsCorrect 
         #&& correctTokensUpdate 
@@ -409,22 +396,7 @@ correctLpTokenDelta = plam $ \lpIssued lpDelta tokenDelta tokenBalance tokenWeig
             ( (pmod # pDen # tokenWeight) #== 0 )
             ( verifyGEquality # 1 # (tokenBalance + tokenDelta) # tokenBalance # tokenG # tokenWeight )
             ( verifyTExpEquality # tokenT # (tokenBalance + tokenDelta) )
-    ptraceC $ "leftPart"
-    ptraceC $ pshow leftPart
-    ptraceC $ "rightPart"
-    ptraceC $ pshow rightPart 
-    ptraceC $ "tokenBalance"
-    ptraceC $ pshow tokenBalance
-    ptraceC $ "tokenDelta"
-    ptraceC $ pshow tokenDelta
-    ptraceC $ "calcTokenDelta"
-    ptraceC $ pshow calcTokenDelta
-    ptraceC $ "correctTokenValue"
-    ptraceC $ pshow correctTokenValue
-    ptraceC $ "lpIssued"
-    ptraceC $ pshow lpIssued
-    ptraceC $ "lpDelta"
-    ptraceC $ pshow lpDelta
+    
     pure $ correctTokenIn #&& correctTokenValue
 
 validDepositRedeemAllTokens :: 
@@ -491,12 +463,6 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
                 #$ pdcons @"invariant" @PInteger # pdata newInvariant
                     # pdnil)
 
-    ptraceC $ "xDepositRedeemIsValid"
-    ptraceC $ pshow xDepositRedeemIsValid
-    ptraceC $ "yDepositRedeemIsValid"
-    ptraceC $ pshow yDepositRedeemIsValid
-    ptraceC $ "newPoolConfig #== newExpectedConfig"
-    ptraceC $ pshow (newPoolConfig #== newExpectedConfig)
     pure $ 
         (   xDepositRedeemIsValid
         #&& yDepositRedeemIsValid

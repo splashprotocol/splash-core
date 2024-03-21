@@ -21,7 +21,7 @@ import PlutusLedgerApi.V1.Crypto  (PubKeyHash)
 import PlutusLedgerApi.V1.Contexts
 
 cfgForMintingValidator :: Config
-cfgForMintingValidator = Config DoTracing
+cfgForMintingValidator = Config NoTracing
 
 wrapMintingValidator ::
     PIsData rdmr =>

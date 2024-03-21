@@ -137,8 +137,8 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
 
   stakeHash <- genPkh
   
-  -- todo: error on big values such as 10000000000000000  
-  -- (yQty :: Int) <- integral (Range.constant 10000000000 10000000000000000)
+  -- todo: error on big values such as 10 000 000 000 000 000  
+  (yQty :: Int) <- integral (Range.constant 10000000000 10000000000000000)
 
   (xWeight :: Integer) <- integral (Range.constant 1 5)
   (xQty :: Integer) <- integral (Range.constant 1000000000 1000000000000)
@@ -194,12 +194,6 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
       }
 
     poolValue = mkValues ((\(ac, qty) -> mkValue ac (fromIntegral qty)) `RIO.map` [(x, xQty), (y, yQty), (nft, nftQty), (lq, lqQty)]) mempty
-  traceM $ T.pack $ (("x: ") ++ (show xQty))
-  traceM $ T.pack $ (("y: ") ++ (show yQty))
-  traceM $ T.pack $ (("xWeight: ") ++ (show xWeight))
-  traceM $ T.pack $ (("yWeight: ") ++ (show yWeight))
-  traceM $ T.pack $ (("poolFee: ") ++ (show poolFee))
-  traceM $ T.pack $ (("trFee: ") ++ (show trFee))
   pure $ BalancePool poolConfig stakeHash poolValue
 
 --- Test utils ---
@@ -247,25 +241,9 @@ calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAsset
 
       gY = takeNBigDecimal gYDouble (maxPrecision) -- ((getValue gYDouble))
       tY = takeNBigDecimal tGDouble (maxPrecision) -- ((getValue tGDouble))
-  traceM $ T.pack $ (("baseAssetWeight: ") ++ (show baseAssetWeight))
-  traceM $ T.pack $ (("maxPrecision: ") ++ (show maxPrecision))
-  traceM $ T.pack $ (("gX: ") ++ (show gX))
-  traceM $ T.pack $ (("tX: ") ++ (show tX))
-  traceM $ T.pack $ (("gY: ") ++ (show gY))
-  traceM $ T.pack $ (("tY: ") ++ (show tY))
-  traceM $ T.pack $ (("yToSwap: ") ++ (show yToSwap))
-  traceM $ T.pack $ (("xInInvariantWithDegree: ") ++ (show xInInvariantWithDegree))
-  traceM $ T.pack $ (("invDivisionInReverseDegree: ") ++ (show invDivisionInReverseDegree))
 
-
-
-
-  -------- Max test ---------
-
-
-  let
-    spotPriceWithoutFee = (((BigDecimal baseAssetBalance 0)) / ((BigDecimal baseAssetWeight 0))) / (((BigDecimal quoteAssetBalance 0)) / ((BigDecimal quoteAssetWeghit 0))) :: BigDecimal
-    spotPriceWithFee = spotPriceWithoutFee * (fromRational $ (fromIntegral (lpFee - treasuryFee) / fromIntegral (feeDen)))
+      spotPriceWithoutFee = (((BigDecimal baseAssetBalance 0)) / ((BigDecimal baseAssetWeight 0))) / (((BigDecimal quoteAssetBalance 0)) / ((BigDecimal quoteAssetWeghit 0))) :: BigDecimal
+      spotPriceWithFee = spotPriceWithoutFee * (fromRational $ (fromIntegral (lpFee - treasuryFee) / fromIntegral (feeDen)))
 
   pure (gX, tX, gY, tY, yToSwap)
 
@@ -373,9 +351,7 @@ correctSwap =
         (yCS, yTN) = unAssetClass (poolY config)
         xValue = valueOf value xCS xTN
         yValue = valueOf value yCS yTN
-      -- let xToSwap = 285041264117
       xToSwap <- integral (Range.constant 100 xValue)
-      traceM $ T.pack $ (("xToSwap: ") ++ (show xToSwap))
       (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
       let
         -- going to withdraw all pool x and y value
@@ -596,7 +572,6 @@ correctRedeem =
         lqIssued = 0x7fffffffffffffff - lqValue
       -- let lqToRedeem = 85989149586251
       lqToRedeem <- integral (Range.constant 1 ((lqIssued `div` 2) - 1))
-      traceM $ T.pack $ (("lqToRedeem: ") ++ (show lqToRedeem))
       (gX, tX, gY, tY, xToRedeem, yToRedeem) <- calculateGandTRedeem xValue (weightX config) yValue (weightY config) (lqToRedeem) lqIssued (poolFeeNum config) (treasuryFee config) (invariant config)
 
       let
