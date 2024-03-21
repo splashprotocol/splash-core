@@ -34,14 +34,18 @@ pub type PoolData {
 /// Pool action types.
 pub type PoolAction {
   AMMAction {
-    pool_in_ix: Int,
-    pool_out_ix: Int,
     // Value of the 'option_int0' is index of base asset for swap and native invariant value for deposit/redeem.
     option_int0: Int,
     // Value of the 'option_int0' is index of quote asset for swap and invariant with LP fees value for deposit/redeem.
     option_int1: Int,
   }
-  PDAOAction { pool_in_ix: Int, pool_out_ix: Int }
+  PDAOAction
+}
+
+pub type PoolRedeemer {
+  pool_in_ix: Int,
+  pool_out_ix: Int,
+  action: PoolAction,
 }
 
 // ==================================== POOL AMM-ORDERS ==================================== //

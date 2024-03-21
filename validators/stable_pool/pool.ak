@@ -10,7 +10,7 @@ use aiken/transaction.{
 use aiken/transaction/credential.{from_script}
 use aiken/transaction/value.{Value}
 use splash/plutus.{Asset, ScriptHash}
-use splash/stableswap/types.{AMMAction, PDAOAction, PoolAction, PoolData}
+use splash/stableswap/types.{AMMAction, PDAOAction, PoolData, PoolRedeemer}
 use splash/stableswap/utils
 
 // LP tokens emisson:
@@ -35,18 +35,13 @@ const max_t_error = 2
 validator(dao_voting_witness: ScriptHash) {
   fn validate_pool(
     input_datum: PoolData,
-    action: PoolAction,
+    redeemer: PoolRedeemer,
     ctx: ScriptContext,
   ) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
     let Transaction { inputs, outputs, .. } = transaction
     expect Spend(pool_in_utxo_reference) = purpose
-    let (pool_in_ix, pool_out_ix) =
-      when action is {
-        AMMAction(pool_in_ix, pool_out_ix, ..) -> (pool_in_ix, pool_out_ix)
-
-        PDAOAction(pool_in_ix, pool_out_ix) -> (pool_in_ix, pool_out_ix)
-      }
+    let PoolRedeemer { pool_in_ix, pool_out_ix, action } = redeemer
 
     // ==================================== POOL INPUT ==================================== //
     expect Some(pool_input) = list.at(inputs, pool_in_ix)
@@ -113,16 +108,10 @@ validator(dao_voting_witness: ScriptHash) {
       pool_in_tokens_policies == pool_out_tokens_policies && list.length(
         pool_out_tokens_policies,
       ) == allowed_num_tokens
-
-    // 6. Pool out tokens balances are positive:
-    let pool_out_tokens_balances =
-      utils.extract_target_balances(tradable_assets_in, output_value)
-    let positive_pool_out_balances: Bool =
-      utils.list_is_positive(pool_out_tokens_balances)
-    // 7. Action is valid:
+    // 6. Action is valid:
     let valid_action: Bool =
       when action is {
-        AMMAction(_, _, option_int0, option_int1) ->
+        AMMAction(option_int0, option_int1) ->
           validate_amm_operation(
             input_value,
             input_datum,
@@ -132,7 +121,7 @@ validator(dao_voting_witness: ScriptHash) {
             option_int1,
           )
 
-        PDAOAction(..) -> {
+        PDAOAction -> {
           expect Some(dao_stabe_proxy_witness) =
             list.at(dao_stabe_proxy_witness_in, 0)
           let valid_dao_action: Bool =
@@ -151,7 +140,7 @@ validator(dao_voting_witness: ScriptHash) {
         }
       }
     // Checking whether all validity conditions are met:
-    valid_pool_input && pool_address_preserved && pool_nft_preserved && pool_config_preserved && no_more_tokens_in_pool_out && positive_pool_out_balances && valid_action
+    valid_pool_input && pool_address_preserved && pool_nft_preserved && pool_config_preserved && no_more_tokens_in_pool_out && valid_action
   }
 }
 
