@@ -1071,6 +1071,7 @@ fn uniform_reserves_invalid_lq_math_template(
   let lp_balance_after = lp_emission - inv_after
   let lp_balance_after_wrong = lp_emission - inv_after - 1
 
+  // Wrong balances:
   let collected_protocol_fees_after_wrong =
     list.repeat(default_token_value - 1, n)
 
@@ -1093,6 +1094,8 @@ fn uniform_reserves_invalid_lq_math_template(
       collected_protocol_fees_before,
       inv_after,
     )
+
+  // Wrong protocol fees:
   let (output_pool_data_wrong_protocol_fees, output_value) =
     pool_state(
       total_balances_after,
@@ -1112,6 +1115,8 @@ fn uniform_reserves_invalid_lq_math_template(
       collected_protocol_fees_after_wrong,
       inv_after,
     )
+
+  // Wrong invariant:
   let (output_pool_data_wrong_inv, _) =
     pool_state(
       total_balances_after,
@@ -1132,6 +1137,7 @@ fn uniform_reserves_invalid_lq_math_template(
       inv_after_wrong,
     )
 
+  // Wrong LP balance:
   let (_, output_value_wrong_lp) =
     pool_state(
       total_balances_after,
@@ -1249,7 +1255,7 @@ test test_uniform_deposit_with_invalid_math() {
   list.count(validation_results0, fn(r) { r == False }) == n_cases
 }
 
-test test_random_deposit() {
+test test_deposit_fixtures() {
   let n = 3
   let a = 3000
   let lp_fee_num = 200
@@ -1480,7 +1486,7 @@ test test_uniform_redeem_with_invalid_math() {
   list.count(validation_results0, fn(r) { r == False }) == n_cases
 }
 
-test test_random_redeem() {
+test test_redeem_fixtures() {
   let n = 3
   let a = 300
   let lp_fee_num = 200
@@ -1801,7 +1807,7 @@ test test_uniform_swap_with_invalid_math() {
   ) == n_cases && list.count(validation_results2, fn(r) { r == False }) == n_cases
 }
 
-test test_random_swap_to_max_decimals() {
+test test_swap_to_max_decimals_fixtures() {
   // 0 -> 1
   let base_ind = 0
   let quote_ind = 1
@@ -1974,7 +1980,7 @@ test test_random_swap_to_max_decimals() {
   )
 }
 
-test test_random_swap_to_min_decimals() {
+test test_swap_to_min_decimals_fixtures() {
   // 0 -> 1
   let base_ind = 0
   let quote_ind = 1
@@ -2144,141 +2150,5 @@ test test_random_swap_to_min_decimals() {
     output_pool_data_wrong_inv,
     base_ind,
     quote_ind,
-  )
-}
-
-fn uniform_reserves_valid_swap_math_template_clean(
-  n: Int,
-  base_amount: Int,
-  lp_fee_num_before: Int,
-  protocol_fee_num_before: Int,
-  base_ind: Int,
-  quote_ind: Int,
-) -> Bool {
-  let min_value = 1_000_000
-  let default_decimal = 1_000_000
-  let default_token_value = min_value * default_decimal
-
-  let tradable_assets =
-    generate_tradable_assets(@"some_pool_token", @"some_pool_token_name", n)
-
-  // Input data:
-  let total_balances_before = list.repeat(default_token_value, n)
-  let tradable_decimals_before = list.repeat(default_decimal, n)
-  let collected_protocol_fees_before = list.repeat(0, n)
-  let a_before = 1000
-
-  let inv_before = default_token_value * n
-  let lp_balance_before = lp_emission - inv_before
-
-  let (input_pool_data, _) =
-    pool_state(
-      total_balances_before,
-      lp_balance_before,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals_before,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a_before,
-      lp_fee_num_before,
-      protocol_fee_num_before,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_before,
-      inv_before,
-    )
-  // Output data:
-  // Output data:
-  let quote_lp_fees = base_amount * input_pool_data.lp_fee_num / denom
-  let quote_protocol_fees =
-    base_amount * input_pool_data.protocol_fee_num / denom
-
-  let total_balances_after =
-    list.indexed_map(
-      total_balances_before,
-      fn(i, b) {
-        if i == base_ind {
-          b + base_amount
-        } else if i == quote_ind {
-          b - base_amount + quote_lp_fees + quote_protocol_fees
-        } else {
-          b
-        }
-      },
-    )
-
-  let collected_protocol_fees_after =
-    list.indexed_map(
-      collected_protocol_fees_before,
-      fn(i, b) {
-        if i == quote_ind {
-          b + quote_protocol_fees
-        } else {
-          b
-        }
-      },
-    )
-
-  let inv_after = inv_before + quote_lp_fees + quote_protocol_fees
-
-  let (_, _) =
-    pool_state(
-      total_balances_after,
-      lp_balance_before,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals_before,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a_before,
-      lp_fee_num_before,
-      protocol_fee_num_before,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after,
-      inv_after,
-    )
-  // Validation:
-  True
-}
-
-test test_swap_one() {
-  // Swap 0 -> 1
-  let base_ind0 = 0
-  let quote_ind0 = 1
-  let protocol_fee_num = 2000
-  let base = 30000000
-  let n = 3
-  let swap_fee = 250
-  uniform_reserves_valid_swap_math_template(
-    n,
-    base,
-    swap_fee,
-    protocol_fee_num,
-    base_ind0,
-    quote_ind0,
-  )
-}
-
-test test_swap_no() {
-  // Swap 0 -> 1
-  let base_ind0 = 0
-  let quote_ind0 = 1
-  let protocol_fee_num = 2150
-  let base = 30_000_000_323
-  let n = 3
-  let swap_fee = 2324
-  uniform_reserves_valid_swap_math_template_clean(
-    n,
-    base,
-    swap_fee,
-    protocol_fee_num,
-    base_ind0,
-    quote_ind0,
   )
 }

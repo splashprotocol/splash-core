@@ -144,7 +144,7 @@ fn validate_stable_pool_dao_action(
   let lp_amount1 =
     value.quantity_of(output_value, lp_token_policy, lp_token_name)
 
-  // 1. Pool invariant values are preserved:
+  // 1. Pool invariant value is preserved:
   let invatiant_preserved: Bool = inv0 == inv1
   // 2. LP tokens are preserved:
   let lp_token_preserved: Bool = lp_amount0 == lp_amount1

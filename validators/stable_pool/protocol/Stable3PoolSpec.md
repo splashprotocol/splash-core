@@ -2,10 +2,10 @@
 
 Stablecoin exchanges require deep liquidity and no price slippage (best case scenario).
 Classic constant product Automated Market Makers pool (AMM pools) are good for highly volatile assets, however,
-constant product invariant formula ($xy = c$) don't meet the requirements above for stablecoins.
+constant product invariant formula ($xy = c$) doesn't meet the requirements above for stablecoins.
 A more complex invariant as the heart of the AMM pool is needed to effectively utilize stablecoins' liquidity.
 
-The most appropriate invariant for constructing AMM pools with stable coins is
+The most appropriate invariant for constructing AMM pools with stablecoins is the
 StableSwap invariant proposed by the [Curve protocol](https://classic.curve.fi/files/stableswap-paper.pdf).
 Curve's invariant combines the pros and cons of the simplest AMM invariants and in its sense is a superposition of
 constant sum $\sum x_i = c$ and constant product $\prod x_i = c$ formulas:
@@ -17,11 +17,11 @@ A n^n \sum x_i + D = D A n^n + \frac{D^{n + 1}}{n^n \prod x_i}
 ```
 
 where $x_i$ represents the balance of $i^{th}$ token in the pool, $D = \sum x_i$
-is the total amount of tokens when they have an equal price i.e. at equilibrium when all tokens have equal balance,
+is the total amount of tokens when they have an equal price i.e. at equilibrium point,
 $A$ is a parameter and $n$ is the number of tokens in the pool.
 
-The StableSwap invariant indeed provides both low price slippage around equal price point
-and deep liquidity, it can be clearly seen from the direct curves' comparison:
+The StableSwap invariant indeed provides both low price slippage
+and deep liquidity around the equilibrium point, it can be clearly seen from the direct comparison:
 ![Comparison of AMM invariants](images/cs_cp_ss_comparison.png)
 
 The shape of the StableSwap invariant's curve strongly depends on the value of the parameter $A$.
@@ -30,10 +30,10 @@ It's called an “amplification coefficient”, the lower it is, the closer the 
 ![Amplification coefficient](images/ss_amplification_comparison.png)
 ![Slippage](images/cp_ss_slippage_comparison.png)
 
-If the price appears to be shifted from equilibrium point, the invariant
+If the price appears to be shifted from the equilibrium point, the invariant
 starts operating in a suboptimal point, still, however, providing some liquidity (in
 most cases larger than constant product invariant, if optimal $A$ was correctly found).
-At any price, this invariant, just like a constant-product one, would
+At any price, this invariant, just like the constant-product one, would
 provide some liquidity (unlike the constant-sum invariant).
 
 Value of the parameter $A$ should be chosen in such a way, that the price remains favorable for traders
@@ -171,7 +171,7 @@ And, in the same manner, we adjust $D_{n*}$ solution to ensure that it is an ext
 
 **Restrictions**
 
-1. Fees aren't applied on deposits/redeems that do not change the ratio of assets in the pool,
+1. Fees aren't applied on deposits/redeems that don't change the ratio of assets in the pool,
    but in case of so-called imbalance deposits/redeems fees are applied as if the user had made a swap to the balanced
    assets ratio. Thus, if user wants to deposit mostly in asset `X`, he must still have a
    small amount of asset `Y` to pay the imbalance fee;
@@ -182,6 +182,8 @@ And, in the same manner, we adjust $D_{n*}$ solution to ensure that it is an ext
 
 General idea is to put all numerical calculations described above into off-chain code and check on-chain
 only validity of the StableSwap invariant with the correct parameters and balances.
+More details about off-chain flow can be found below in the descriptions of off-chain operator's actions in the
+AMM-orders TX images.
 
 ### Stable3Pool
 
@@ -223,22 +225,25 @@ Pool validator must validate that:
 1. Pool input is valid;
 2. Pool address is preserved;
 3. Pool NFT is preserved;
-3. Immutable pool configuration parameters are preserved;
-4. No more tokens are in the pool output;
-5. All out balances are positive;
+4. Immutable pool configuration parameters are preserved;
+5. No more tokens are in the pool output;
 6. Action is valid:
     1. In case of AMM action (Deposit/Redeem/Swap):
-       2. Valid protocol fees;
-       3. Valid liquidity provider fees;
-       4. Valid tradable and liquidity token deltas;
-       5. Calculations were performed according to the StableSwap invariant with pool params.
+        2. Valid protocol fees;
+        3. Valid liquidity provider fees;
+        4. Valid tradable and liquidity token deltas;
+        5. Calculations were performed according to the StableSwap invariant with pool params.
     2. In case of DAO-actions:
         1. Action is confirmed by the proxy-StablePool DAO script;
         2. Action is confirmed by the Splash DAO voting script.
 
-### Deposit Order
+### Deposit
 
-With arbitrary amount of tokens deposited.
+![Deposit](images/stable3_deposit.svg)
+
+##### Data
+
+With arbitrary amount of tokens deposited:
 
 | Field                    | Type                  | Description                                 |
 |--------------------------|-----------------------|---------------------------------------------|
@@ -264,11 +269,13 @@ Deposit order validator must validate that:
 2. Not less than expected `LP` token amount is received by redeemer;
 3. Redeemer is valid.
 
-### Redeem Order
+### Redeem
 
-With arbitrary amount of tokens to receive.
+![Deposit](images/stable3_redeem.svg)
 
-#### Data
+##### Data
+
+With arbitrary amount of tokens deposited:
 
 | Field                                   | Type                  | Description                                  |
 |-----------------------------------------|-----------------------|----------------------------------------------|
@@ -280,10 +287,9 @@ With arbitrary amount of tokens to receive.
 
 ##### Tokens
 
-| Name | Description | Amount    |
-|------|-------------|-----------|
-| `LP` | Base asset  | Arbitrary |
-
+| Name | Description     | Amount    |
+|------|-----------------|-----------|
+| `LP` | Liquidity token | Arbitrary |
 
 #### Validator
 
@@ -294,8 +300,10 @@ Redeem order validator must validate that:
 3. Valid change is received by redeemer;
 4. Redeemer is valid.
 
-### Redeem Uniform Order
+### Redeem Uniform
+
 Redeem in the current balances ration of the pool doesn't assume change of liquidity tokens.
+
 #### Data
 
 | Field                                   | Type                  | Description                                      |
@@ -310,7 +318,6 @@ Redeem in the current balances ration of the pool doesn't assume change of liqui
 |------|-------------|-----------|
 | `LP` | Base asset  | Arbitrary |
 
-
 #### Validator
 
 Redeem order validator must validate that:
@@ -318,6 +325,11 @@ Redeem order validator must validate that:
 1. Order interacts with the desired pool;
 2. Expected amounts of all tokens are received by redeemer;
 4. Redeemer is valid.
+
+### Swap
+
+![Swap](images/stable3_swap.svg)
+Swap order is implemented as uniform Splash AMM-order.
 
 ### StablePool-proxy DAO
 
@@ -336,10 +348,9 @@ The DAO contract ensures the correctness of the following actions:
 
 #### Data
 
-| Field        | Type                        | Description                                                                                                  |
-|--------------|-----------------------------|--------------------------------------------------------------------------------------------------------------|
-| `pool_nft`   | `Asset`                     | Identifier of the target pool                                                                                |
-
+| Field      | Type    | Description                   |
+|------------|---------|-------------------------------|
+| `pool_nft` | `Asset` | Identifier of the target pool |
 
 #### Validator
 
@@ -348,8 +359,8 @@ DAO contract must validate that:
 1. Pool invariant values are preserved;
 2. `LP` tokens are preserved
 2. Action is valid:
-   1. Change liquidity provider fee;
-   2. Change protocol fee;
-   3. Withdraw protocol treasury;
-   4. Change treasury address;
-   5. Change proxy DAO witness.
+    1. Change liquidity provider fee;
+    2. Change protocol fee;
+    3. Withdraw protocol treasury;
+    4. Change treasury address;
+    5. Change proxy DAO witness.
