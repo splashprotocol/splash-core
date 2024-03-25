@@ -21,7 +21,6 @@ import Plutarch.Rational
 import Plutarch.Num                 ((#*), pabs)
 import Plutarch.Extra.Maybe         as Maybe
 import Plutarch.Api.V1.AssocMap
-import PExtra.Num                   (pexp)
 import Plutarch.Positive
 
 import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromData, assetClass, pValueLength, tletUnwrap)
@@ -158,8 +157,8 @@ pIntLengthInternal =
 roundTo :: ClosedTerm (PInteger :--> PInteger :--> PInteger)
 roundTo = plam $ \origValue roundIdx ->
     let
-        roundingDenum = ptryPositive # (ppow # 10 # ((pIntLength # origValue) - roundIdx))
-        rational      = (pcon $ PRational origValue roundingDenum)
+        roundingDenum  = ptryPositive # (ppow # 10 # ((pIntLength # origValue) - roundIdx))
+        rational       = (pcon $ PRational origValue roundingDenum)
     in pround # rational
 
 verifyGTValues ::
@@ -183,10 +182,9 @@ verifyGEquality ::
         :--> PInteger
         :--> PInteger
         :--> PInteger
-        :--> PInteger
         :--> PBool
         )
-verifyGEquality = plam $ \leftSideMultiplicator rightSideRaw prevTokenBalance tokenG tokenWeight ->
+verifyGEquality = plam $ \leftSideMultiplicator rightSideRaw tokenG tokenWeight ->
     let
         tokenBalanceIntLength = pIntLength # rightSideRaw
 
@@ -195,7 +193,7 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideRaw prevTokenBalance to
         -- tokenG = rightSideNum ^ (tokenWeight / pDen)
         -- leftSideRaw = tokenG ^ (pDen / tokenWeight) => leftSide == (rightSide +-1)
         leftSideRaw = (ppow # tokenG # degree) * leftSideMultiplicator
-        leftSide    = roundTo # leftSideRaw # tokenBalanceIntLength
+        leftSide    = roundTo # leftSideRaw  # tokenBalanceIntLength
         rightSide   = roundTo # rightSideRaw # tokenBalanceIntLength
 
         gEDiff = leftSide - rightSide
@@ -203,7 +201,6 @@ verifyGEquality = plam $ \leftSideMultiplicator rightSideRaw prevTokenBalance to
             ( gEDiff #<= 0 )
             ( (-1) #<= gEDiff )
             ( gEDiff #<= (1) )
-
     in validGEquality
 
 verifyTExpEquality ::
@@ -234,7 +231,7 @@ validGTAndTokenDeltaWithFees = plam $ \prevTokenBalance tokenWeight tokenDelta t
 
         correctTokenValue = pif
             ( (pmod # pDen # tokenWeight) #== 0 )
-            ( verifyGEquality # feeDen # (prevTokenBalance * feeDen + tokenDelta * fees) # prevTokenBalance # tokenG # tokenWeight )  --( leftSide #== rightSide )
+            ( verifyGEquality # feeDen # (prevTokenBalance * feeDen + tokenDelta * fees) # tokenG # tokenWeight )  --( leftSide #== rightSide )
             ( verifyTExpEquality # tokenT # (prevTokenBalance * feeDen + tokenDelta * fees) )
 
     in correctGandT #&& correctTokenValue
@@ -255,7 +252,7 @@ validGTAndTokenDeltaWithoutFees = plam $ \prevTokenBalance tokenWeight tokenDelt
 
         correctTokenValue = pif
             ( (pmod # pDen # tokenWeight) #== 0 )
-            ( verifyGEquality # 1 # (prevTokenBalance + tokenDelta) # prevTokenBalance # tokenG # tokenWeight )
+            ( verifyGEquality # 1 # (prevTokenBalance + tokenDelta) # tokenG # tokenWeight )
             ( verifyTExpEquality # tokenT # (prevTokenBalance + tokenDelta) )
 
     in correctGandT #&& correctTokenValue
@@ -374,13 +371,8 @@ correctLpTokenDelta ::
         :--> PInteger
         :--> PBool
         )
-correctLpTokenDelta = plam $ \lpIssued lpDelta tokenDelta tokenBalance tokenWeight tokenG tokenT -> unTermCont $ do
-    let
-        tokenBalanceIntLength = pIntLength # tokenBalance
-                
-        leftPart  = roundTo # ((pabs #tokenDelta) * lpIssued)   # tokenBalanceIntLength
-        rightPart = roundTo # (tokenBalance * (pabs # lpDelta)) # tokenBalanceIntLength
-
+correctLpTokenDelta = plam $ \lpIssued lpDelta tokenDelta tokenBalance tokenWeight tokenG tokenT ->
+    let                
         calcTokenDelta = (pdiv # (lpDelta #* tokenBalance) # lpIssued)
 
         tokensDiff = calcTokenDelta - tokenDelta
@@ -394,10 +386,10 @@ correctLpTokenDelta = plam $ \lpIssued lpDelta tokenDelta tokenBalance tokenWeig
 
         correctTokenValue = pif
             ( (pmod # pDen # tokenWeight) #== 0 )
-            ( verifyGEquality # 1 # (tokenBalance + tokenDelta) # tokenBalance # tokenG # tokenWeight )
+            ( verifyGEquality # 1 # (tokenBalance + tokenDelta) # tokenG # tokenWeight )
             ( verifyTExpEquality # tokenT # (tokenBalance + tokenDelta) )
     
-    pure $ correctTokenIn #&& correctTokenValue
+    in correctTokenIn #&& correctTokenValue
 
 validDepositRedeemAllTokens :: 
     ClosedTerm 

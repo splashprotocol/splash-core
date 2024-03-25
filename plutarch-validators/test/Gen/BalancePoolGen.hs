@@ -144,12 +144,6 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
   (xQty :: Integer) <- integral (Range.constant 1000000000 1000000000000)
   poolFee <- integral (Range.constant 80000 feeDen)
   trFee <- integral (Range.constant 1 1000)
-  -- let trFee = 683
-  -- let poolFee = 86472
-  -- let xWeight = 5
-  -- let yWeight = 5
-  -- let xQty = 303457031315
-
   treasuryAddress <- genValidatorHash
   let
     yWeight = 10 - xWeight
@@ -165,7 +159,6 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
 
     maxPrecision = (if (yPartLength > xValueLength) then yPartLength else xValueLength) + precisionAdditionalDec
 
-    -- invariant = (xQtyFloat**(xWeightFloat / 10)) * (yQtyFloat**(yWeightFloat / 10))
     invariantT = ((BigDecimal xQty 0) ** (fromRational $ (fromIntegral xWeight) / 10)) * ( (BigDecimal yQty 0) ** (fromRational $ (fromIntegral yWeight) / 10))
     invariant = getDecimalNum invariantT
 
