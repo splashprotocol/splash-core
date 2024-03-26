@@ -19,7 +19,6 @@ evalConfig = Config NoTracing
 evalWithArgs :: ClosedTerm a -> [Data] -> Either Text (ExBudget, [Text], Program DeBruijn DefaultUni DefaultFun ())
 evalWithArgs x args = do
   cmp <- compile evalConfig x
-  --traceM $ "Compiled:"
   let (escr, budg, trc) = evalScriptHuge $ applyArguments cmp args
   scr <- left (pack . show) escr
   pure (budg, trc, unScript scr)

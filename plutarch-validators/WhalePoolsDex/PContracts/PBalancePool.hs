@@ -188,7 +188,7 @@ verifyGEquality ::
         )
 verifyGEquality = plam $ \leftSideMultiplicator rightSideRaw prevTokenBalance tokenG tokenWeight ->
     let
-        tokenBalanceIntLength = pIntLength # prevTokenBalance
+        tokenBalanceIntLength = pIntLength # rightSideRaw
 
         degree = pdiv # pDen # tokenWeight
 
@@ -310,9 +310,12 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
 
         prevInvariantLength = pIntLength # prevInvariant
         newInvarianRounded  = roundTo # (newGX #* newGY) # prevInvariantLength
-
+        invariantRoundingDiff = newInvarianRounded - prevInvariant
         -- Verify that new value of invariant equals to previous
-        newInvariantIsCorrect = prevInvariant #== newInvarianRounded
+        newInvariantIsCorrect = pif
+            ( invariantRoundingDiff #<= 0 )
+            ( (-1) #<= invariantRoundingDiff )
+            ( invariantRoundingDiff #<= (1) )
 
         correctTokensUpdate =
             pif
@@ -371,26 +374,30 @@ correctLpTokenDelta ::
         :--> PInteger
         :--> PBool
         )
-correctLpTokenDelta = plam $ \lpIssued lpDelta tokenDelta tokenBalance tokenWeight tokenG tokenT ->
+correctLpTokenDelta = plam $ \lpIssued lpDelta tokenDelta tokenBalance tokenWeight tokenG tokenT -> unTermCont $ do
     let
         tokenBalanceIntLength = pIntLength # tokenBalance
                 
         leftPart  = roundTo # ((pabs #tokenDelta) * lpIssued)   # tokenBalanceIntLength
         rightPart = roundTo # (tokenBalance * (pabs # lpDelta)) # tokenBalanceIntLength
 
-        leftRightPartDiff = leftPart - rightPart
+        calcTokenDelta = (pdiv # (lpDelta #* tokenBalance) # lpIssued)
 
-        correctTokenIn = pif
-            ( leftRightPartDiff #<= 0 )
-            ( (-1) #<= leftRightPartDiff )
-            ( leftRightPartDiff #<= (1) )
-        
+        tokensDiff = calcTokenDelta - tokenDelta
+
+        correctTokenError = pif
+            ( tokensDiff #<= 0 )
+            ( (-1) #<= tokensDiff )
+            ( tokensDiff #<= (1) )
+
+        correctTokenIn = correctTokenError #&& (calcTokenDelta #<= tokenDelta)
+
         correctTokenValue = pif
             ( (pmod # pDen # tokenWeight) #== 0 )
             ( verifyGEquality # 1 # (tokenBalance + tokenDelta) # tokenBalance # tokenG # tokenWeight )
             ( verifyTExpEquality # tokenT # (tokenBalance + tokenDelta) )
-
-    in correctTokenIn #&& correctTokenValue
+    
+    pure $ correctTokenIn #&& correctTokenValue
 
 validDepositRedeemAllTokens :: 
     ClosedTerm 

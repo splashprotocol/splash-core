@@ -37,7 +37,7 @@ import Debug.Trace
 import Data.Text as T (pack, unpack, splitOn)
 
 balancePool = testGroup "BalancePool"
-  ((genTests `map` [redeemAllTests]))
+  ((genTests `map` [swapTests, depositAllTests, redeemAllTests]))
 
 genTests BalancePoolTestGroup{..} = 
   let
@@ -92,7 +92,7 @@ cutFloatD toCut maxInt = let
   in read $ T.unpack . Prelude.head $ splitted
 
 actionWithValidSignersQty :: Int -> (BalancePool -> Gen BalancePoolActionResult) -> Pool.BalancePoolAction -> TestResult -> Property
-actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withTests 10 $ property $ do
+actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withShrinks 1 $ withTests 10 $ property $ do
   let
     threshold = 2
 
