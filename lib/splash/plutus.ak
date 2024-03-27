@@ -6,9 +6,6 @@ use aiken/transaction/value.{AssetName, PolicyId}
 pub type VerificationKeyHash =
   Hash<Blake2b_224, VerificationKey>
 
-pub type ScriptHash =
-  Hash<Blake2b_224, Script>
-
 pub type Asset {
   policy: PolicyId,
   name: AssetName,
