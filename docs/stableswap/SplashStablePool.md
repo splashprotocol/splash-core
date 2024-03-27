@@ -199,7 +199,7 @@ Data related to the pool (`Immutable` stands for pool configuration parameters) 
 | `tradable_assets`             | `List<Asset>`      | Identifiers of the tradable assets                                                                                                      | `Immutable` |
 | `tradable_tokens_multipliers` | `List<Int>`        | Precision multipliers for calculations, i.e. precision / decimals. Precision must be fixed as maximum value of tradable tokens decimals | `Immutable` |
 | `lp_token`                    | `Asset`            | Identifier of the liquidity token asset                                                                                                 | `Immutable` |
-| `fees_are_editable`           | `Bool`             | Flag if fees are editable                                                                                                               | `Immutable` |
+| `lp_fee_is_editable`          | `Bool`             | Flag if liquidity provider fee is editable                                                                                                                  | `Immutable` |
 | `ampl_coeff`                  | `Integer`          | StableSwap invariant amplification coefficient                                                                                          | `Mutable`   |
 | `lp_fee_num`                  | `Integer`          | Numerator of the liquidity provider fee                                                                                                 | `Mutable`   |
 | `protocol_fee_num`            | `Integer`          | Numerator of the protocol fee share                                                                                                     | `Mutable`   |

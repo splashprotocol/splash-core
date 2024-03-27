@@ -127,7 +127,7 @@ fn validate_stable_pool_dao_action(
   let PoolData {
     ampl_coeff: ampl_coeff0,
     lp_fee_num: lp_fee_num0,
-    fees_are_editable,
+    lp_fee_is_editable,
     protocol_fee_num: protocol_fee_num0,
     dao_stabe_proxy_witness: dao_stabe_proxy_witness0,
     treasury_address: treasury_addr0,
@@ -172,7 +172,7 @@ fn validate_stable_pool_dao_action(
       let params_preserved_for_liquidity_provider_fee_num_update: Bool =
         protocol_fees0 == protocol_fees1 && input_value == output_value && input_stake_cred == output_stake_cred && ampl_coeff0 == ampl_coeff1 && protocol_fee_num0 == protocol_fee_num1 && dao_stabe_proxy_witness0 == dao_stabe_proxy_witness1 && treasury_addr0 == treasury_addr1
 
-      fees_are_editable && liquidity_provider_fee_inside_bounds && params_preserved_for_liquidity_provider_fee_num_update
+      lp_fee_is_editable && liquidity_provider_fee_inside_bounds && params_preserved_for_liquidity_provider_fee_num_update
     } else if
     dao_action_ix == 1{
     
@@ -182,7 +182,7 @@ fn validate_stable_pool_dao_action(
 
       let params_preserved_for_protocol_fee_num_update: Bool =
         protocol_fees0 == protocol_fees1 && input_value == output_value && input_stake_cred == output_stake_cred && ampl_coeff0 == ampl_coeff1 && lp_fee_num1 == lp_fee_num0 && treasury_addr1 == treasury_addr0 && dao_stabe_proxy_witness1 == dao_stabe_proxy_witness0
-      fees_are_editable && protocol_fee_num_inside_bounds && params_preserved_for_protocol_fee_num_update
+      protocol_fee_num_inside_bounds && params_preserved_for_protocol_fee_num_update
     } else if
     dao_action_ix == 2{
     

@@ -15,8 +15,8 @@ pub type PoolData {
   tradable_tokens_multipliers: List<Int>,
   // Identifier of the liquidity token, representing user's share in the pool | Immutable:
   lp_token: Asset,
-  // Flag if fees are editable | Immutable:
-  fees_are_editable: Bool,
+  // Flag if liquidity provider fee is editable | Immutable:
+  lp_fee_is_editable: Bool,
   // Invariant's amplification coefficient | Mutable:
   ampl_coeff: Int,
   // Numerator of the liquidity provider fee | Mutable:

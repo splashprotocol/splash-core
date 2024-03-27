@@ -60,7 +60,7 @@ validator(dao_voting_witness: ScriptHash) {
       tradable_assets: tradable_assets_in,
       tradable_tokens_multipliers: tradable_tokens_multipliers_in,
       lp_token: lp_token_in,
-      fees_are_editable: fees_are_editable_in,
+      lp_fee_is_editable: lp_fee_is_editable_in,
       dao_stabe_proxy_witness: dao_stabe_proxy_witness_in,
       ..
     } = input_datum
@@ -85,7 +85,7 @@ validator(dao_voting_witness: ScriptHash) {
       tradable_assets: tradable_assets_out,
       tradable_tokens_multipliers: tradable_tokens_multipliers_out,
       lp_token: lp_token_out,
-      fees_are_editable: fees_are_editable_out,
+      lp_fee_is_editable: lp_fee_is_editable_out,
       ..
     } = output_datum
 
@@ -102,7 +102,7 @@ validator(dao_voting_witness: ScriptHash) {
 
     // 4. Pool config params are preserved:
     let pool_config_preserved: Bool =
-      pool_nft_in == pool_nft_out && n_in == n_out && tradable_assets_in == tradable_assets_out && tradable_tokens_multipliers_in == tradable_tokens_multipliers_out && lp_token_in == lp_token_out && fees_are_editable_in == fees_are_editable_out
+      pool_nft_in == pool_nft_out && n_in == n_out && tradable_assets_in == tradable_assets_out && tradable_tokens_multipliers_in == tradable_tokens_multipliers_out && lp_token_in == lp_token_out && lp_fee_is_editable_in == lp_fee_is_editable_out
     // 5. No extra tokens in the pool's value:
     let no_more_tokens_in_pool_out: Bool =
       pool_in_tokens_policies == pool_out_tokens_policies
