@@ -161,11 +161,13 @@ And, in the same manner, we adjust $D_{n*}$ solution to ensure that it is an ext
     2. Protocol fees (treasury for Splash token holders).
 2. All fees are accumulated inside the pool;
 3. Support of DAO-actions:
-    1. Change liquidity provider fee;
-    2. Change protocol fee;
-    3. Change treasury address;
-    4. Change proxy-DAO script;
-    5. Withdrawn protocol fees to distribute between Splash token holders.
+    1. Update liquidity provider fee;
+    2. Update protocol fee;
+    3. Update treasury address;
+    4. Update proxy DAO witness;
+    5. Withdrawn protocol fees to distribute between Splash token holders;
+    6. Update stake credential;
+    7. Update amplification coefficient.
 4. Main protocol validators are StablePool and StablePool-proxy DAO,
    order contracts can be modified by users.
 
@@ -175,8 +177,7 @@ And, in the same manner, we adjust $D_{n*}$ solution to ensure that it is an ext
    but in case of so-called imbalance deposits/redeems fees are applied as if the user had made a swap to the balanced
    assets ratio. Thus, if user wants to deposit mostly in asset `X`, he must still have a
    small amount of asset `Y` to pay the imbalance fee;
-2. Shape of the StableSwap invariant is fixed, i.e. amplification coefficient can't be changed via DAO-voting;
-3. Fees rates are equal to all assets in the pool.
+2. Fees rates are equal to all assets in the pool.
 
 ## eUTXO protocol design
 
@@ -198,7 +199,8 @@ Data related to the pool (`Immutable` stands for pool configuration parameters) 
 | `tradable_assets`             | `List<Asset>`      | Identifiers of the tradable assets                                                                                                      | `Immutable` |
 | `tradable_tokens_multipliers` | `List<Int>`        | Precision multipliers for calculations, i.e. precision / decimals. Precision must be fixed as maximum value of tradable tokens decimals | `Immutable` |
 | `lp_token`                    | `Asset`            | Identifier of the liquidity token asset                                                                                                 | `Immutable` |
-| `ampl_coeff`                  | `Integer`          | StableSwap invariant amplification coefficient                                                                                          | `Immutable` |
+| `fees_are_editable`           | `Bool`             | Flag if fees are editable                                                                                                               | `Immutable` |
+| `ampl_coeff`                  | `Integer`          | StableSwap invariant amplification coefficient                                                                                          | `Mutable`   |
 | `lp_fee_num`                  | `Integer`          | Numerator of the liquidity provider fee                                                                                                 | `Mutable`   |
 | `protocol_fee_num`            | `Integer`          | Numerator of the protocol fee share                                                                                                     | `Mutable`   |
 | `dao_stabe_proxy_witness`     | `List<ScriptHash>` | Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool                                    | `Mutable`   |
@@ -338,13 +340,6 @@ are: `deposit/redeem/swap`). It allows to add different logic to the protocol wi
 pool contract.
 The pool will only verify that the corresponding script and Splash DAO voting confirmed action.
 
-The DAO contract ensures the correctness of the following actions:
-
-1. Change liquidity provider fee;
-2. Change protocol fee;
-3. Withdraw protocol treasury;
-4. Change treasury address;
-5. Change proxy DAO witness.
 
 #### Data
 
@@ -354,13 +349,15 @@ The DAO contract ensures the correctness of the following actions:
 
 #### Validator
 
-DAO contract must validate that:
+Proxy-DAO contract must validate that:
 
 1. Pool invariant values are preserved;
 2. `LP` tokens are preserved
-2. Action is valid:
-    1. Change liquidity provider fee;
-    2. Change protocol fee;
-    3. Withdraw protocol treasury;
-    4. Change treasury address;
-    5. Change proxy DAO witness.
+3. Action is valid. The proxy-DAO contract ensures the correctness of the following actions:
+   1. Update liquidity provider fee;
+   2. Update protocol fee;
+   3. Update treasury address;
+   4. Update proxy DAO witness;
+   5. Withdrawn protocol fees to distribute between Splash token holders;
+   6. Update stake credential;
+   7. Update amplification coefficient.

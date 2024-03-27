@@ -1,23 +1,21 @@
 use aiken/bytearray
-use aiken/int
 use aiken/list
 use aiken/math
-use aiken/string
 use aiken/transaction.{
-  InlineDatum, Input, Output, OutputReference, ScriptContext, Spend, Transaction,
-  TransactionId,
+  InlineDatum, Input, Output, ScriptContext, Spend, Transaction,
 }
-use aiken/transaction/credential.{from_script}
+use aiken/transaction/credential.{Address}
 use aiken/transaction/value.{Value}
 use splash/plutus.{Asset, ScriptHash}
+use splash/stableswap/test_utils.{
+  generate_tradable_assets, make_pool_state_transition_context, n2t_pool_state,
+  t2t_pool_state,
+}
 use splash/stableswap/types.{AMMAction, PDAOAction, PoolData, PoolRedeemer}
 use splash/stableswap/utils
 
 // LP tokens emisson:
 const lp_emission = 340_282_366_920_938_463_463_374_607_431_768_211_455
-
-// Number of non-tradable assets in the pool (pool's NFT + LP token):
-const n_non_tradable_tokens = 2
 
 // Common denominator of calculations:
 const denom = 100_000
@@ -50,8 +48,11 @@ validator(dao_voting_witness: ScriptHash) {
       output: pool_input_output,
       output_reference: pool_output_reference,
     } = pool_input
-    let Output { value: input_value, address: pool_in_address, .. } =
-      pool_input_output
+    let Output {
+      value: input_value,
+      address: Address { payment_credential: payment_cred_in, .. },
+      ..
+    } = pool_input_output
 
     let PoolData {
       pool_nft: pool_nft_in,
@@ -59,7 +60,7 @@ validator(dao_voting_witness: ScriptHash) {
       tradable_assets: tradable_assets_in,
       tradable_tokens_multipliers: tradable_tokens_multipliers_in,
       lp_token: lp_token_in,
-      ampl_coeff: ampl_coeff_in,
+      fees_are_editable: fees_are_editable_in,
       dao_stabe_proxy_witness: dao_stabe_proxy_witness_in,
       ..
     } = input_datum
@@ -71,7 +72,7 @@ validator(dao_voting_witness: ScriptHash) {
     // Pool out params:
     expect Output {
       value: output_value,
-      address: pool_out_address,
+      address: Address { payment_credential: payment_cred_out, .. },
       datum: InlineDatum(pool_out_datum),
       ..
     } = pool_out_output
@@ -84,7 +85,7 @@ validator(dao_voting_witness: ScriptHash) {
       tradable_assets: tradable_assets_out,
       tradable_tokens_multipliers: tradable_tokens_multipliers_out,
       lp_token: lp_token_out,
-      ampl_coeff: ampl_coeff_out,
+      fees_are_editable: fees_are_editable_out,
       ..
     } = output_datum
 
@@ -92,8 +93,8 @@ validator(dao_voting_witness: ScriptHash) {
     // 1. Pool input is valid:
     let valid_pool_input: Bool = pool_in_utxo_reference == pool_output_reference
 
-    // 2. Pool address is preserved:
-    let pool_address_preserved: Bool = pool_in_address == pool_out_address
+    // 2. Pool script is preserved:
+    let pool_script_preserved: Bool = payment_cred_in == payment_cred_out
     // 3. Pool NFT is preserved:
     let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft_in
     let pool_nft_preserved: Bool =
@@ -101,13 +102,10 @@ validator(dao_voting_witness: ScriptHash) {
 
     // 4. Pool config params are preserved:
     let pool_config_preserved: Bool =
-      pool_nft_in == pool_nft_out && n_in == n_out && tradable_assets_in == tradable_assets_out && tradable_tokens_multipliers_in == tradable_tokens_multipliers_out && lp_token_in == lp_token_out && ampl_coeff_in == ampl_coeff_out
+      pool_nft_in == pool_nft_out && n_in == n_out && tradable_assets_in == tradable_assets_out && tradable_tokens_multipliers_in == tradable_tokens_multipliers_out && lp_token_in == lp_token_out && fees_are_editable_in == fees_are_editable_out
     // 5. No extra tokens in the pool's value:
-    let allowed_num_tokens = n_in + n_non_tradable_tokens
     let no_more_tokens_in_pool_out: Bool =
-      pool_in_tokens_policies == pool_out_tokens_policies && list.length(
-        pool_out_tokens_policies,
-      ) == allowed_num_tokens
+      pool_in_tokens_policies == pool_out_tokens_policies
     // 6. Action is valid:
     let valid_action: Bool =
       when action is {
@@ -140,7 +138,7 @@ validator(dao_voting_witness: ScriptHash) {
         }
       }
     // Checking whether all validity conditions are met:
-    valid_pool_input && pool_address_preserved && pool_nft_preserved && pool_config_preserved && no_more_tokens_in_pool_out && valid_action
+    valid_pool_input && pool_script_preserved && pool_nft_preserved && pool_config_preserved && no_more_tokens_in_pool_out && valid_action
   }
 }
 
@@ -400,196 +398,6 @@ fn validate_amm_operation(
 }
 
 // ================================================= TESTS ================================================= //
-const default_lovelace_value = 1_000_000_000_000
-
-// Policies:
-pub fn generate_tradable_assets(
-  seed: String,
-  name_seed: String,
-  num: Int,
-) -> List<Asset> {
-  list.map(
-    list.range(0, num - 1),
-    fn(x) {
-      Asset {
-        policy: bytearray.from_string(string.concat(seed, string.from_int(x))),
-        name: bytearray.from_string(
-          string.concat(name_seed, string.from_int(x)),
-        ),
-      }
-    },
-  )
-}
-
-test test_generate_tradable_assets() {
-  let policies =
-    generate_tradable_assets(@"some_pool_token", @"some_pool_token_name", 3)
-  list.length(policies) == 3 && list.length(list.unique(policies)) == 3
-}
-
-pub fn default_pool_state(
-  n: Int,
-  tradable_assets: List<Asset>,
-  protocol_fees: List<Int>,
-  inv: Int,
-) -> PoolData {
-  let tradable_decimals =
-    [1_000, 1_000_000, 1_000]
-  let tradable_decimals_sorted = list.sort(tradable_decimals, int.compare)
-  expect Some(precision) = list.last(tradable_decimals_sorted)
-  let tradable_tokens_multipliers =
-    list.map(tradable_decimals, fn(x) { precision / x })
-  PoolData {
-    pool_nft: Asset {
-      policy: bytearray.from_string(@"pool_nft"),
-      name: bytearray.from_string(@"pool_nft_name"),
-    },
-    n,
-    tradable_assets,
-    tradable_tokens_multipliers,
-    lp_token: Asset {
-      policy: bytearray.from_string(@"lp_token"),
-      name: bytearray.from_string(@"lp_token_name"),
-    },
-    ampl_coeff: 300,
-    lp_fee_num: 200,
-    protocol_fee_num: 500,
-    dao_stabe_proxy_witness: [bytearray.from_string(@"dao_stabe_proxy_witness")],
-    treasury_address: bytearray.from_string(@"treasury_address"),
-    protocol_fees,
-    inv,
-  }
-}
-
-/// Returns PoolData and Value with a given params:
-pub fn pool_state(
-  tradable_balances: List<Int>,
-  lp_balance: Int,
-  pool_nft_policy_string: String,
-  pool_nft_name_string: String,
-  n: Int,
-  tradable_assets: List<Asset>,
-  tradable_decimals: List<Int>,
-  lp_policy_string: String,
-  lp_name_string: String,
-  ampl_coeff: Int,
-  lp_fee_num: Int,
-  protocol_fee_num: Int,
-  dao_policy_string: String,
-  treasury_address_string: String,
-  protocol_fees: List<Int>,
-  inv: Int,
-) -> (PoolData, Value) {
-  let tradable_decimals_sorted = list.sort(tradable_decimals, int.compare)
-  expect Some(precision) = list.last(tradable_decimals_sorted)
-  let tradable_tokens_multipliers =
-    list.map(tradable_decimals, fn(x) { precision / x })
-  let pool_data =
-    PoolData {
-      pool_nft: Asset {
-        policy: bytearray.from_string(pool_nft_policy_string),
-        name: bytearray.from_string(pool_nft_name_string),
-      },
-      n,
-      tradable_assets,
-      tradable_tokens_multipliers,
-      lp_token: Asset {
-        policy: bytearray.from_string(lp_policy_string),
-        name: bytearray.from_string(lp_name_string),
-      },
-      ampl_coeff,
-      lp_fee_num,
-      protocol_fee_num,
-      dao_stabe_proxy_witness: [bytearray.from_string(dao_policy_string)],
-      treasury_address: bytearray.from_string(treasury_address_string),
-      protocol_fees,
-      inv,
-    }
-
-  expect Some(asset0) = list.at(tradable_assets, 0)
-  expect Some(asset1) = list.at(tradable_assets, 1)
-  expect Some(balance0) = list.at(tradable_balances, 0)
-  expect Some(balance1) = list.at(tradable_balances, 1)
-
-  let min_value =
-    value.from_lovelace(default_lovelace_value)
-      |> value.add(pool_data.pool_nft.policy, pool_data.pool_nft.name, 1)
-      |> value.add(pool_data.lp_token.policy, pool_data.lp_token.name, lp_balance)
-      |> value.add(asset0.policy, asset0.name, balance0)
-      |> value.add(asset1.policy, asset1.name, balance1)
-
-  let input_value =
-    if n == 2 {
-      min_value
-    } else if n == 3 {
-      expect Some(asset2) = list.at(tradable_assets, 2)
-      expect Some(balance2) = list.at(tradable_balances, 2)
-
-      let extra_value =
-        value.zero()
-          |> value.add(asset2.policy, asset2.name, balance2)
-      value.merge(min_value, extra_value)
-    } else if n == 4 {
-      expect Some(asset2) = list.at(tradable_assets, 2)
-      expect Some(balance2) = list.at(tradable_balances, 2)
-      expect Some(asset3) = list.at(tradable_assets, 3)
-      expect Some(balance3) = list.at(tradable_balances, 3)
-
-      let extra_value =
-        value.zero()
-          |> value.add(asset2.policy, asset2.name, balance2)
-          |> value.add(asset3.policy, asset3.name, balance3)
-      value.merge(min_value, extra_value)
-    } else {
-      value.zero()
-    }
-
-  (pool_data, input_value)
-}
-
-pub fn pool_amm_action_state_transition_tx(
-  input_data: PoolData,
-  input_value: Value,
-  output_data: PoolData,
-  output_value: Value,
-) -> ScriptContext {
-  let pool_addr =
-    from_script(#"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50")
-  let pool_ref_script =
-    Some(#"ee7659342d952e4569acc0592e703737530d1e79fe932673a0fa3e50")
-  let placeholder_utxo =
-    OutputReference { transaction_id: TransactionId(""), output_index: 0 }
-  let pool_input_utxo =
-    Output {
-      address: pool_addr,
-      value: input_value,
-      datum: InlineDatum(input_data),
-      reference_script: pool_ref_script,
-    }
-
-  let pool_output_utxo =
-    Output {
-      address: pool_addr,
-      value: output_value,
-      datum: InlineDatum(output_data),
-      reference_script: pool_ref_script,
-    }
-
-  let pool_input =
-    Input { output_reference: placeholder_utxo, output: pool_input_utxo }
-
-  ScriptContext {
-    purpose: Spend(placeholder_utxo),
-    transaction: transaction.placeholder()
-      |> fn(transaction) {
-           Transaction {
-             ..transaction,
-             inputs: [pool_input],
-             outputs: [pool_output_utxo],
-           }
-         },
-  }
-}
 
 // =================================== SWAP TEST TEMPLATES =================================== //
 fn uniform_reserves_valid_swap_math_template(
@@ -617,13 +425,36 @@ fn uniform_reserves_valid_swap_math_template(
   let lp_balance_before = lp_emission - inv_before
 
   let (input_pool_data, input_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
       n,
       tradable_assets,
+      tradable_decimals_before,
+      @"pool_lp_policy",
+      @"pool_lp_name",
+      a_before,
+      lp_fee_num_before,
+      protocol_fee_num_before,
+      @"dao_stable_policy",
+      @"tr_policy",
+      collected_protocol_fees_before,
+      inv_before,
+    )
+  let tradable_assets_n2t = list.drop(tradable_assets, 1)
+  let tradable_assets_n2t =
+    list.push(tradable_assets_n2t, Asset { policy: #"", name: #"" })
+
+  let (input_pool_data_n2t, input_value_n2t) =
+    n2t_pool_state(
+      total_balances_before,
+      lp_balance_before,
+      @"pool_nft_policy",
+      @"pool_nft_name",
+      n,
+      tradable_assets_n2t,
       tradable_decimals_before,
       @"pool_lp_policy",
       @"pool_lp_name",
@@ -668,7 +499,7 @@ fn uniform_reserves_valid_swap_math_template(
   let inv_after = inv_before + quote_lp_fees
 
   let (output_pool_data, output_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_before,
       @"pool_nft_policy",
@@ -686,6 +517,34 @@ fn uniform_reserves_valid_swap_math_template(
       collected_protocol_fees_after,
       inv_after,
     )
+
+  let (output_pool_data_n2t, output_value_nt2) =
+    n2t_pool_state(
+      total_balances_after,
+      lp_balance_before,
+      @"pool_nft_policy",
+      @"pool_nft_name",
+      n,
+      tradable_assets_n2t,
+      tradable_decimals_before,
+      @"pool_lp_policy",
+      @"pool_lp_name",
+      a_before,
+      lp_fee_num_before,
+      protocol_fee_num_before,
+      @"dao_stable_policy",
+      @"tr_policy",
+      collected_protocol_fees_after,
+      inv_after,
+    )
+  let ctx =
+    make_pool_state_transition_context(
+      input_pool_data,
+      input_value,
+      output_pool_data,
+      output_value,
+    )
+  let redeemer = PoolRedeemer(0, 0, AMMAction(base_ind, quote_ind))
   // Validation:
   validate_amm_operation(
     input_value,
@@ -694,6 +553,18 @@ fn uniform_reserves_valid_swap_math_template(
     output_pool_data,
     base_ind,
     quote_ind,
+  ) && validate_amm_operation(
+    input_value_n2t,
+    input_pool_data_n2t,
+    output_value_nt2,
+    output_pool_data_n2t,
+    base_ind,
+    quote_ind,
+  ) && validate_pool(
+    bytearray.from_string(@"proxy_dao"),
+    input_pool_data,
+    redeemer,
+    ctx,
   )
 }
 
@@ -721,7 +592,7 @@ fn uniform_reserves_invalid_swap_math_template(
   let lp_balance_before = lp_emission - inv_before
 
   let (input_pool_data, input_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
@@ -786,7 +657,7 @@ fn uniform_reserves_invalid_swap_math_template(
     )
 
   let (output_pool_data, output_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_before,
       @"pool_nft_policy",
@@ -805,7 +676,7 @@ fn uniform_reserves_invalid_swap_math_template(
       inv_after,
     )
   let (_, output_value_wrong_balance) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after_wrong,
       lp_balance_before,
       @"pool_nft_policy",
@@ -836,7 +707,7 @@ fn uniform_reserves_invalid_swap_math_template(
       },
     )
   let (output_pool_data_wrong_protocol_fees, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_before,
       @"pool_nft_policy",
@@ -858,7 +729,7 @@ fn uniform_reserves_invalid_swap_math_template(
   let inv_after_wrong = inv_before + quote_lp_fees - quote_protocol_fees - 1
 
   let (output_pool_data_wrong_inv, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_before,
       @"pool_nft_policy",
@@ -878,7 +749,7 @@ fn uniform_reserves_invalid_swap_math_template(
     )
 
   let (output_pool_data_wrong_inv_and_fees, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_before,
       @"pool_nft_policy",
@@ -952,7 +823,7 @@ fn uniform_reserves_valid_lq_math_template(
   let lp_balance_before = lp_emission - inv_before
 
   let (input_pool_data, input_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
@@ -983,7 +854,7 @@ fn uniform_reserves_valid_lq_math_template(
   let inv_after = new_token_value * n
   let lp_balance_after = lp_emission - inv_after
   let (output_pool_data, output_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1035,7 +906,7 @@ fn uniform_reserves_invalid_lq_math_template(
   let lp_balance_before = lp_emission - inv_before
 
   let (input_pool_data, input_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
@@ -1076,7 +947,7 @@ fn uniform_reserves_invalid_lq_math_template(
     list.repeat(default_token_value - 1, n)
 
   let (output_pool_data, output_value_wrong_balance) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after_wrong,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1097,7 +968,7 @@ fn uniform_reserves_invalid_lq_math_template(
 
   // Wrong protocol fees:
   let (output_pool_data_wrong_protocol_fees, output_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1118,7 +989,7 @@ fn uniform_reserves_invalid_lq_math_template(
 
   // Wrong invariant:
   let (output_pool_data_wrong_inv, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1139,7 +1010,7 @@ fn uniform_reserves_invalid_lq_math_template(
 
   // Wrong LP balance:
   let (_, output_value_wrong_lp) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after_wrong,
       @"pool_nft_policy",
@@ -1273,7 +1144,7 @@ test test_deposit_fixtures() {
   let lp_balance_before = lp_emission - inv_before
 
   let (input_pool_data, input_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
@@ -1307,7 +1178,7 @@ test test_deposit_fixtures() {
   let lp_balance_after = lp_emission - inv_with_lp_fees
 
   let (output_pool_data, output_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1328,7 +1199,7 @@ test test_deposit_fixtures() {
   // Output with error:
   // 1. Wrong balances:
   let (_, output_value_wrong_balances) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after_wrong,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1348,7 +1219,7 @@ test test_deposit_fixtures() {
     )
   // 2. Wrong fees:
   let (output_pool_data_wrong_fees, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1370,7 +1241,7 @@ test test_deposit_fixtures() {
   // 3. Wrong invariant:
   let inv_after_wrong = inv_after - 1
   let (output_pool_data_wrong_inv, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1504,7 +1375,7 @@ test test_redeem_fixtures() {
   let lp_balance_before = lp_emission - inv_before
 
   let (input_pool_data, input_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
@@ -1538,7 +1409,7 @@ test test_redeem_fixtures() {
   let lp_balance_after = lp_emission - inv_with_lp_fees
 
   let (output_pool_data, output_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1559,7 +1430,7 @@ test test_redeem_fixtures() {
   // Output with error:
   // 1. Wrong balances:
   let (_, output_value_wrong_balances) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after_wrong,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1579,7 +1450,7 @@ test test_redeem_fixtures() {
     )
   // 2. Wrong fees:
   let (output_pool_data_wrong_fees, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1601,7 +1472,7 @@ test test_redeem_fixtures() {
   // 3. Wrong invariant:
   let inv_after_wrong = inv_after - 1
   let (output_pool_data_wrong_inv, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1828,7 +1699,7 @@ test test_swap_to_max_decimals_fixtures() {
   let lp_balance_before = lp_emission - inv_before
 
   let (input_pool_data, input_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
@@ -1856,7 +1727,7 @@ test test_swap_to_max_decimals_fixtures() {
   let inv_after = 774400041
   let lp_balance_after = lp_balance_before
   let (output_pool_data, output_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1879,7 +1750,7 @@ test test_swap_to_max_decimals_fixtures() {
   let total_balances_after_wrong =
     [390088, 428943460, 348092]
   let (_, output_value_wrong_balances) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after_wrong,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1901,7 +1772,7 @@ test test_swap_to_max_decimals_fixtures() {
   let collected_protocol_fees_after_wrong =
     [88088, 220047215, 93093]
   let (output_pool_data_wrong_fees, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -1923,7 +1794,7 @@ test test_swap_to_max_decimals_fixtures() {
   // 3. Wrong invariant:
   let inv_after_wrong = inv_after - 1
   let (output_pool_data_wrong_inv, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -2001,7 +1872,7 @@ test test_swap_to_min_decimals_fixtures() {
   let lp_balance_before = lp_emission - inv_before
 
   let (input_pool_data, input_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
@@ -2029,7 +1900,7 @@ test test_swap_to_min_decimals_fixtures() {
   let inv_after = 5532477203
   let lp_balance_after = lp_balance_before
   let (output_pool_data, output_value) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -2052,7 +1923,7 @@ test test_swap_to_min_decimals_fixtures() {
   let total_balances_after_wrong =
     [390088, 428943460, 348092]
   let (_, output_value_wrong_balances) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after_wrong,
       lp_balance_after,
       @"pool_nft_policy",
@@ -2074,7 +1945,7 @@ test test_swap_to_min_decimals_fixtures() {
   let collected_protocol_fees_after_wrong =
     [88088, 220047215, 93093]
   let (output_pool_data_wrong_fees, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
@@ -2096,7 +1967,7 @@ test test_swap_to_min_decimals_fixtures() {
   // 3. Wrong invariant:
   let inv_after_wrong = inv_after - 1
   let (output_pool_data_wrong_inv, _) =
-    pool_state(
+    t2t_pool_state(
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",

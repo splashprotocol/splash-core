@@ -15,7 +15,9 @@ pub type PoolData {
   tradable_tokens_multipliers: List<Int>,
   // Identifier of the liquidity token, representing user's share in the pool | Immutable:
   lp_token: Asset,
-  // Invariant's amplification coefficient | Immutable:
+  // Flag if fees are editable | Immutable:
+  fees_are_editable: Bool,
+  // Invariant's amplification coefficient | Mutable:
   ampl_coeff: Int,
   // Numerator of the liquidity provider fee | Mutable:
   lp_fee_num: Int,
@@ -91,7 +93,7 @@ pub type OrderAction {
 // ==================================== DAO ==================================== //
 
 /// DAO contract config (congig is immutable).
-pub type DAODatum {
+pub type DAOData {
   // Identifier of the pool:
   pool_nft: Asset,
 }
@@ -103,10 +105,12 @@ pub type DAOAction {
   dao_in_ix: Int,
   dao_out_ix: Int,
   // Value of the 'dao_action_ix' is one from the set:
-  // - 0: Change liquidity provider num;
-  // - 1: Change protocol fee num;
-  // - 2: Change treasury address;
+  // - 0: Update liquidity provider num;
+  // - 1: Update protocol fee num;
+  // - 2: Update treasury address;
   // - 3: Update DAO-proxy witness;
-  // - 4: Withdrawn protocol fees.
+  // - 4: Withdrawn protocol fees;
+  // - 5: Update 'ampl_coeff' value;
+  // - 6: Update staking credential of the pool.
   dao_action_ix: Int,
 }
