@@ -71,6 +71,7 @@ validator(witness: Referenced<Credential>) {
 
 validator {
   fn batch_witness(_: Data, ctx: ScriptContext) -> Bool {
+    expect WithdrawFrom(_) = ctx.purpose
     let tx = ctx.transaction
     left_biased_zip_validate(
       tx.inputs,
@@ -90,7 +91,7 @@ fn validation_step(
   let self = input.output
   expect InlineDatum(datum) = self.datum
   let (_, fields) = builtin.un_constr_data(datum)
-  let tag: Data = builtin.head_list(fields)
+  let tag = builtin.head_list(fields)
   let this_tag: Data = this_tag
   if tag == this_tag {
     expect conf: LimitOrderConfig = datum
@@ -237,7 +238,7 @@ fn left_biased_zip_validate(
     [] -> acc
     [x, ..xs] ->
       when rhs is {
-        [] -> fail
+        [] -> False
         [y, ..ys] ->
           left_biased_zip_validate(
             xs,
@@ -617,7 +618,9 @@ fn test_mixed_full_swap(
              }
            },
     }
-  limit_order(wit, initial_conf, True, ctx) && batch_witness(0, ctx)
+  let wdrl_ctx =
+    ScriptContext { purpose: WithdrawFrom(wit), transaction: ctx.transaction }
+  limit_order(wit, initial_conf, True, ctx) && batch_witness(0, wdrl_ctx)
 }
 
 fn test_batched_full_swap(
@@ -680,11 +683,13 @@ fn test_batched_full_swap(
              }
            },
     }
+  let wdrl_ctx =
+    ScriptContext { purpose: WithdrawFrom(wit), transaction: ctx.transaction }
   list.foldl(
     list.range(0, size),
     True,
     fn(_x, acc) { acc && limit_order(wit, initial_conf, True, ctx) },
-  ) && batch_witness(0, ctx)
+  ) && batch_witness(0, wdrl_ctx)
 }
 
 test valid_batched_full_swap_at_base_price() {
