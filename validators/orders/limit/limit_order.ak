@@ -23,7 +23,6 @@ type LimitOrderConfig {
   tag: OrderType,
   /// Beacon used to track progress.
   beacon: PolicyId,
-  /// An extension of the config speific to order type.
   /// What we receive.
   input: Asset,
   /// Tradable amount of Lovelace.
@@ -87,13 +86,16 @@ fn validation_step(
   output: Output,
   signatories: List<VerificationKeyHash>,
 ) -> Bool {
+  trace @"entered validator"
   let self = input.output
   expect InlineDatum(datum) = self.datum
   let (_, fields) = builtin.un_constr_data(datum)
   let tag: Data = builtin.head_list(fields)
   let this_tag: Data = this_tag
   if tag == this_tag {
+    trace @"tag coincides"
     expect conf: LimitOrderConfig = datum
+    trace @"datum parsed"
     let successor = output
 
     let self_value = self.value
@@ -147,6 +149,7 @@ fn validation_step(
     let is_terminated = successor_address == conf.redeemer_address
     let valid_execution =
       if is_terminated {
+        trace @"entered is_terminated validation"
         let tradable_input_removed = tradable_input_0
         let fee_removed = fee_0
         let output_added =
@@ -169,8 +172,10 @@ fn validation_step(
           }
         valid_exchange_rate? && overall_integrity?
       } else {
+        trace @"entered !is_terminated validation"
         expect InlineDatum(successor_datum) = successor.datum
         expect successor_conf: LimitOrderConfig = successor_datum
+        trace @"successor.datum parsed"
         let tradable_input_1 = successor_conf.tradable_input
         let tradable_input_removed = tradable_input_0 - tradable_input_1
         let fee_1 = successor_conf.fee
@@ -222,6 +227,7 @@ fn validation_step(
 
     valid_execution? && valid_stake_cred? && valid_authorization?
   } else {
+    trace @"tags don't coincide"
     True
   }
 }
