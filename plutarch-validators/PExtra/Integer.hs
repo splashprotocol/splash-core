@@ -2,7 +2,6 @@ module PExtra.Integer (
     podd,
     peven,
     ppow,
-    ppowR
 ) where
 
 import Plutarch.Prelude
@@ -15,16 +14,23 @@ peven = phoistAcyclic $ plam $ \n -> (pmod # n # 2) #== 0
 
 ppow :: Term s (PInteger :--> PInteger :--> PInteger)
 ppow = phoistAcyclic $
-    pfix #$ plam $ \self a power ->
+    plam $ \a n ->
         pif
-            (power #== 0)
-            1
-            $ a * (self # a # (power - 1))
+            (n #< 0)
+            perror
+            (pexp' # a # n)
 
-ppowR :: Term s (PRational :--> PInteger :--> PRational)
-ppowR = phoistAcyclic $
-    pfix #$ plam $ \self a power ->
+-- pexp' doesn't check if n is negative
+-- the helper function is used so n is only
+-- checked as positive once and not on
+-- recursive calls
+pexp' :: Term s (PInteger :--> PInteger :--> PInteger)
+pexp' = phoistAcyclic $
+    pfix #$ plam $ \self a n ->
         pif
-            (power #== 0)
+            (n #== 0)
             1
-            $ a * (self # a # (power - 1))
+            $ pif (podd # n) a 1 * (psquare #$ self # a # (pdiv # n # 2))
+
+psquare :: Term s (PInteger :--> PInteger)
+psquare = phoistAcyclic $ plam $ \x' -> plet x' $ \x -> x * x

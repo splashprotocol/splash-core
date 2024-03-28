@@ -43,9 +43,7 @@ genTests BalancePoolTestGroup{..} =
   let
     failedCases  = (constructCase Failed) `map` invalidActions
     successCases = constructCase Success validAction
-    
-    --incorrectThreshold = treasholdCase contractAction $ constructIncorrectSignatureThresholdCase validAction
-  in testGroup name ((testCases contractAction ([successCases] ++ failedCases))) -- ++ [incorrectThreshold])
+  in testGroup name ((testCases contractAction ([successCases] ++ failedCases)))
 
 testCases action cases =
    (\(name, propertyName, poolUpdater, testResult) ->
