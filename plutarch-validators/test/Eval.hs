@@ -27,6 +27,5 @@ evalWithArgsT :: ClosedTerm a -> [Data] -> Either Text (Program DeBruijn Default
 evalWithArgsT x args = do
   cmp <- compile evalConfig x
   let (escr, budg, trc) = evalScript $ applyArguments cmp args
-  traceM $ "Trace:" ++ show trc
   scr <- left (pack . show) escr
   pure (unScript scr)

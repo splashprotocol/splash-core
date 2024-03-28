@@ -118,7 +118,6 @@ library
     PExtra.List
     PExtra.Maybe
     PExtra.Monadic
-    PExtra.Num
     PExtra.Pair
     PExtra.PTriple
 
