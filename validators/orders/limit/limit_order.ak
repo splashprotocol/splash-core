@@ -7,10 +7,11 @@ use aiken/transaction.{
 }
 use aiken/transaction/credential.{
   Address, Credential, Inline, Referenced, ScriptCredential, from_script,
-  from_verification_key,
+  from_verification_key, with_delegation_key,
 }
 use aiken/transaction/value.{
-  PolicyId, ada_asset_name, ada_policy_id, add, from_lovelace, quantity_of,
+  PolicyId, Value, ada_asset_name, ada_policy_id, add, from_lovelace,
+  quantity_of,
 }
 use splash/lovelace.{lovelace_of}
 use splash/orders/types.{OrderType}
@@ -141,9 +142,6 @@ fn validation_step(
 
     let self_address = self.address
     let successor_address = successor.address
-    // Stake cred preserved.
-    let valid_stake_cred =
-      successor_address.stake_credential == self_address.stake_credential
 
     let is_terminated = successor_address == conf.redeemer_address
     let valid_execution =
@@ -199,8 +197,8 @@ fn validation_step(
         // Execution step is worth it.
         let min_marginal_output = conf.min_marginal_output
         let valid_marginal_output = output_added >= min_marginal_output
-        // Script preserved.
-        let script_preserved = self_address == successor_address
+        // Script and Stake cred preserved.
+        let address_preserved = self_address == successor_address
         let expected_successor_conf =
           LimitOrderConfig {
             ..conf,
@@ -209,7 +207,7 @@ fn validation_step(
           }
         // Immutable field are unchanged.
         let config_preserved = successor_conf == expected_successor_conf
-        valid_exchange_rate? && valid_fee? && overall_integrity? && valid_marginal_output? && script_preserved? && config_preserved?
+        valid_exchange_rate? && valid_fee? && overall_integrity? && valid_marginal_output? && address_preserved? && config_preserved?
       }
 
     let valid_authorization =
@@ -221,7 +219,7 @@ fn validation_step(
         }
       }
 
-    valid_execution? && valid_stake_cred? && valid_authorization?
+    valid_execution? && valid_authorization?
   } else {
     True
   }
@@ -249,6 +247,156 @@ fn left_biased_zip_validate(
           )
       }
   }
+}
+
+fn reproduce_eol_order(address: Address, value: Value) -> Output {
+  Output { address, value, datum: NoDatum, reference_script: None }
+}
+
+fn reproduce_order(
+  script: ByteArray,
+  value: Value,
+  tradable_input: Int,
+  input: (PolicyId, ByteArray),
+  output: (PolicyId, ByteArray),
+  cost_per_ex_step: Int,
+  min_marginal_output: Int,
+  fee: Int,
+  base_price: Rational,
+  redeemer_address: Address,
+  cancellation_pkh: VerificationKeyHash,
+  permitted_executors: List<VerificationKeyHash>,
+) -> (Output, LimitOrderConfig) {
+  let conf =
+    LimitOrderConfig {
+      tag: this_tag,
+      beacon,
+      tradable_input,
+      cost_per_ex_step,
+      min_marginal_output,
+      input: mk_asset(input.1st, input.2nd),
+      output: mk_asset(output.1st, output.2nd),
+      base_price,
+      fee,
+      redeemer_address,
+      cancellation_pkh,
+      permitted_executors,
+    }
+  let address = from_script(script)
+  let output =
+    Output { address, value, datum: InlineDatum(conf), reference_script: None }
+  (output, conf)
+}
+
+test reproduce_preprod_execution() {
+  let (ask, _) =
+    reproduce_order(
+      script: #"3e428b6289aba5280f1df5c1b9e0f55c28925f659e954858817630b6",
+      value: from_lovelace(102_500_000),
+      tradable_input: 100_000_000,
+      input: (ada_policy_id, ada_asset_name),
+      output: (
+        #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
+        #"74657374746f6b656e",
+      ),
+      cost_per_ex_step: 500_000,
+      min_marginal_output: 1_000,
+      fee: 500_000,
+      base_price: Rational { num: 1, denom: 1000 },
+      redeemer_address: from_verification_key(
+        #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
+      )
+        |> with_delegation_key(
+             #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
+           ),
+      cancellation_pkh: #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
+      permitted_executors: [],
+    )
+  let ask_input_ref =
+    OutputReference {
+      transaction_id: TransactionId(
+        #"1428011538d509b0905860e874cc4efcc63df4fa5193b0d90e607f35c4a38cb2",
+      ),
+      output_index: 0,
+    }
+  let ask_input = Input { output_reference: ask_input_ref, output: ask }
+  let (bid, _) =
+    reproduce_order(
+      script: #"3e428b6289aba5280f1df5c1b9e0f55c28925f659e954858817630b6",
+      value: from_lovelace(2_500_000)
+        |> add(
+             #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
+             #"74657374746f6b656e",
+             100_000,
+           ),
+      tradable_input: 100_000,
+      input: (
+        #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
+        #"74657374746f6b656e",
+      ),
+      output: (ada_policy_id, ada_asset_name),
+      cost_per_ex_step: 500_000,
+      min_marginal_output: 1_000,
+      fee: 500_000,
+      base_price: Rational { num: 1000, denom: 1 },
+      redeemer_address: from_verification_key(
+        #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
+      )
+        |> with_delegation_key(
+             #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
+           ),
+      cancellation_pkh: #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
+      permitted_executors: [],
+    )
+  let bid_input_ref =
+    OutputReference {
+      transaction_id: TransactionId(
+        #"72193c6ceb5d4175b383d6326675563d7733fc9b7230f241eba7e2d9649012ec",
+      ),
+      output_index: 0,
+    }
+  let bid_input = Input { output_reference: bid_input_ref, output: bid }
+  let ask_out =
+    reproduce_eol_order(
+      address: from_verification_key(
+        #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
+      )
+        |> with_delegation_key(
+             #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
+           ),
+      value: from_lovelace(2_000_000)
+        |> add(
+             #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
+             #"74657374746f6b656e",
+             100_000,
+           ),
+    )
+  let bid_out =
+    reproduce_eol_order(
+      address: from_verification_key(
+        #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
+      )
+        |> with_delegation_key(
+             #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
+           ),
+      value: from_lovelace(102_000_000),
+    )
+  let witness =
+    Inline(
+      ScriptCredential(
+        #"339129f739e2905f3c3ea7727d6ee62b5057618144bf5d07b0fba7bd",
+      ),
+    )
+  let withdrawal_ctx =
+    ScriptContext {
+      purpose: WithdrawFrom(witness),
+      transaction: Transaction {
+        ..transaction.placeholder(),
+        inputs: [ask_input, bid_input],
+        outputs: [ask_out, bid_out],
+      },
+    }
+  batch_witness(0, withdrawal_ctx)
 }
 
 const test_redeemer = #"a2"
