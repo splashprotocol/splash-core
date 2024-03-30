@@ -6,6 +6,8 @@ module WhalePoolsDex.PValidators (
     redeemValidator,
     validatorAddress,
     wrapValidator,
+    redeemBalanceValidator,
+    depositBalanceValidator
 ) where
 
 import PlutusLedgerApi.V1.Scripts (Validator (getValidator))
@@ -17,6 +19,8 @@ import qualified WhalePoolsDex.PContracts.PBalancePool as PBP
 import qualified WhalePoolsDex.PContracts.PPoolBFee    as PPB
 import qualified WhalePoolsDex.PContracts.PRedeem      as PR
 import qualified WhalePoolsDex.PContracts.PSwap        as PS
+import qualified WhalePoolsDex.PContracts.PDepositBalance as PBD
+import qualified WhalePoolsDex.PContracts.PRedeemBalance  as PBR
 
 import Plutarch
 import Plutarch.Api.V2 (mkValidator, validatorHash)
@@ -58,3 +62,9 @@ redeemValidator = mkValidator cfgForValidator $ wrapValidator PR.redeemValidator
 
 validatorAddress :: Validator -> Address
 validatorAddress = scriptHashAddress . validatorHash
+
+depositBalanceValidator :: Validator
+depositBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBD.depositValidatorT
+
+redeemBalanceValidator :: Validator
+redeemBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBR.redeemBalanceValidatorT

@@ -21,7 +21,7 @@ import PlutusLedgerApi.V2 as PV2
 import Plutarch.Api.V2
 
 main :: IO ()
-main = 
+main = do
   defaultMain tests
 
 tests = testGroup "Contracts"
