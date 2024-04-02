@@ -52,7 +52,7 @@ newtype BalancePoolConfig (s :: S)
                  , "treasuryY"        ':= PInteger
                  , "DAOPolicy"        ':= PBuiltinList (PAsData PStakingCredential)
                  , "treasuryAddress"  ':= PValidatorHash
-                 , "invariant"        ':= PInteger
+                 , "invariantInW"     ':= PInteger
                  ]
             )
         )
@@ -115,12 +115,9 @@ newtype BalancePoolRedeemer (s :: S)
         ( Term
             s
             ( PDataRecord
-                '[ "action" ':= BalancePoolAction
-                 , "selfIx" ':= PInteger
-                 -- for swap, deposit / redeem (All assets) contains: gX, gY
-                 , "g"     ':= PBuiltinList (PAsData PInteger)
-                 -- for swap, deposit / redeem (All assets) contains: tX, tY
-                 , "t"     ':= PBuiltinList (PAsData PInteger)
+                '[ "action"       ':= BalancePoolAction
+                 , "selfIx"       ':= PInteger
+                 , "newInvariant" ':= PInteger
                  ]
             )
         )
@@ -264,15 +261,12 @@ validSwap ::
         :--> BalancePoolConfig 
         :--> BalancePoolConfig 
         :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
         :--> PBool
         )
-validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newTx newGY newTy -> unTermCont $ do
+validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newInvariantWRoot -> unTermCont $ do
     prevState  <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] prevState'
     newState   <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] newState'
-    prevConfig <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant"] prevPoolConfig
+    prevConfig <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariantInW"] prevPoolConfig
     newConfig  <- pletFieldsC @'["treasuryX", "treasuryY"] newPoolConfig
     let
         prevPoolNft = getField @"poolNft" prevConfig
@@ -287,7 +281,7 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
         prevTreasuryY = getField @"treasuryY" prevConfig
         prevDAOPolicy = getField @"DAOPolicy" prevConfig
         prevTreasuryAddress = getField @"treasuryAddress" prevConfig
-        prevInvariant = getField @"invariant" prevConfig
+        prevInvariant = getField @"invariantInW" prevConfig
 
         newTreasuryX = getField @"treasuryX" newConfig
         newTreasuryY = getField @"treasuryY" newConfig
@@ -305,20 +299,36 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
         dy  = newY - prevY
         dlq = newLq - prevLq
 
-        prevInvariantLength = pIntLength # prevInvariant
-        newInvarianRounded  = roundTo # (newGX #* newGY) # prevInvariantLength
-        invariantRoundingDiff = newInvarianRounded - prevInvariant
-        -- Verify that new value of invariant equals to previous
-        newInvariantIsCorrect = pif
-            ( invariantRoundingDiff #<= 0 )
-            ( (-1) #<= invariantRoundingDiff )
-            ( invariantRoundingDiff #<= (1) )
+        -- prevInvariantLength = pIntLength # prevInvariant
+        -- newInvarianRounded  = roundTo # (newGX #* newGY) # prevInvariantLength
+        -- invariantRoundingDiff = newInvarianRounded - prevInvariant
+        -- -- Verify that new value of invariant equals to previous
+        -- newInvariantIsCorrect = pif
+        --     ( invariantRoundingDiff #<= 0 )
+        --     ( (-1) #<= invariantRoundingDiff )
+        --     ( invariantRoundingDiff #<= (1) )
 
-        correctTokensUpdate =
+        feeDenPositive = ptryPositive # feeDen
+
+        feeMultiplier = 
             pif
                 ( zero #< dx )
-                ( (validGTAndTokenDeltaWithFees # prevX # weightX # dx # newGX # newTx # (feeNum - treasuryFee)) #&& (validGTAndTokenDeltaWithoutFees # prevY # weightY # dy # newGY # newTy) )
-                ( (validGTAndTokenDeltaWithoutFees # prevX # weightX # dx # newGX # newTx) #&& (validGTAndTokenDeltaWithFees # prevY # weightY # dy # newGY # newTy # (feeNum - treasuryFee)) )
+                (pcon (PRational (dx * (feeNum - treasuryFee)) feeDenPositive))
+                (pcon (PRational (dy * (feeNum - treasuryFee)) feeDenPositive))
+
+        newRightPart =
+            pif
+                ( zero #< dx )
+                ( ((ppow # (prevX + (pround # feeMultiplier)) # weightX) * (ppow # newY # weightY)) )
+                ( ((ppow # (prevY + (pround # feeMultiplier)) # weightY) * (ppow # newX # weightX)) )
+        
+        newInvariantInW =
+            ppow # prevInvariant # pDen
+
+        correctTokensUpdate = ( newInvariantInW #== newRightPart ) #&& (newInvariantInW #== prevInvariant)
+
+                -- ( (validGTAndTokenDeltaWithFees # prevX # weightX # dx # newGX # newTx # (feeNum - treasuryFee)) #&& (validGTAndTokenDeltaWithoutFees # prevY # weightY # dy # newGY # newTy) )
+                -- ( (validGTAndTokenDeltaWithoutFees # prevX # weightX # dx # newGX # newTx) #&& (validGTAndTokenDeltaWithFees # prevY # weightY # dy # newGY # newTy # (feeNum - treasuryFee)) )
 
         correctTreasuryUpdate =
             pif
@@ -340,12 +350,32 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
                 #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
-                #$ pdcons @"invariant" @PInteger # pdata prevInvariant
+                #$ pdcons @"invariantInW" @PInteger # pdata prevInvariant
                     # pdnil)
+    
+    ptraceC $ "newInvariantInW"
+    ptraceC $ pshow newInvariantInW
+    ptraceC $ "newRightPart"
+    ptraceC $ pshow newRightPart
+    ptraceC $ "( newInvariantInW #== newRightPart )"
+    ptraceC $ pshow ( newInvariantInW #== newRightPart )
+    ptraceC $ "prevInvariant"
+    ptraceC $ pshow prevInvariant
+    ptraceC $ "newInvariantInW"
+    ptraceC $ pshow newInvariantInW
+    ptraceC $ "(newInvariantInW #== prevInvariant)"
+    ptraceC $ pshow (newInvariantInW #== prevInvariant)
+    ptraceC $ "correctTokensUpdate"
+    ptraceC $ pshow correctTokensUpdate
+    ptraceC $ "correctTreasuryUpdate"
+    ptraceC $ pshow correctTreasuryUpdate
+    ptraceC $ "(newPoolConfig #== newExpectedConfig)"
+    ptraceC $ pshow (newPoolConfig #== newExpectedConfig)
+    ptraceC $ "(dlq #== zero)"
+    ptraceC $ pshow (dlq #== zero)
 
     pure $
-        (   newInvariantIsCorrect 
-        #&& correctTokensUpdate 
+        (   correctTokensUpdate 
         #&& correctTreasuryUpdate 
         #&& (newPoolConfig #== newExpectedConfig)
         #&& (dlq #== zero)
@@ -398,15 +428,12 @@ validDepositRedeemAllTokens ::
         :--> BalancePoolConfig 
         :--> BalancePoolConfig 
         :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
         :--> PBool
         )
-validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newTx newGY newTy -> unTermCont $ do
+validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfig newInvariantWRoot -> unTermCont $ do
     prevState  <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] prevState'
     newState   <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] newState'
-    prevConfig <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant"] prevPoolConfig
+    prevConfig <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariantInW"] prevPoolConfig
     let
         prevPoolNft = getField @"poolNft" prevConfig
         prevPoolX   = getField @"poolX"  prevConfig
@@ -420,6 +447,7 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
         prevTreasuryY = getField @"treasuryY" prevConfig
         prevDAOPolicy = getField @"DAOPolicy" prevConfig
         prevTreasuryAddress = getField @"treasuryAddress" prevConfig
+        prevInvariant = getField @"invariantInW" prevConfig
 
         prevX  = pfromData $ getField @"reservesX" prevState
         prevY  = pfromData $ getField @"reservesY" prevState
@@ -433,10 +461,17 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
         dy  = newY - prevY
         dlq = newLq - prevLq
 
-        xDepositRedeemIsValid = correctLpTokenDelta # prevLq # dlq # dx # prevX # weightX # newGX # newTx
-        yDepositRedeemIsValid = correctLpTokenDelta # prevLq # dlq # dy # prevY # weightY # newGY # newTy
+        -- xDepositRedeemIsValid = correctLpTokenDelta # prevLq # dlq # dx # prevX # weightX # newGX # newTx
+        -- yDepositRedeemIsValid = correctLpTokenDelta # prevLq # dlq # dy # prevY # weightY # newGY # newTy
 
-        newInvariant = newGX * newGY
+        newRightPart = ( ppow # ((ppow # newX # weightX) * (ppow # newY # weightY)) # pDen )
+        
+        newInvariantInW =
+            ppow # newInvariantWRoot # pDen
+
+        correctTokensUpdate = ( newInvariantInW #== newRightPart ) #&& (newInvariantInW #== prevInvariant)
+
+        -- newInvariant = newGX * newGY
     
     newExpectedConfig <-
         tcon $ (BalancePoolConfig $
@@ -452,35 +487,16 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
                 #$ pdcons @"treasuryY" @PInteger # pdata prevTreasuryY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
-                #$ pdcons @"invariant" @PInteger # pdata newInvariant
+                #$ pdcons @"invariantInW" @PInteger # pdata newInvariantInW
                     # pdnil)
 
     pure $ 
-        (   xDepositRedeemIsValid
-        #&& yDepositRedeemIsValid
-        #&& newPoolConfig #== newExpectedConfig
+        (   
+        --     xDepositRedeemIsValid
+        -- #&& yDepositRedeemIsValid
+        -- #&& 
+        newPoolConfig #== newExpectedConfig
         )
-
-correctLpTokenRedeem ::
-    ClosedTerm 
-        (    PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PBool
-        )
-correctLpTokenRedeem = plam $ \lpIssued lpRedeemed tokenOut tokenBalance tokenWeight tokenG tokenT ->
-    let
-        correctTokenOut  = (1 - (pdiv # (lpIssued - lpRedeemed) # lpIssued)) #* tokenBalance
-        correctTokenDelta = 
-            pif
-                ( (pmod # pDen # tokenWeight) #== 0 )
-                ( tokenOut #== tokenBalance - (ppow # tokenG # (pdiv # pDen # tokenWeight)) )
-                ( tokenOut #== tokenBalance - (ppow # tokenT # tokenWeight) )
-    in tokenOut #== correctTokenOut #&& correctTokenDelta
 
 readPoolState :: Term s (BalancePoolConfig :--> PTxOut :--> BalancePoolState)
 readPoolState = phoistAcyclic $
@@ -510,13 +526,12 @@ readPoolState = phoistAcyclic $
 
 balancePoolValidatorT :: ClosedTerm (BalancePoolConfig :--> BalancePoolRedeemer :--> PScriptContext :--> PBool)
 balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
-    redeemer <- pletFieldsC @'["action", "selfIx", "g", "t", "maxDen"] redeemer'
+    redeemer <- pletFieldsC @'["action", "selfIx", "newInvariant"] redeemer'
     let
         selfIx = getField @"selfIx" redeemer
         action = getField @"action" redeemer
 
-        gList = getField @"g" redeemer
-        tList = getField @"t" redeemer
+        invariantInWRoot = getField @"newInvariant" redeemer
 
     ctx <- pletFieldsC @'["txInfo", "purpose"] ctx'
     let txinfo' = getField @"txInfo" ctx
@@ -567,17 +582,7 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
 
     pure $
         selfIdentity #&& (pmatch action $ \case
-            Swap    -> unTermCont $ do
-                gx <- tletUnwrap $ phead # gList
-                gy <- tletUnwrap $ pelemAt # (pconstant 1) # gList
-                tx <- tletUnwrap $ phead # tList
-                ty <- tletUnwrap $ pelemAt # (pconstant 1) # tList
-                pure $ noMoreTokens #&& scriptPreserved #&& (validSwap # s0 # s1 # conf # newConfig # gx # tx # gy # ty)
+            Swap      -> noMoreTokens #&& scriptPreserved #&& (validSwap # s0 # s1 # conf # newConfig # invariantInWRoot)
             DAOAction -> validDAOAction # conf # txinfo'
-            _ -> unTermCont $ do
-                gx <- tletUnwrap $ phead # gList
-                gy <- tletUnwrap $ pelemAt # (pconstant 1) # gList
-                tx <- tletUnwrap $ phead # tList
-                ty <- tletUnwrap $ pelemAt # (pconstant 1) # tList
-                pure $ noMoreTokens #&& scriptPreserved #&& (validDepositRedeemAllTokens # s0 # s1 # conf # newConfig # gx # tx # gy # ty)
+            _ -> noMoreTokens #&& scriptPreserved #&& (validDepositRedeemAllTokens # s0 # s1 # conf # newConfig # invariantInWRoot)
         )

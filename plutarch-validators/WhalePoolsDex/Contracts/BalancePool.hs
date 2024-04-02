@@ -62,8 +62,7 @@ instance PlutusTx.ToData BalancePoolAction where
 data BalancePoolRedeemer = BalancePoolRedeemer
     { action :: BalancePoolAction
     , selfIx :: Integer
-    , g :: [Integer]
-    , t :: [Integer]
+    , newInvariantInW :: Integer
     }
     deriving (Show)
 

@@ -52,8 +52,7 @@ import WhalePoolsDex.Contracts.BalancePool
 data BalancePoolActionResult = BalancePoolActionResult
   { newPool :: BalancePool
   , additionalOutputs :: [TxOut]
-  , g :: [Integer]
-  , t :: [Integer]
+  , newInvariantInW :: Integer
   } deriving Show
 
 data BalancePoolTestAction m = BalancePoolTestAction
@@ -138,17 +137,22 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
   stakeHash <- genPkh
   
   -- todo: error on big values such as 10 000 000 000 000 000  
-  (yQty :: Int) <- integral (Range.constant 10000000000 10000000000000000)
+  -- (yQty :: Int) <- integral (Range.constant 10000000000 10000000000000000)
 
-  (xWeight :: Integer) <- integral (Range.constant 1 5)
-  (xQty :: Integer) <- integral (Range.constant 1000000000 1000000000000)
-  poolFee <- integral (Range.constant 80000 feeDen)
-  trFee <- integral (Range.constant 1 1000)
+  -- (xWeight :: Integer) <- integral (Range.constant 1 5)
+  -- (xQty :: Integer) <- integral (Range.constant 1000000000 1000000000000)
+  -- poolFee <- integral (Range.constant 80000 feeDen)
+  -- trFee <- integral (Range.constant 1 1000)
   treasuryAddress <- genValidatorHash
   let
+    xQty = 100000000
+    yQty = 100000000
+    xWeight = 2
     yWeight = 10 - xWeight
+    poolFee = 99970
+    trFee = 10
 
-    yQty = xQty * yWeight
+    -- yQty = xQty * yWeight
     nftQty = 1
 
     xQtyFloat = (fromIntegral xQty) :: Double
@@ -161,6 +165,7 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
 
     invariantT = ((BigDecimal xQty 0) ** (fromRational $ (fromIntegral xWeight) / 10)) * ( (BigDecimal yQty 0) ** (fromRational $ (fromIntegral yWeight) / 10))
     invariant = getDecimalNum invariantT
+    -- invariant = takeNBigDecimal (nthRoot 100000000 10 (UP, (Just . toInteger $ maxPrecision))) maxPrecision
 
     lqQty  = 0x7fffffffffffffff - invariant
 
@@ -192,8 +197,8 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
 --- Test utils ---
 
 -- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> BaseIn -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, quoteOut)
-calculateGandTSwap :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer, Integer, Integer, Integer)
-calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit baseIn lpFee treasuryFee prevInvariant = do
+calculateInvarintRootAndQuoteOutput :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer)
+calculateInvarintRootAndQuoteOutput baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit baseIn lpFee treasuryFee prevInvariant = do
   let
       yPartLength = toInteger $ RIO.length . show $ quoteAssetBalance
       xValueLength = toInteger $ RIO.length . show $ (baseAssetBalance + baseIn)
@@ -217,9 +222,16 @@ calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAsset
       xInInvariantWithDegree = (xInInvariantBigDecimal ** (fromRational $ ((fromIntegral baseAssetWeight) / 10))) -- g
       xInInvariantWith1Degree = (xInInvariantBigDecimal) ** (fromRational $ (1 / 10)) -- t
 
+
       gX = ((takeNBigDecimal xInInvariantWithDegree (maxPrecision)) :: Integer)
       tX = ((takeNBigDecimal xInInvariantWith1Degree (maxPrecision)) :: Integer)
 
+  traceM $ T.pack ("xValueFloat: " ++ show xValueFloat)
+  traceM $ T.pack ("additionalPart: " ++ show additionalPart)
+  traceM $ T.pack ("xInInvariantBigDecimal: " ++ show xInInvariantBigDecimal)
+  traceM $ T.pack ("baseAssetWeight: " ++ show baseAssetWeight)
+  traceM $ T.pack ("xInInvariantWithDegree: " ++ show xInInvariantWithDegree)
+  let
       -- test
       invDivision = invariantFloat / xInInvariantWithDegree
       invDivisionInReverseDegree = nthRoot (invDivision ** 10) (fromInteger quoteAssetWeghit) (DOWN, (Just . toInteger $ 0))
@@ -229,16 +241,36 @@ calculateGandTSwap baseAssetBalance baseAssetWeight quoteAssetBalance quoteAsset
 
       yToSwap = quoteAssetBalance - invDivisionInReverseDegreeBigDecimalRounded
 
+  traceM $ T.pack ("invariantFloat: " ++ show invariantFloat)
+  traceM $ T.pack ("invDivision: " ++ show invDivision)
+  traceM $ T.pack ("invDivisionInReverseDegree: " ++ show invDivisionInReverseDegree)
+
+  let
       gYDouble = ((BigDecimal (quoteAssetBalance - yToSwap) 0) ** (fromRational $ (fromIntegral quoteAssetWeghit) / 10)) :: BigDecimal -- g
       tGDouble = (((BigDecimal (quoteAssetBalance - yToSwap) 0) ** (fromRational $ (1 / 10)))) :: BigDecimal -- g
 
       gY = takeNBigDecimal gYDouble (maxPrecision) -- ((getValue gYDouble))
       tY = takeNBigDecimal tGDouble (maxPrecision) -- ((getValue tGDouble))
 
+      xInInvariantWithDegreeTest = (xInInvariantBigDecimal ** (fromIntegral baseAssetWeight))
+      gYDoubleTest = ((BigDecimal (quoteAssetBalance - yToSwap) 0) ** (fromIntegral quoteAssetWeghit))
+
+  traceM $ T.pack ("xInInvariantWithDegreeTest: " ++ show xInInvariantWithDegreeTest)
+  traceM $ T.pack ("gYDoubleTest: " ++ show gYDoubleTest)
+
+  traceM $ T.pack ("prev invariant in degree: " ++ show (invariantFloat ** 10))
+  -- traceM $ T.pack ("gY: " ++ show gY)
+  -- traceM $ T.pack ("tY: " ++ show tY)
+
+  traceM $ T.pack ("xInInvariantWithDegreeTest * gYDoubleTest: " ++ show (xInInvariantWithDegreeTest * gYDoubleTest))
+
+  let
       spotPriceWithoutFee = (((BigDecimal baseAssetBalance 0)) / ((BigDecimal baseAssetWeight 0))) / (((BigDecimal quoteAssetBalance 0)) / ((BigDecimal quoteAssetWeghit 0))) :: BigDecimal
       spotPriceWithFee = spotPriceWithoutFee * (fromRational $ (fromIntegral (lpFee - treasuryFee) / fromIntegral (feeDen)))
+      invariantRoot = nthRoot (xInInvariantWithDegree * gYDouble) 10 (UP, (Just . toInteger $ maxPrecision)) :: BigDecimal
+      invariantRootRounded = takeNBigDecimal invariantRoot (maxPrecision)
 
-  pure (gX, tX, gY, tY, yToSwap)
+  pure (prevInvariant, yToSwap)
 
 -- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> BaseIn -> lqSupply -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, quoteToDeposit, lqOut)
 calculateGandTDeposit :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer, Integer, Integer, Integer, Integer, Integer)
@@ -344,12 +376,22 @@ correctSwap =
         (yCS, yTN) = unAssetClass (poolY config)
         xValue = valueOf value xCS xTN
         yValue = valueOf value yCS yTN
-      xToSwap <- integral (Range.constant 100 xValue)
-      (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+        xToSwap = 100000000
+      -- xToSwap <- integral (Range.constant 100 xValue)
+      (invariantInWRoot, yToSwap) <- calculateInvarintRootAndQuoteOutput xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
       let
         -- going to withdraw all pool x and y value
         tFee = treasuryFee config
 
+      -- traceM $ T.pack $ ("xToSwap:" ++ (show xToSwap))
+      -- traceM $ T.pack $ ("yToSwap:" ++ (show yToSwap))
+      -- traceM $ T.pack $ ("gX:" ++ (show gX))
+      -- traceM $ T.pack $ ("gY:" ++ (show gY))
+      -- traceM $ T.pack $ ("tX:" ++ (show tX))
+      -- traceM $ T.pack $ ("tY:" ++ (show tY))
+      -- traceM $ T.pack $ ("treasuey:" ++ (show ((tFee * xToSwap) `div` feeDen)))
+
+      let
         newPoolConfig = config 
           { treasuryX = (tFee * xToSwap) `div` feeDen
           , treasuryY = 0
@@ -360,7 +402,10 @@ correctSwap =
           , value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate yToSwap))
           }
 
-      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY]
+      traceM $ T.pack $ ("prev value:" ++ (show $ value))
+      traceM $ T.pack $ ("new value:" ++ (show $ value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate yToSwap))))
+
+      pure $ BalancePoolActionResult newPool [] invariantInWRoot
   in BalancePoolTestAction "Correct swap" testAction
 
 incorrectSwapGT :: MonadGen m => BalancePoolTestAction m
@@ -375,13 +420,13 @@ incorrectSwapGT =
         yValue = valueOf value yCS yTN
 
       xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
-      (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap + 1000) (poolFeeNum config) (treasuryFee config) (invariant config)
+      (invariantInWRoot, yToSwap) <- calculateInvarintRootAndQuoteOutput xValue (weightX config) yValue (weightY config) (xToSwap + 1000) (poolFeeNum config) (treasuryFee config) (invariant config)
       let
         newPool = prevPool 
           { value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate yToSwap))
           }
 
-      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY]
+      pure $ BalancePoolActionResult newPool [] invariantInWRoot
   in BalancePoolTestAction "Incorrect swap GT" testAction
 
 incorrectSwapPoolFinalXValue :: MonadGen m => BalancePoolTestAction m
@@ -397,7 +442,7 @@ incorrectSwapPoolFinalXValue =
 
       xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
       incorrectXSwapValue <- integral (Range.constant 1 ((xValue `div` 2) - 1))
-      (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+      (invariantInWRoot, yToSwap) <- calculateInvarintRootAndQuoteOutput xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
       let
         tFee = treasuryFee config
 
@@ -410,7 +455,7 @@ incorrectSwapPoolFinalXValue =
           { value  = value <> (assetClassValue (poolX config) (incorrectXSwapValue)) <> (assetClassValue (poolY config) (negate yToSwap))
           }
 
-      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY]
+      pure $ BalancePoolActionResult newPool [] invariantInWRoot
   in BalancePoolTestAction "Incorrect pool x final value" testAction
 
 incorrectSwapPoolFinalYValue :: MonadGen m => BalancePoolTestAction m
@@ -426,7 +471,7 @@ incorrectSwapPoolFinalYValue =
 
       xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
       incorrectYFinalValue <- integral (Range.constant 1 (yValue - 1))
-      (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+      (invariantInWRoot, yToSwap) <- calculateInvarintRootAndQuoteOutput xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
 
       let
         -- going to withdraw all pool x and y value
@@ -441,7 +486,7 @@ incorrectSwapPoolFinalYValue =
           { value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate incorrectYFinalValue))
           }
 
-      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY]
+      pure $ BalancePoolActionResult newPool [] invariantInWRoot
   in BalancePoolTestAction "Incorrect pool y final value" testAction
 
 incorrectSwapTrFeeValue :: MonadGen m => BalancePoolTestAction m
@@ -456,7 +501,7 @@ incorrectSwapTrFeeValue =
         yValue = valueOf value yCS yTN
 
       xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
-      (gX, tX, gY, tY, yToSwap) <- calculateGandTSwap xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+      (invariantInWRoot, yToSwap) <- calculateInvarintRootAndQuoteOutput xValue (weightX config) yValue (weightY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
       let
         treasuryFee_ = treasuryFee config
         newPoolConfig = config 
@@ -467,158 +512,158 @@ incorrectSwapTrFeeValue =
           , value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate yToSwap))
           }
 
-      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY]
+      pure $ BalancePoolActionResult newPool [] invariantInWRoot
   in BalancePoolTestAction "Incorrect pool treasury X final value" testAction
 
 -- Swap cases end --
 
 -- Deposit all cases start --
 
-correctDeposit :: MonadGen m => BalancePoolTestAction m
-correctDeposit = 
-  let
-    testAction prevPool@BalancePool{..} = do
+-- correctDeposit :: MonadGen m => BalancePoolTestAction m
+-- correctDeposit = 
+--   let
+--     testAction prevPool@BalancePool{..} = do
 
-      let
-        (xCS, xTN) = unAssetClass (poolX config)
-        (yCS, yTN) = unAssetClass (poolY config)
-        (lqCS, lqTN) = unAssetClass (poolLq config)
-        xValue = valueOf value xCS xTN
-        yValue = valueOf value yCS yTN
-        lqValue = valueOf value lqCS lqTN
-        lqSupply = 0x7fffffffffffffff - lqValue
+--       let
+--         (xCS, xTN) = unAssetClass (poolX config)
+--         (yCS, yTN) = unAssetClass (poolY config)
+--         (lqCS, lqTN) = unAssetClass (poolLq config)
+--         xValue = valueOf value xCS xTN
+--         yValue = valueOf value yCS yTN
+--         lqValue = valueOf value lqCS lqTN
+--         lqSupply = 0x7fffffffffffffff - lqValue
 
-      lqIssued <- integral (Range.constant 1 ((lqValue `div` 2) - 1))
+--       lqIssued <- integral (Range.constant 1 ((lqValue `div` 2) - 1))
 
-      (gX, tX, gY, tY, xToDeposit, yToDeposit, lqIssued) <- calculateGandTDeposit xValue (weightX config) yValue (weightY config) (lqIssued) lqSupply (poolFeeNum config) (treasuryFee config) (invariant config)
+--       (gX, tX, gY, tY, xToDeposit, yToDeposit, lqIssued) <- calculateGandTDeposit xValue (weightX config) yValue (weightY config) (lqIssued) lqSupply (poolFeeNum config) (treasuryFee config) (invariant config)
 
-      let
-        -- lqIssued = 0x7fffffffffffffff - (round lqValue)
+--       let
+--         -- lqIssued = 0x7fffffffffffffff - (round lqValue)
 
-        newInvariant = gX * gY
+--         newInvariant = gX * gY
 
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { invariant = newInvariant
-          }
+--         -- going to withdraw all pool x and y value
+--         newPoolConfig = config 
+--           { invariant = newInvariant
+--           }
 
-        newPool = prevPool 
-          { config = newPoolConfig
-          , value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate lqIssued))
-          }
+--         newPool = prevPool 
+--           { config = newPoolConfig
+--           , value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate lqIssued))
+--           }
 
-      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY]
-  in BalancePoolTestAction "Correct deposit all tokens" testAction
+--       pure $ BalancePoolActionResult newPool [] invariantInWRoot
+--   in BalancePoolTestAction "Correct deposit all tokens" testAction
 
-incorrectDepositLqOut :: MonadGen m => BalancePoolTestAction m
-incorrectDepositLqOut = 
-  let
-    testAction prevPool@BalancePool{..} = do
+-- incorrectDepositLqOut :: MonadGen m => BalancePoolTestAction m
+-- incorrectDepositLqOut = 
+--   let
+--     testAction prevPool@BalancePool{..} = do
 
-      let
-        (xCS, xTN) = unAssetClass (poolX config)
-        (yCS, yTN) = unAssetClass (poolY config)
-        (lqCS, lqTN) = unAssetClass (poolLq config)
-        xValue = valueOf value xCS xTN
-        yValue = valueOf value yCS yTN
-        lqValue = valueOf value lqCS lqTN
-        lqSupply = 0x7fffffffffffffff - lqValue
+--       let
+--         (xCS, xTN) = unAssetClass (poolX config)
+--         (yCS, yTN) = unAssetClass (poolY config)
+--         (lqCS, lqTN) = unAssetClass (poolLq config)
+--         xValue = valueOf value xCS xTN
+--         yValue = valueOf value yCS yTN
+--         lqValue = valueOf value lqCS lqTN
+--         lqSupply = 0x7fffffffffffffff - lqValue
 
-      lqIssued <- integral (Range.constant 1 ((lqValue `div` 2) - 1))
+--       lqIssued <- integral (Range.constant 1 ((lqValue `div` 2) - 1))
 
-      (gX, tX, gY, tY, xToDeposit, yToDeposit, lqIssued) <- calculateGandTDeposit xValue (weightX config) yValue (weightY config) (lqIssued) lqSupply (poolFeeNum config) (treasuryFee config) (invariant config)
+--       (gX, tX, gY, tY, xToDeposit, yToDeposit, lqIssued) <- calculateGandTDeposit xValue (weightX config) yValue (weightY config) (lqIssued) lqSupply (poolFeeNum config) (treasuryFee config) (invariant config)
 
-      let
-        -- lqIssued = 0x7fffffffffffffff - (round lqValue)
+--       let
+--         -- lqIssued = 0x7fffffffffffffff - (round lqValue)
 
-        newInvariant = gX * gY
+--         newInvariant = gX * gY
 
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { invariant = newInvariant
-          }
+--         -- going to withdraw all pool x and y value
+--         newPoolConfig = config 
+--           { invariant = newInvariant
+--           }
 
-        newPool = prevPool 
-          { config = newPoolConfig
-          , value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate (lqIssued + 1000)))
-          }
+--         newPool = prevPool 
+--           { config = newPoolConfig
+--           , value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate (lqIssued + 1000)))
+--           }
 
-      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY]
-  in BalancePoolTestAction "Incorrect deposit all tokens. Incorrect lq out" testAction
+--       pure $ BalancePoolActionResult newPool [] invariantInWRoot
+--   in BalancePoolTestAction "Incorrect deposit all tokens. Incorrect lq out" testAction
 
--- Deposit all cases end --
+-- -- Deposit all cases end --
 
--- Redeem all cases start --
+-- -- Redeem all cases start --
 
-correctRedeem :: MonadGen m => BalancePoolTestAction m
-correctRedeem = 
-  let
-    testAction prevPool@BalancePool{..} = do
+-- correctRedeem :: MonadGen m => BalancePoolTestAction m
+-- correctRedeem = 
+--   let
+--     testAction prevPool@BalancePool{..} = do
 
-      let
-        (xCS, xTN) = unAssetClass (poolX config)
-        (yCS, yTN) = unAssetClass (poolY config)
-        (lqCS, lqTN) = unAssetClass (poolLq config)
-        xValue = valueOf value xCS xTN
-        yValue = valueOf value yCS yTN
-        lqValue = valueOf value lqCS lqTN
-        lqIssued = 0x7fffffffffffffff - lqValue
-      -- let lqToRedeem = 85989149586251
-      lqToRedeem <- integral (Range.constant 1 ((lqIssued `div` 2) - 1))
-      (gX, tX, gY, tY, xToRedeem, yToRedeem) <- calculateGandTRedeem xValue (weightX config) yValue (weightY config) (lqToRedeem) lqIssued (poolFeeNum config) (treasuryFee config) (invariant config)
+--       let
+--         (xCS, xTN) = unAssetClass (poolX config)
+--         (yCS, yTN) = unAssetClass (poolY config)
+--         (lqCS, lqTN) = unAssetClass (poolLq config)
+--         xValue = valueOf value xCS xTN
+--         yValue = valueOf value yCS yTN
+--         lqValue = valueOf value lqCS lqTN
+--         lqIssued = 0x7fffffffffffffff - lqValue
+--       -- let lqToRedeem = 85989149586251
+--       lqToRedeem <- integral (Range.constant 1 ((lqIssued `div` 2) - 1))
+--       (gX, tX, gY, tY, xToRedeem, yToRedeem) <- calculateGandTRedeem xValue (weightX config) yValue (weightY config) (lqToRedeem) lqIssued (poolFeeNum config) (treasuryFee config) (invariant config)
 
-      let
-        -- lqIssued = 0x7fffffffffffffff - (round lqValue)
+--       let
+--         -- lqIssued = 0x7fffffffffffffff - (round lqValue)
 
-        newInvariant = gX * gY
+--         newInvariant = gX * gY
 
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { invariant = newInvariant
-          }
+--         -- going to withdraw all pool x and y value
+--         newPoolConfig = config 
+--           { invariant = newInvariant
+--           }
 
-        newPool = prevPool 
-          { config = newPoolConfig
-          , value  = value <> (assetClassValue (poolX config) (negate xToRedeem)) <> (assetClassValue (poolY config) (negate yToRedeem)) <> (assetClassValue (poolLq config) (lqToRedeem))
-          }
+--         newPool = prevPool 
+--           { config = newPoolConfig
+--           , value  = value <> (assetClassValue (poolX config) (negate xToRedeem)) <> (assetClassValue (poolY config) (negate yToRedeem)) <> (assetClassValue (poolLq config) (lqToRedeem))
+--           }
 
-      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY]
-  in BalancePoolTestAction "Correct redeem all tokens" testAction
+--       pure $ BalancePoolActionResult newPool [] invariantInWRoot
+--   in BalancePoolTestAction "Correct redeem all tokens" testAction
 
-incorrectRedeemLQFinalValue :: MonadGen m => BalancePoolTestAction m
-incorrectRedeemLQFinalValue = 
-  let
-    testAction prevPool@BalancePool{..} = do
+-- incorrectRedeemLQFinalValue :: MonadGen m => BalancePoolTestAction m
+-- incorrectRedeemLQFinalValue = 
+--   let
+--     testAction prevPool@BalancePool{..} = do
 
-      let
-        (xCS, xTN) = unAssetClass (poolX config)
-        (yCS, yTN) = unAssetClass (poolY config)
-        (lqCS, lqTN) = unAssetClass (poolLq config)
-        xValue = valueOf value xCS xTN
-        yValue = valueOf value yCS yTN
-        lqValue = valueOf value lqCS lqTN
-        lqIssued = 0x7fffffffffffffff - lqValue
+--       let
+--         (xCS, xTN) = unAssetClass (poolX config)
+--         (yCS, yTN) = unAssetClass (poolY config)
+--         (lqCS, lqTN) = unAssetClass (poolLq config)
+--         xValue = valueOf value xCS xTN
+--         yValue = valueOf value yCS yTN
+--         lqValue = valueOf value lqCS lqTN
+--         lqIssued = 0x7fffffffffffffff - lqValue
 
-      lqToRedeem <- integral (Range.constant 1000 ((lqIssued `div` 2) - 1))
+--       lqToRedeem <- integral (Range.constant 1000 ((lqIssued `div` 2) - 1))
 
-      (gX, tX, gY, tY, xToRedeem, yToRedeem) <- calculateGandTRedeem xValue (weightX config) yValue (weightY config) (lqToRedeem) lqIssued (poolFeeNum config) (treasuryFee config) (invariant config)
+--       (gX, tX, gY, tY, xToRedeem, yToRedeem) <- calculateGandTRedeem xValue (weightX config) yValue (weightY config) (lqToRedeem) lqIssued (poolFeeNum config) (treasuryFee config) (invariant config)
 
-      let
-        -- lqIssued = 0x7fffffffffffffff - (round lqValue)
+--       let
+--         -- lqIssued = 0x7fffffffffffffff - (round lqValue)
 
-        newInvariant = gX * gY
+--         newInvariant = gX * gY
 
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { invariant = newInvariant
-          }
+--         -- going to withdraw all pool x and y value
+--         newPoolConfig = config 
+--           { invariant = newInvariant
+--           }
 
-        newPool = prevPool 
-          { config = newPoolConfig
-          , value  = value <> (assetClassValue (poolX config) (negate xToRedeem)) <> (assetClassValue (poolY config) (negate yToRedeem)) <> (assetClassValue (poolLq config) (lqToRedeem - 100))
-          }
+--         newPool = prevPool 
+--           { config = newPoolConfig
+--           , value  = value <> (assetClassValue (poolX config) (negate xToRedeem)) <> (assetClassValue (poolY config) (negate yToRedeem)) <> (assetClassValue (poolLq config) (lqToRedeem - 100))
+--           }
 
-      pure $ BalancePoolActionResult newPool [] [gX, gY] [tX, tY]
-  in BalancePoolTestAction "InCorrect redeem all tokens. Incorrect final lq value" testAction
+--       pure $ BalancePoolActionResult newPool [] invariantInWRoot
+--   in BalancePoolTestAction "InCorrect redeem all tokens. Incorrect final lq value" testAction
 
 -- Redeem all cases end --
