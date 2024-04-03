@@ -23,7 +23,6 @@ type LimitOrderConfig {
   tag: OrderType,
   /// Beacon used to track progress.
   beacon: PolicyId,
-  /// An extension of the config speific to order type.
   /// What we receive.
   input: Asset,
   /// Tradable amount of Lovelace.
