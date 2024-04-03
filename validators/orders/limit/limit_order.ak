@@ -11,9 +11,8 @@ use aiken/transaction/credential.{
 }
 use aiken/transaction/value.{
   PolicyId, Value, ada_asset_name, ada_policy_id, add, from_lovelace,
-  quantity_of,
 }
-use splash/lovelace.{lovelace_of}
+use splash/value_ext
 use splash/orders/types.{OrderType}
 use splash/plutus.{Asset, VerificationKeyHash, mk_asset}
 use splash/rational.{Rational, rational}
@@ -84,6 +83,8 @@ validator {
   }
 }
 
+const max_assets = 3
+
 fn validation_step(
   input: Input,
   output: Output,
@@ -101,34 +102,45 @@ fn validation_step(
     let self_value = self.value
     let successor_value = successor.value
 
-    let input_policy = conf.input.policy
-    let input_tn = conf.input.name
-    let output_policy = conf.output.policy
-    let output_tn = conf.output.name
+    let input = conf.input
+    let output = conf.output
+    let input_policy = input.policy
+    let input_tn = input.name
+    let output_policy = output.policy
+    let output_tn = output.name
 
     let ada_is_input = input_policy == ada_policy_id
     let ada_is_output = output_policy == ada_policy_id
 
-    let input_0 = quantity_of(self_value, input_policy, input_tn)
-    let output_0 = quantity_of(self_value, output_policy, output_tn)
-    let input_1 = quantity_of(successor_value, input_policy, input_tn)
-    let output_1 = quantity_of(successor_value, output_policy, output_tn)
+    expect [lovelace_pol_0, ..self_value_raw] = self_value |> value.to_dict |> dict.to_list
+    let (_, lovelace_0) = lovelace_pol_0.2nd |> dict.to_list |> builtin.head_list
+    expect [lovelace_pol_1, ..successor_value_raw] = successor_value |> value.to_dict |> dict.to_list
+    let (_, lovelace_1) = lovelace_pol_1.2nd |> dict.to_list |> builtin.head_list
 
-    let lovelace_0 =
+    let input_0 =
       if ada_is_input {
-        input_0
-      } else if ada_is_output {
-        output_0
+        lovelace_0
       } else {
-        lovelace_of(self_value)
+        value_ext.quantity_of(self_value_raw, input_policy, input_tn, max_assets)
       }
-    let lovelace_1 =
-      if ada_is_input {
-        input_1
-      } else if ada_is_output {
-        output_1
+    let output_0 =
+      if ada_is_output {
+        lovelace_0
       } else {
-        lovelace_of(successor_value)
+        value_ext.quantity_of(self_value_raw, output_policy, output_tn, max_assets)
+      }
+
+    let input_1 =
+      if ada_is_input {
+        lovelace_1
+      } else {
+        value_ext.quantity_of(successor_value_raw, input_policy, input_tn, max_assets)
+      }
+    let output_1 =
+      if ada_is_output {
+        lovelace_1
+      } else {
+        value_ext.quantity_of(successor_value_raw, output_policy, output_tn, max_assets)
       }
 
     let output_delta = output_1 - output_0
@@ -288,7 +300,7 @@ fn reproduce_order(
   (output, conf)
 }
 
-test reproduce_preprod_execution() {
+test reproduce_preprod_execution_one_to_one() {
   let (ask, _) =
     reproduce_order(
       script: #"3e428b6289aba5280f1df5c1b9e0f55c28925f659e954858817630b6",
@@ -867,7 +879,7 @@ test valid_batched_full_swap_at_base_price() {
     added_output,
     allowed_executors,
     pkh1,
-    46,
+    60,
   )
 }
 
