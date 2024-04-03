@@ -39,6 +39,12 @@ import Data.Text as T (pack, unpack, splitOn)
 balancePool = testGroup "BalancePool"
   ((genTests `map` [swapTests, depositAllTests, redeemAllTests]))
 
+validPoolHash :: Property
+validPoolHash = withTests 1 $ property $ do
+  let
+    actualPoolValidatorHash = PV2.validatorHash poolValidator
+  actualPoolValidatorHash === poolValidatorHash
+
 genTests BalancePoolTestGroup{..} = 
   let
     failedCases  = (constructCase Failed) `map` invalidActions
@@ -104,7 +110,7 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withSh
     datum    = toData $ (config prevPool)
   let
     context  = toData $ mkContext txInInfo purpose
-    redeemer = toData $ Pool.BalancePoolRedeemer action 0 (g updateResult) (t updateResult)
+    redeemer = toData $ Pool.BalancePoolRedeemer action 0 (g updateResult) (t updateResult) (lList updateResult)
 
     correctResult = 
       case testResultShouldBe of

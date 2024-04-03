@@ -19,6 +19,9 @@ import Test.Tasty.HUnit
 import WhalePoolsDex.PValidators
 import PlutusLedgerApi.V2 as PV2
 import Plutarch.Api.V2
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
+import Codec.Serialise (serialise, deserialise)
 
 main :: IO ()
 main = do

@@ -28,6 +28,7 @@ data BalancePoolConfig = BalancePoolConfig
     , daoPolicy   :: [StakingCredential]
     , treasuryAddress :: ValidatorHash
     , invariant   :: Integer
+    , invariantLength :: Integer
     }
     deriving stock (Show)
 
@@ -64,6 +65,7 @@ data BalancePoolRedeemer = BalancePoolRedeemer
     , selfIx :: Integer
     , g :: [Integer]
     , t :: [Integer]
+    , lList :: [Integer]
     }
     deriving (Show)
 
