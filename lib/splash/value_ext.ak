@@ -1,6 +1,5 @@
 use aiken/builtin
 use aiken/dict
-use aiken/list
 use aiken/transaction/value.{PolicyId}
 
 pub fn lovelace_of(val: value.Value) -> Int {

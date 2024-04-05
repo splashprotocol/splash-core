@@ -12,10 +12,10 @@ use aiken/transaction/credential.{
 use aiken/transaction/value.{
   PolicyId, Value, ada_asset_name, ada_policy_id, add, from_lovelace,
 }
-use splash/value_ext
 use splash/orders/types.{OrderType}
 use splash/plutus.{Asset, VerificationKeyHash, mk_asset}
 use splash/rational.{Rational, rational}
+use splash/value_ext
 
 const this_tag = #[0]
 
@@ -111,35 +111,59 @@ fn validation_step(
     let ada_is_input = input_policy == ada_policy_id
     let ada_is_output = output_policy == ada_policy_id
 
-    expect [lovelace_pol_0, ..self_value_raw] = self_value |> value.to_dict |> dict.to_list
-    let (_, lovelace_0) = lovelace_pol_0.2nd |> dict.to_list |> builtin.head_list
-    expect [lovelace_pol_1, ..successor_value_raw] = successor_value |> value.to_dict |> dict.to_list
-    let (_, lovelace_1) = lovelace_pol_1.2nd |> dict.to_list |> builtin.head_list
+    expect [lovelace_pol_0, ..self_value_raw] =
+      self_value |> value.to_dict |> dict.to_list
+    let (_, lovelace_0) =
+      lovelace_pol_0.2nd |> dict.to_list |> builtin.head_list
+    expect [lovelace_pol_1, ..successor_value_raw] =
+      successor_value |> value.to_dict |> dict.to_list
+    let (_, lovelace_1) =
+      lovelace_pol_1.2nd |> dict.to_list |> builtin.head_list
 
     let input_0 =
       if ada_is_input {
         lovelace_0
       } else {
-        value_ext.quantity_of(self_value_raw, input_policy, input_tn, max_assets)
+        value_ext.quantity_of(
+          self_value_raw,
+          input_policy,
+          input_tn,
+          max_assets,
+        )
       }
     let output_0 =
       if ada_is_output {
         lovelace_0
       } else {
-        value_ext.quantity_of(self_value_raw, output_policy, output_tn, max_assets)
+        value_ext.quantity_of(
+          self_value_raw,
+          output_policy,
+          output_tn,
+          max_assets,
+        )
       }
 
     let input_1 =
       if ada_is_input {
         lovelace_1
       } else {
-        value_ext.quantity_of(successor_value_raw, input_policy, input_tn, max_assets)
+        value_ext.quantity_of(
+          successor_value_raw,
+          input_policy,
+          input_tn,
+          max_assets,
+        )
       }
     let output_1 =
       if ada_is_output {
         lovelace_1
       } else {
-        value_ext.quantity_of(successor_value_raw, output_policy, output_tn, max_assets)
+        value_ext.quantity_of(
+          successor_value_raw,
+          output_policy,
+          output_tn,
+          max_assets,
+        )
       }
 
     let output_delta = output_1 - output_0
