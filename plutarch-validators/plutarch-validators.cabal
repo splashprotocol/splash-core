@@ -94,8 +94,10 @@ library
     WhalePoolsDex.Contracts.Proxy.FeeSwitch
     WhalePoolsDex.Contracts.Pool
     WhalePoolsDex.Contracts.PoolBFee
+    WhalePoolsDex.Contracts.BalancePool
     WhalePoolsDex.PContracts.PApi
     WhalePoolsDex.PContracts.PAssets
+    WhalePoolsDex.PContracts.PBalancePool
     WhalePoolsDex.PContracts.PDeposit
     WhalePoolsDex.PContracts.POrder
     WhalePoolsDex.PContracts.PPool
@@ -141,6 +143,7 @@ test-suite cardano-dex-contracts-test
     Gen.Models
     Gen.FeeSwitchGen
     Gen.DepositGen
+    Gen.BalancePoolGen
     Gen.PoolGen
     Gen.SwapGen
     Gen.RedeemGen
@@ -153,6 +156,7 @@ test-suite cardano-dex-contracts-test
     Tests.Redeem
     Tests.Staking
     Tests.FeeSwitch
+    Tests.BalancePool
     Tests.FeeSwitchBFee
     Tests.Api
     Eval
@@ -177,3 +181,4 @@ test-suite cardano-dex-contracts-test
     , plutus-core
     , serialise
     , hw-hedgehog
+    , HasBigDecimal

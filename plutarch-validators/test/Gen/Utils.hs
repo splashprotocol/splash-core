@@ -30,10 +30,12 @@ import Gen.DepositGen (mkByteString)
 import Gen.Models     (mkDatum, genTxOutRef)
 
 import WhalePoolsDex.Contracts.Pool
+import WhalePoolsDex.Contracts.BalancePool
+import WhalePoolsDex.PConstants hiding (mkByteString)
 
 --todo: change to real
 fakePoolHashValue :: String
-fakePoolHashValue = "0237cc313756ebb5bcfc2728f7bdc6a8047b471220a305aa373b278a"
+fakePoolHashValue = "f002facfd69d51b63e7046c6d40349b0b17c8dd775ee415c66af3ccc"
 
 fakePoolValidatorHash :: Plutus.ValidatorHash
 fakePoolValidatorHash = Plutus.ValidatorHash $ BuiltinByteString . mkByteString $ T.pack fakePoolHashValue
@@ -62,6 +64,20 @@ data Pool = Pool
 
 instance ToTxOut Pool where
   toTxOut Pool{..} = TxOut
+    { txOutAddress  = Address (ScriptCredential poolValidatorHash) (Just $ StakingHash (PubKeyCredential stakeAddress)) -- todo: add staking part
+    , txOutValue    = value
+    , txOutDatum    = OutputDatum $ mkDatum config
+    , txOutReferenceScript = Nothing
+    }
+
+data BalancePool = BalancePool 
+  { config       :: BalancePoolConfig
+  , stakeAddress :: PubKeyHash
+  , value        :: Value
+  } deriving Show
+
+instance ToTxOut BalancePool where
+  toTxOut BalancePool{..} = TxOut
     { txOutAddress  = Address (ScriptCredential fakePoolValidatorHash) (Just $ StakingHash (PubKeyCredential stakeAddress)) -- todo: add staking part
     , txOutValue    = value
     , txOutDatum    = OutputDatum $ mkDatum config

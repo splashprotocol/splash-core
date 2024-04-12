@@ -10,11 +10,12 @@ module WhalePoolsDex.PValidators (
 import PlutusLedgerApi.V1.Scripts (Validator (getValidator))
 import PlutusLedgerApi.V1.Address
 
-import qualified WhalePoolsDex.PContracts.PDeposit  as PD
-import qualified WhalePoolsDex.PContracts.PPool     as PP
-import qualified WhalePoolsDex.PContracts.PPoolBFee as PPB
-import qualified WhalePoolsDex.PContracts.PRedeem   as PR
-import qualified WhalePoolsDex.PContracts.PSwap     as PS
+import qualified WhalePoolsDex.PContracts.PDeposit      as PD
+import qualified WhalePoolsDex.PContracts.PPool         as PP
+import qualified WhalePoolsDex.PContracts.PBalancePool  as PBP
+import qualified WhalePoolsDex.PContracts.PPoolBFee     as PPB
+import qualified WhalePoolsDex.PContracts.PRedeem       as PR
+import qualified WhalePoolsDex.PContracts.PSwap         as PS
 
 import Plutarch
 import Plutarch.Api.V2 (mkValidator, validatorHash)
@@ -37,6 +38,9 @@ poolValidator = mkValidator $ wrapValidator PP.poolValidatorT
 
 poolBFeeValidator :: Validator
 poolBFeeValidator = mkValidator $ wrapValidator PPB.poolValidatorT
+
+poolBalanceValidator :: Validator
+poolBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBP.balancePoolValidatorT
 
 swapValidator :: Validator
 swapValidator = mkValidator $ wrapValidator PS.swapValidatorT

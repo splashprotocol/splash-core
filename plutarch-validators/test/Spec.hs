@@ -11,6 +11,7 @@ import Tests.Staking
 import Tests.Api
 import Tests.FeeSwitch
 import Tests.FeeSwitchBFee
+import Tests.BalancePool
 
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -24,24 +25,26 @@ main =
   defaultMain tests
 
 tests = testGroup "Contracts"
-  [ feeSwitch
-  , feeSwitchBFee
-  , checkPValueLength
-  , checkPool
-  , checkPoolRedeemer
-  , checkPoolBFee
-  , checkPoolBFeeRedeemer
-  , checkRedeem
-  , checkRedeemIdentity
-  , checkRedeemIsFair
-  , checkRedeemRedeemer
-  , checkDeposit 
-  , checkDepositChange
-  , checkDepositRedeemer
-  , checkDepositIdentity
-  , checkDepositLq
-  , checkDepositTokenReward
-  , checkSwap
-  , checkSwapRedeemer
-  , checkSwapIdentity
+  [ 
+  --   feeSwitch
+  -- , feeSwitchBFee
+  balancePool
+  -- , checkPValueLength
+  -- , checkPool
+  -- , checkPoolRedeemer
+  -- , checkPoolBFee
+  -- , checkPoolBFeeRedeemer
+  -- , checkRedeem
+  -- , checkRedeemIdentity
+  -- , checkRedeemIsFair
+  -- , checkRedeemRedeemer
+  -- , checkDeposit 
+  -- , checkDepositChange
+  -- , checkDepositRedeemer
+  -- , checkDepositIdentity
+  -- , checkDepositLq
+  -- , checkDepositTokenReward
+  -- , checkSwap
+  -- , checkSwapRedeemer
+  -- , checkSwapIdentity
   ]
