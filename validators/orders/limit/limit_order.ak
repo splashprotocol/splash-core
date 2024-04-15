@@ -591,6 +591,60 @@ test normal_partial_swap_token_to_token() {
   )
 }
 
+fn test_cancell(
+  value: (Value, Value),
+  redeemer_address: Address,
+  cancellation_pkh: ByteArray,
+  signatories: List<ByteArray>,
+  cancellation_address: Address,
+) -> Bool {
+  let conf0 =
+    LimitOrderConfig {
+      tag: this_tag,
+      beacon: "beacon",
+      tradable_input: 1000,
+      cost_per_ex_step: 1000,
+      min_marginal_output: 1000,
+      input: mk_asset("x", "x"),
+      output: mk_asset("y", "y"),
+      base_price: rational(1, 2),
+      fee: 1000,
+      redeemer_address,
+      cancellation_pkh,
+      permitted_executors: [],
+    }
+  let address = from_script("spending_script")
+  let output0 =
+    Output {
+      address,
+      value: value.1st,
+      datum: InlineDatum(conf0),
+      reference_script: None,
+    }
+  let order_input_ref =
+    OutputReference { transaction_id: TransactionId(hex32), output_index: 0 }
+  let order_input = Input { output_reference: order_input_ref, output: output0 }
+  let cancellation_output =
+    Output {
+      address: cancellation_address,
+      value: value.2nd,
+      datum: NoDatum,
+      reference_script: None,
+    }
+  let witness = Inline(ScriptCredential("batch_wit"))
+  let spending_ctx =
+    ScriptContext {
+      purpose: Spend(order_input_ref),
+      transaction: Transaction {
+        ..transaction.placeholder(),
+        inputs: [order_input],
+        outputs: [cancellation_output],
+        extra_signatories: signatories,
+      },
+    }
+  limit_order(witness, conf0, False, spending_ctx)
+}
+
 fn test_partial_swap(
   input: Asset,
   output: Asset,
@@ -725,6 +779,33 @@ fn test_partial_swap(
     0,
     withdrawal_ctx,
   )
+}
+
+test normal_cancellation() {
+  let val = from_lovelace(1000) |> add("tkn", "btc", 1)
+  let addr = from_verification_key("dude1")
+  let signer = "dude0"
+  test_cancell((val, val), addr, signer, [signer], addr)
+}
+
+test bad_cancellation_wrong_redeemer() {
+  let val = from_lovelace(1000) |> add("tkn", "btc", 1)
+  let addr = from_verification_key("dude1")
+  let signer = "dude0"
+  !test_cancell(
+    (val, val),
+    addr,
+    signer,
+    [signer],
+    from_verification_key("dude2"),
+  )
+}
+
+test bad_cancellation_unauthorized() {
+  let val = from_lovelace(1000) |> add("tkn", "btc", 1)
+  let addr = from_verification_key("dude1")
+  let signer = "dude0"
+  !test_cancell((val, val), addr, signer, ["dude2"], addr)
 }
 
 fn test_mixed_full_swap(
