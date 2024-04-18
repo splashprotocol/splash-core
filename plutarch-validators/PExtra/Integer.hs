@@ -33,26 +33,26 @@ pexp' = phoistAcyclic $
             1
             $ pif (podd # n) a 1 * (psquare #$ self # a # (pdiv # n # 2))
 
-ppow10 :: Term s (PInteger :--> PInteger :--> PInteger)
+ppow10 :: Term s (PInteger :--> PInteger)
 ppow10 = phoistAcyclic $
-    plam $ \a n ->
+    plam $ \n ->
         pif
             (n #< 0)
             perror
-            (pexp10' # a # n)
+            (pexp10' # n)
 
-pexp10' :: Term s (PInteger :--> PInteger :--> PInteger)
+pexp10' :: Term s (PInteger :--> PInteger)
 pexp10' = phoistAcyclic $
-    pfix #$ plam $ \self a n ->
+    pfix #$ plam $ \self n ->
         pif
             (n #< 12)
-            (pexp10constant' # a # n)
-            $ pif (podd # n) a 1 * (psquare #$ self # a # (pdiv # n # 2))
+            (pexp10constant' # n)
+            $ pif (podd # n) (pconstant 10) 1 * (psquare #$ self # (pdiv # n # 2))
 
 -- max degree is 11
-pexp10constant' :: Term s (PInteger :--> PInteger :--> PInteger)
+pexp10constant' :: Term s (PInteger :--> PInteger)
 pexp10constant' = phoistAcyclic $
-    pfix #$ plam $ \self a n ->
+    plam $ \n ->
         pif
             ( n #== 11 )
             (pconstant 100000000000)

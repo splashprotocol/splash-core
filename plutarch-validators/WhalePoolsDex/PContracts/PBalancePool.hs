@@ -160,7 +160,7 @@ pIntLengthInternal =
 
 checkLength :: Term s (PInteger :--> PInteger :--> PInteger)
 checkLength = phoistAcyclic $ plam $ \origValue apLength ->
-    plet (ppow10 # (pconstant 10) # apLength) $ \upperBound ->
+    plet (ppow10 # apLength) $ \upperBound ->
         plet (pdiv # upperBound # (pconstant 10)) $ \lowerBound -> unTermCont $ do
             pure (pif (lowerBound #<= origValue #&& origValue #< upperBound)
                 (apLength)
@@ -169,7 +169,7 @@ checkLength = phoistAcyclic $ plam $ \origValue apLength ->
 roundToTest :: Term s (PInteger :--> PInteger :--> PInteger :--> PInteger)
 roundToTest = phoistAcyclic $ plam $ \origValue roundIdx lengthTest -> unTermCont $ do
     checkedLength <- tlet $ checkLength # origValue # lengthTest
-    denum         <- tlet $ (ppow10 # (pconstant 10) # (checkedLength - roundIdx))
+    denum         <- tlet $ (ppow10 # (checkedLength - roundIdx))
     roundingDenum <- tlet $ ptryPositive # denum
     rational      <- tlet $ (pcon $ PRational origValue roundingDenum)
     pure $ pround # rational
