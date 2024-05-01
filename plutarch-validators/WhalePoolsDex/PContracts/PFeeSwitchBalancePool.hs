@@ -83,7 +83,7 @@ instance PlutusType DAOAction where
             )
 
 -- All SwitchFee actions shouldn't modify main poolConfig elements: poolNft, poolX, poolY, poolLq, lqBound, feeNum
-validateCommonFields :: PMemberFields BalancePoolConfig '["poolNft", "poolX", "poolY", "poolLq", "weightX", "weightY", "invariant", "invariantLength"] s as => HRec as -> HRec as -> Term s PBool
+validateCommonFields :: PMemberFields BalancePoolConfig '["poolNft", "poolX", "poolY", "poolLq", "weightX", "weightY", "invariant"] s as => HRec as -> HRec as -> Term s PBool
 validateCommonFields prevConfig newConfig =
   let
     prevPoolNft   = getField @"poolNft" prevConfig
@@ -93,7 +93,6 @@ validateCommonFields prevConfig newConfig =
     prevWeightY   = getField @"weightY"  prevConfig
     prevPoolLq    = getField @"poolLq"  prevConfig
     prevInvariant = getField @"invariant"  prevConfig
-    prevInvariantLength = getField @"invariantLength"  prevConfig
 
     newPoolNft   = getField @"poolNft" newConfig
     newPoolX     = getField @"poolX"   newConfig
@@ -102,7 +101,6 @@ validateCommonFields prevConfig newConfig =
     newWeightY   = getField @"weightY"   newConfig
     newPoolLq    = getField @"poolLq"  newConfig
     newInvariant = getField @"invariant" newConfig
-    newInvariantLength = getField @"invariantLength" newConfig
 
     commonFieldsValid = 
       prevPoolNft    #== newPoolNft   #&&
@@ -111,8 +109,7 @@ validateCommonFields prevConfig newConfig =
       prevPoolY      #== newPoolY     #&&
       prevWeightY    #== newWeightY   #&&
       prevPoolLq     #== newPoolLq    #&&
-      prevInvariant  #== newInvariant #&&
-      prevInvariantLength #== newInvariantLength
+      prevInvariant  #== newInvariant
 
   in commonFieldsValid
 

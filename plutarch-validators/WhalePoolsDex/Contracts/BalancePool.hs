@@ -28,7 +28,6 @@ data BalancePoolConfig = BalancePoolConfig
     , daoPolicy   :: [StakingCredential]
     , treasuryAddress :: ValidatorHash
     , invariant   :: Integer
-    , invariantLength :: Integer
     }
     deriving stock (Show)
 
@@ -63,9 +62,6 @@ instance PlutusTx.ToData BalancePoolAction where
 data BalancePoolRedeemer = BalancePoolRedeemer
     { action :: BalancePoolAction
     , selfIx :: Integer
-    , g :: [Integer]
-    , t :: [Integer]
-    , lList :: [Integer]
     }
     deriving (Show)
 

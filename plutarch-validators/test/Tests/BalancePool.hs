@@ -25,6 +25,7 @@ import WhalePoolsDex.PMintingValidators
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.Hedgehog as HH
+import Hedgehog.Internal.Property
 
 import Gen.Models
 import Gen.DepositGen
@@ -110,7 +111,7 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withSh
     datum    = toData $ (config prevPool)
   let
     context  = toData $ mkContext txInInfo purpose
-    redeemer = toData $ Pool.BalancePoolRedeemer action 0 (g updateResult) (t updateResult) (lList updateResult)
+    redeemer = toData $ Pool.BalancePoolRedeemer action 0
 
     correctResult = 
       case testResultShouldBe of
