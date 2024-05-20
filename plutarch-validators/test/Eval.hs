@@ -20,7 +20,6 @@ evalWithArgs :: ClosedTerm a -> [Data] -> Either Text (ExBudget, [Text], Program
 evalWithArgs x args = do
   cmp <- compile evalConfig x
   let (escr, budg, trc) = evalScript $ applyArguments cmp args
-  traceM $ show trc
   scr <- left (pack . show) escr
   pure (budg, trc, unScript scr)
 

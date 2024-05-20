@@ -42,9 +42,7 @@ newtype BalancePoolConfig (s :: S)
             ( PDataRecord
                 '[ "poolNft"          ':= PAssetClass
                  , "poolX"            ':= PAssetClass
-                 , "weightX"          ':= PInteger
                  , "poolY"            ':= PAssetClass
-                 , "weightY"          ':= PInteger
                  , "poolLq"           ':= PAssetClass
                  , "feeNum"           ':= PInteger
                  , "treasuryFee"      ':= PInteger
@@ -52,7 +50,6 @@ newtype BalancePoolConfig (s :: S)
                  , "treasuryY"        ':= PInteger
                  , "DAOPolicy"        ':= PBuiltinList (PAsData PStakingCredential)
                  , "treasuryAddress"  ':= PValidatorHash
-                 , "invariant"        ':= PInteger
                  ]
             )
         )
@@ -149,14 +146,12 @@ validSwap ::
 validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermCont $ do
     prevState  <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] prevState'
     newState   <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] newState'
-    prevConfig <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant"] prevPoolConfig
+    prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress"] prevPoolConfig
     newConfig  <- pletFieldsC @'["treasuryX", "treasuryY"] newPoolConfig
     let
         prevPoolNft = getField @"poolNft" prevConfig
         prevPoolX   = getField @"poolX"  prevConfig
-        weightX     = getField @"weightX" prevConfig
         prevPoolY   = getField @"poolY"  prevConfig
-        weightY     = getField @"weightY" prevConfig
         prevPoolLq  = getField @"poolLq" prevConfig
         feeNum      = getField @"feeNum" prevConfig
         treasuryFee = getField @"treasuryFee" prevConfig
@@ -164,7 +159,6 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermC
         prevTreasuryY = getField @"treasuryY" prevConfig
         prevDAOPolicy = getField @"DAOPolicy" prevConfig
         prevTreasuryAddress = getField @"treasuryAddress" prevConfig
-        prevInvariant = getField @"invariant" prevConfig
 
         newTreasuryX = getField @"treasuryX" newConfig
         newTreasuryY = getField @"treasuryY" newConfig
@@ -185,11 +179,21 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermC
     let
         fullFeeNum = feeNum - treasuryFee
 
-        newInvariant = 
+        currentInvariant = prevX * (prevY * prevY * prevY * prevY)
+
+        newXPart =
             pif
                 (zero #< dx)
-                ((ppow # (prevX + (pdiv # (dx * fullFeeNum) # feeDen)) # weightX) #* (ppow # (prevY + dy) # weightY))
-                ((ppow # (prevX + dx) # weightX) #* (ppow # (prevY + (pdiv # (dy * fullFeeNum) # feeDen)) # weightY))
+                (prevX + (pdiv # (dx * fullFeeNum) # feeDen))
+                (prevX + dx)
+
+        newYPart =
+            pif
+                (zero #< dx)
+                (prevY + dy)
+                (pdiv # (dy * fullFeeNum) # feeDen)
+
+        newInvariant = newXPart * (newYPart * newYPart * newYPart * newYPart)
 
         correctTreasuryUpdate =
             pif
@@ -203,15 +207,13 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermC
                 (prevTreasuryY #== newTreasuryY)
                 (prevTreasuryX #== newTreasuryX)
 
-    correctInv <- tlet $ prevInvariant #<= newInvariant
+    correctInv <- tlet $ currentInvariant #<= newInvariant
 
     newExpectedConfig <-
         tcon $ (BalancePoolConfig $
             pdcons @"poolNft" @PAssetClass # pdata prevPoolNft
                 #$ pdcons @"poolX" @PAssetClass # pdata prevPoolX
-                #$ pdcons @"weightX" @PInteger # pdata weightX
                 #$ pdcons @"poolY" @PAssetClass # pdata prevPoolY
-                #$ pdcons @"weightY" @PInteger # pdata weightY
                 #$ pdcons @"poolLq" @PAssetClass # pdata prevPoolLq
                 #$ pdcons @"feeNum" @PInteger # pdata feeNum
                 #$ pdcons @"treasuryFee" @PInteger # pdata treasuryFee
@@ -219,7 +221,6 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermC
                 #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
-                #$ pdcons @"invariant" @PInteger # pdata newInvariant
                     # pdnil)
 
     pure $
@@ -271,13 +272,11 @@ validDepositRedeemAllTokens ::
 validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermCont $ do
     prevState  <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] prevState'
     newState   <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] newState'
-    prevConfig <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant"] prevPoolConfig
+    prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress"] prevPoolConfig
     let
         prevPoolNft = getField @"poolNft" prevConfig
         prevPoolX   = getField @"poolX"  prevConfig
-        weightX     = getField @"weightX" prevConfig
         prevPoolY   = getField @"poolY"  prevConfig
-        weightY     = getField @"weightY" prevConfig
         prevPoolLq  = getField @"poolLq" prevConfig
         feeNum      = getField @"feeNum" prevConfig
         treasuryFee = getField @"treasuryFee" prevConfig
@@ -299,8 +298,6 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
     dlq <- tlet $ newLq - prevLq
 
     let
-        newInvariant = (ppow # (prevX + dx) # weightX) #* (ppow # (prevY + dy) # weightY)
-
         xDepositRedeemIsValid = correctLpTokenDelta # prevLq # dlq # dx # prevX
         yDepositRedeemIsValid = correctLpTokenDelta # prevLq # dlq # dy # prevY
 
@@ -308,9 +305,7 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
         tcon $ (BalancePoolConfig $
             pdcons @"poolNft" @PAssetClass # pdata prevPoolNft
                 #$ pdcons @"poolX" @PAssetClass # pdata prevPoolX
-                #$ pdcons @"weightX" @PInteger # pdata weightX
                 #$ pdcons @"poolY" @PAssetClass # pdata prevPoolY
-                #$ pdcons @"weightY" @PInteger # pdata weightY
                 #$ pdcons @"poolLq" @PAssetClass # pdata prevPoolLq
                 #$ pdcons @"feeNum" @PInteger # pdata feeNum
                 #$ pdcons @"treasuryFee" @PInteger # pdata treasuryFee
@@ -318,7 +313,6 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
                 #$ pdcons @"treasuryY" @PInteger # pdata prevTreasuryY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
-                #$ pdcons @"invariant" @PInteger # pdata newInvariant
                     # pdnil)
 
     pure $ 

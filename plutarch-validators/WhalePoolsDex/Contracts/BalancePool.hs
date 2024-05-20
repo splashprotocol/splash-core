@@ -17,9 +17,7 @@ import PlutusLedgerApi.V1.Credential
 data BalancePoolConfig = BalancePoolConfig
     { poolNft     :: AssetClass
     , poolX       :: AssetClass
-    , weightX     :: Integer
     , poolY       :: AssetClass
-    , weightY     :: Integer
     , poolLq      :: AssetClass
     , poolFeeNum  :: Integer
     , treasuryFee :: Integer
@@ -27,7 +25,6 @@ data BalancePoolConfig = BalancePoolConfig
     , treasuryY   :: Integer
     , daoPolicy   :: [StakingCredential]
     , treasuryAddress :: ValidatorHash
-    , invariant   :: Integer
     }
     deriving stock (Show)
 

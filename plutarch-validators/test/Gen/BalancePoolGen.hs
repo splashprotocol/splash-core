@@ -170,9 +170,7 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
     poolConfig = BalancePoolConfig
       { poolNft = nft
       , poolX   = x
-      , weightX = xWeight
       , poolY   = y
-      , weightY = yWeight
       , poolLq  = lq
       , poolFeeNum  = poolFee
       , treasuryFee = trFee
@@ -180,7 +178,6 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
       , treasuryY  = 0
       , daoPolicy  = [daoContract]
       , treasuryAddress = treasuryAddress
-      , invariant  = getDecimalNum invariantT --346572421577 -- 
       }
 
     poolValue = mkValues ((\(ac, qty) -> mkValue ac (fromIntegral qty)) `RIO.map` [(x, xQty), (y, yQty), (nft, nftQty), (lq, lqQty)]) mempty
@@ -190,11 +187,15 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
 --- Test utils ---
 
 -- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> BaseIn -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, quoteOut)
-calculateY :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m Integer
-calculateY baseAssetBalance baseAssetWeight baseTreasury quoteAssetBalance quoteAssetWeight quoteTreasury baseIn lpFee treasuryFee prevInvariant = do
+calculateY :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m Integer
+calculateY baseAssetBalance baseAssetWeight baseTreasury quoteAssetBalance quoteAssetWeight quoteTreasury baseIn lpFee treasuryFee = do
   let
+      prevX = BigDecimal (baseAssetBalance - baseTreasury) 0
+      prevY = BigDecimal (quoteAssetBalance - quoteTreasury) 0
+
+      invariantFloat = (prevX ** (fromIntegral baseAssetWeight)) * (prevY ** (fromIntegral quoteAssetWeight))
+
       yPartLength = toInteger $ RIO.length . show $ quoteAssetBalance
-      invariantFloat = (BigDecimal prevInvariant 0) :: BigDecimal
       additionalPart = (BigDecimal (fromIntegral baseIn) 0) * (fromRational $ (fromIntegral (lpFee - treasuryFee)) / fromIntegral feeDen)
       xValueFloat = BigDecimal (baseAssetBalance - baseTreasury) 0
       xInInvariantBigDecimal  = xValueFloat + additionalPart
@@ -205,7 +206,7 @@ calculateY baseAssetBalance baseAssetWeight baseTreasury quoteAssetBalance quote
       invDivisionInReverseDegreeBigDecimalRounded = takeNBigDecimal invDivisionInReverseDegree (yPartLength)
       yToSwap = quoteAssetBalance - quoteTreasury - invDivisionInReverseDegreeBigDecimalRounded
 
-  (correctY, attempts) <- internalCheck (getDecimalNum xInInvariantBigDecimal) baseAssetWeight (quoteAssetBalance - quoteTreasury) quoteAssetWeight prevInvariant yToSwap 1
+  (correctY, attempts) <- internalCheck (getDecimalNum xInInvariantBigDecimal) baseAssetWeight (quoteAssetBalance - quoteTreasury) quoteAssetWeight (getDecimalNum invariantFloat) yToSwap 1
 
   pure correctY
 
@@ -218,9 +219,15 @@ internalCheck baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeigh
     else internalCheck baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeight prevInvariant (quoteToSwap - 1) (startAcc + 1)
 
 -- BaseAssetBalance -> BaseAssetWeight -> QuoteAssetBalance -> QuoteAssetWeghit -> BaseIn -> lqSupply -> lpFee -> treasuryFee -> (gBase, tBase, gQuote, tQuote, quoteToDeposit, lqOut)
-calculateGandTDeposit :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer, Integer, Integer)
-calculateGandTDeposit baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit lqIssued lqSupply lpFee treasuryFee prevInvariant = do
+calculateGandTDeposit :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer, Integer, Integer)
+calculateGandTDeposit baseAssetBalance baseTreasury baseAssetWeight quoteAssetBalance quoteTreasury quoteAssetWeghit lqIssued lqSupply lpFee treasuryFee = do
   let
+      prevX = BigDecimal (baseAssetBalance - baseTreasury) 0
+      prevY = BigDecimal (quoteAssetBalance - quoteTreasury) 0
+
+      invariantFloat = (prevX ** (fromIntegral baseAssetWeight)) * (prevY ** (fromIntegral quoteAssetWeghit))
+      prevInvariant = getDecimalNum invariantFloat
+
       lqSupplyDouble = (fromIntegral lqSupply) :: BigDecimal
       lqIssuedDec = (fromIntegral lqIssued) :: BigDecimal
       xValueFloat = (fromIntegral baseAssetBalance) :: BigDecimal
@@ -262,9 +269,16 @@ calculateGandTDeposit baseAssetBalance baseAssetWeight quoteAssetBalance quoteAs
 
   pure (getDecimalNum xToDeposit, getDecimalNum yToDeposit, getDecimalNum lqIssuedDec, normalizedNeInvariant)
 
-calculateGandTRedeem :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer)
-calculateGandTRedeem baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeghit lqRedeem lqSupply lpFee treasuryFee prevInvariant = do
+calculateGandTRedeem :: MonadGen m => Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> m (Integer, Integer)
+calculateGandTRedeem baseAssetBalance baseTreasury baseAssetWeight quoteAssetBalance quoteTreasury quoteAssetWeghit lqRedeem lqSupply lpFee treasuryFee = do
   let
+
+      prevX = BigDecimal (baseAssetBalance - baseTreasury) 0
+      prevY = BigDecimal (quoteAssetBalance - quoteTreasury) 0
+
+      invariantFloat = (prevX ** (fromIntegral baseAssetWeight)) * (prevY ** (fromIntegral quoteAssetWeghit))
+      prevInvariant = getDecimalNum invariantFloat
+
       lqRedeemDec = (fromIntegral lqRedeem) :: BigDecimal
       xToRedeem = roundBD ((lqRedeemDec * xValueFloat) / lqSupplyDouble) (DOWN, (Just . toInteger $ 0))
       yToRedeem = roundBD ((lqRedeemDec * yValueFloat) / lqSupplyDouble) (DOWN, (Just . toInteger $ 0))
@@ -276,7 +290,6 @@ calculateGandTRedeem baseAssetBalance baseAssetWeight quoteAssetBalance quoteAss
       maxPrecision = (if (yPartLength > xValueLength) then yPartLength else xValueLength)
 
       xValueFloat = (fromIntegral baseAssetBalance) :: BigDecimal
-      invariantFloat = fromIntegral prevInvariant :: BigDecimal
       xWeightFloat = (fromIntegral baseAssetWeight) :: BigDecimal
       yValueFloat = (fromIntegral quoteAssetBalance) :: BigDecimal
       yWeightFloat = (fromIntegral quoteAssetWeghit) :: BigDecimal
@@ -334,17 +347,16 @@ correctSwap =
         yValue = valueOf value yCS yTN
 
       xToSwap <- integral (Range.constant 100 xValue)
-      yToSwap <- calculateY xValue (weightX config) (treasuryX config) yValue (weightY config) (treasuryY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+      yToSwap <- calculateY xValue 1 (treasuryX config) yValue 4 (treasuryY config) (xToSwap) (poolFeeNum config) (treasuryFee config)
       let
         -- going to withdraw all pool x and y value
         tFee = treasuryFee config
-        xAdditionalPart = BigDecimal (xToSwap * ((poolFeeNum config) - (treasuryFee config)) `div` feeDen) 0
-        newInvariant = (((BigDecimal xValue 0) + xAdditionalPart) ** (fromRational $ (fromIntegral (weightX config)))) * ((BigDecimal (yValue - yToSwap) 0) ** (fromRational $ (fromIntegral (weightY config))))
+        xAdditionalPart = BigDecimal (xToSwap * (feeDen - (treasuryFee config)) `div` feeDen) 0
+        newInvariant = (((BigDecimal xValue 0) + xAdditionalPart) ** (fromRational $ (fromIntegral 1))) * ((BigDecimal (yValue - yToSwap) 0) ** (fromRational $ (fromIntegral 4)))
 
         newPoolConfig = config 
           { treasuryX = (treasuryX config) + ((tFee * xToSwap) `div` feeDen)
           , treasuryY = (treasuryY config)
-          , invariant = getDecimalNum newInvariant
           }
       
       let
@@ -368,7 +380,7 @@ incorrectSwapGT =
         yValue = valueOf value yCS yTN
 
       xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
-      yToSwap <- calculateY xValue (weightX config) (treasuryX config) yValue (weightY config) (treasuryY config) (xToSwap + 1000) (poolFeeNum config) (treasuryFee config) (invariant config)
+      yToSwap <- calculateY xValue 1 (treasuryX config) yValue 4 (treasuryY config) (xToSwap + 1000) (poolFeeNum config) (treasuryFee config)
       let
         newPool = prevPool 
           { value  = value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate yToSwap))
@@ -390,7 +402,7 @@ incorrectSwapPoolFinalXValue =
 
       xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
       incorrectXSwapValue <- integral (Range.constant 1 ((xValue `div` 2) - 1))
-      yToSwap <- calculateY xValue (weightX config) (treasuryX config) yValue (weightY config) (treasuryY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+      yToSwap <- calculateY xValue 1 (treasuryX config) yValue 4 (treasuryY config) (xToSwap) (poolFeeNum config) (treasuryFee config)
       let
         tFee = treasuryFee config
 
@@ -419,7 +431,7 @@ incorrectSwapPoolFinalYValue =
 
       xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
       incorrectYFinalValue <- integral (Range.constant 1 (yValue - 1))
-      yToSwap <- calculateY xValue (weightX config) (treasuryX config) yValue (weightY config) (treasuryY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+      yToSwap <- calculateY xValue 1 (treasuryX config) yValue 4 (treasuryY config) (xToSwap) (poolFeeNum config) (treasuryFee config)
 
       let
         -- going to withdraw all pool x and y value
@@ -449,7 +461,7 @@ incorrectSwapTrFeeValue =
         yValue = valueOf value yCS yTN
 
       xToSwap <- integral (Range.constant 1 ((xValue `div` 2) - 1))
-      yToSwap <- calculateY xValue (weightX config) (treasuryX config) yValue (weightY config) (treasuryY config) (xToSwap) (poolFeeNum config) (treasuryFee config) (invariant config)
+      yToSwap <- calculateY xValue 1 (treasuryX config) yValue 4 (treasuryY config) (xToSwap) (poolFeeNum config) (treasuryFee config)
       let
         treasuryFee_ = treasuryFee config
         newPoolConfig = config 
@@ -483,18 +495,13 @@ correctDeposit =
 
       lqIssued <- integral (Range.constant 1 ((lqValue `div` 2) - 1))
 
-      (xToDeposit, yToDeposit, lqIssued, _) <- calculateGandTDeposit xValue (weightX config) yValue (weightY config) (lqIssued) lqSupply (poolFeeNum config) (treasuryFee config) (invariant config)
+      (xToDeposit, yToDeposit, lqIssued, _) <- calculateGandTDeposit xValue (treasuryX config) 1 yValue (treasuryY config) 4 (lqIssued) lqSupply (poolFeeNum config) (treasuryFee config)
 
       let
-        newInvariant = getDecimalNum ((((BigDecimal (xValue + xToDeposit) 0)) ** (fromRational $ (fromIntegral (weightX config)))) * ((BigDecimal (yValue + yToDeposit) 0) ** (fromRational $ (fromIntegral (weightY config)))))
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { invariant       = newInvariant
-          }
-
+        newInvariant = getDecimalNum ((((BigDecimal (xValue + xToDeposit) 0)) ** (fromRational $ (fromIntegral 1))) * ((BigDecimal (yValue + yToDeposit) 0) ** (fromRational $ (fromIntegral 4))))
+        
         newPool = prevPool 
-          { config = newPoolConfig
-          , value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate lqIssued))
+          { value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate lqIssued))
           }
 
       pure $ BalancePoolActionResult newPool []
@@ -516,19 +523,11 @@ incorrectDepositLqOut =
 
       lqIssued <- integral (Range.constant 1 ((lqValue `div` 2) - 1))
 
-      (xToDeposit, yToDeposit, lqIssued, _) <- calculateGandTDeposit xValue (weightX config) yValue (weightY config) (lqIssued) lqSupply (poolFeeNum config) (treasuryFee config) (invariant config)
+      (xToDeposit, yToDeposit, lqIssued, _) <- calculateGandTDeposit xValue (treasuryX config) 1 yValue (treasuryY config) 4 (lqIssued) lqSupply (poolFeeNum config) (treasuryFee config)
 
       let
-        newInvariant = getDecimalNum ((((BigDecimal (xValue + xToDeposit) 0)) ** (fromRational $ (fromIntegral (weightX config)))) * ((BigDecimal (yValue + yToDeposit) 0) ** (fromRational $ (fromIntegral (weightY config)))))
-
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { invariant = newInvariant
-          }
-
         newPool = prevPool 
-          { config = newPoolConfig
-          , value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate (lqIssued + 1000)))
+          { value  = value <> (assetClassValue (poolX config) (xToDeposit)) <> (assetClassValue (poolY config) (yToDeposit)) <> (assetClassValue (poolLq config) (negate (lqIssued + 1000)))
           }
 
       pure $ BalancePoolActionResult newPool []
@@ -553,18 +552,11 @@ correctRedeem =
         lqIssued = 0x7fffffffffffffff - lqValue
 
       lqToRedeem <- integral (Range.constant 1 ((lqIssued `div` 2) - 1))
-      (xToRedeem, yToRedeem) <- calculateGandTRedeem xValue (weightX config) yValue (weightY config) (lqToRedeem) lqIssued (poolFeeNum config) (treasuryFee config) (invariant config)
+      (xToRedeem, yToRedeem) <- calculateGandTRedeem xValue (treasuryX config) 1 yValue (treasuryY config) 4 (lqToRedeem) lqIssued (poolFeeNum config) (treasuryFee config)
 
       let
-        newInvariant = getDecimalNum ((((BigDecimal (xValue - xToRedeem) 0)) ** (fromRational $ (fromIntegral (weightX config)))) * ((BigDecimal (yValue - yToRedeem) 0) ** (fromRational $ (fromIntegral (weightY config)))))
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { invariant = newInvariant
-          }
-
         newPool = prevPool 
-          { config = newPoolConfig
-          , value  = value <> (assetClassValue (poolX config) (negate xToRedeem)) <> (assetClassValue (poolY config) (negate yToRedeem)) <> (assetClassValue (poolLq config) (lqToRedeem))
+          { value  = value <> (assetClassValue (poolX config) (negate xToRedeem)) <> (assetClassValue (poolY config) (negate yToRedeem)) <> (assetClassValue (poolLq config) (lqToRedeem))
           }
 
       pure $ BalancePoolActionResult newPool []
@@ -586,19 +578,11 @@ incorrectRedeemLQFinalValue =
 
       lqToRedeem <- integral (Range.constant 1000 ((lqIssued `div` 2) - 1))
 
-      (xToRedeem, yToRedeem) <- calculateGandTRedeem xValue (weightX config) yValue (weightY config) (lqToRedeem) lqIssued (poolFeeNum config) (treasuryFee config) (invariant config)
+      (xToRedeem, yToRedeem) <- calculateGandTRedeem xValue (treasuryX config) 1 yValue (treasuryY config) 4 (lqToRedeem) lqIssued (poolFeeNum config) (treasuryFee config)
 
       let
-        newInvariant = getDecimalNum ((((BigDecimal (xValue - xToRedeem) 0)) ** (fromRational $ (fromIntegral (weightX config)))) * ((BigDecimal (yValue - yToRedeem) 0) ** (fromRational $ (fromIntegral (weightY config)))))
-
-        -- going to withdraw all pool x and y value
-        newPoolConfig = config 
-          { invariant = newInvariant
-          }
-
         newPool = prevPool 
-          { config = newPoolConfig
-          , value  = value <> (assetClassValue (poolX config) (negate xToRedeem)) <> (assetClassValue (poolY config) (negate yToRedeem)) <> (assetClassValue (poolLq config) (lqToRedeem - 100))
+          { value  = value <> (assetClassValue (poolX config) (negate xToRedeem)) <> (assetClassValue (poolY config) (negate yToRedeem)) <> (assetClassValue (poolLq config) (lqToRedeem - 100))
           }
 
       pure $ BalancePoolActionResult newPool []
