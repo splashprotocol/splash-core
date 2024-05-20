@@ -191,7 +191,7 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermC
             pif
                 (zero #< dx)
                 (prevY + dy)
-                (pdiv # (dy * fullFeeNum) # feeDen)
+                (prevY + pdiv # (dy * fullFeeNum) # feeDen)
 
         newInvariant = newXPart * (newYPart * newYPart * newYPart * newYPart)
 
