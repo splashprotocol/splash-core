@@ -13,7 +13,7 @@ use splash/stableswap/types.{DAOData, PoolData}
 
 const default_lovelace_value = 1_000_000_000_000_000
 
-pub const lp_emission = 340_282_366_920_938_463_463_374_607_431_768_211_455
+pub const lp_emission = 9223372036854775807
 
 // Generate policies:
 pub fn generate_tradable_assets(
@@ -76,11 +76,12 @@ pub fn t2t_pool_state(
         policy: bytearray.from_string(lp_policy_string),
         name: bytearray.from_string(lp_name_string),
       },
+      ampl_coeff_is_editable: True,
       lp_fee_is_editable: True,
       ampl_coeff,
       lp_fee_num,
       protocol_fee_num,
-      dao_stabe_proxy_witness: [bytearray.from_string(dao_policy_string)],
+      dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
       treasury_address: bytearray.from_string(treasury_address_string),
       protocol_fees,
       inv,
@@ -163,11 +164,12 @@ pub fn n2t_pool_state(
         policy: bytearray.from_string(lp_policy_string),
         name: bytearray.from_string(lp_name_string),
       },
+      ampl_coeff_is_editable: True,
       lp_fee_is_editable: True,
       ampl_coeff,
       lp_fee_num,
       protocol_fee_num,
-      dao_stabe_proxy_witness: [bytearray.from_string(dao_policy_string)],
+      dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
       treasury_address: bytearray.from_string(treasury_address_string),
       protocol_fees,
       inv,

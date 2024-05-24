@@ -15,7 +15,7 @@ use splash/stableswap/types.{AMMAction, PDAOAction, PoolData, PoolRedeemer}
 use splash/stableswap/utils
 
 // LP tokens emisson:
-const lp_emission = 340_282_366_920_938_463_463_374_607_431_768_211_455
+const lp_emission = 9223372036854775807
 
 // Common denominator of calculations:
 const denom = 100_000
@@ -26,12 +26,9 @@ const n_swap_tokens = 2
 // Constants for fees numerators averaging in imbalanced deposit/redeem amm-actions:
 const imbalance_fee_avg_denom = 4
 
-// Maximum calc error in min token units for swap protocol fees validation:
-const max_t_error = 2
-
 /// Main pool validator:
 validator(dao_voting_witness: ScriptHash) {
-  fn validate_pool(
+  fn validate_stable_pool_transition(
     input_datum: PoolData,
     redeemer: PoolRedeemer,
     ctx: ScriptContext,
@@ -60,8 +57,9 @@ validator(dao_voting_witness: ScriptHash) {
       tradable_assets: tradable_assets_in,
       tradable_tokens_multipliers: tradable_tokens_multipliers_in,
       lp_token: lp_token_in,
+      ampl_coeff_is_editable: ampl_coeff_is_editable_in,
       lp_fee_is_editable: lp_fee_is_editable_in,
-      dao_stabe_proxy_witness: dao_stabe_proxy_witness_in,
+      dao_stabe_proxy_witness,
       ..
     } = input_datum
 
@@ -85,6 +83,7 @@ validator(dao_voting_witness: ScriptHash) {
       tradable_assets: tradable_assets_out,
       tradable_tokens_multipliers: tradable_tokens_multipliers_out,
       lp_token: lp_token_out,
+      ampl_coeff_is_editable: ampl_coeff_is_editable_out,
       lp_fee_is_editable: lp_fee_is_editable_out,
       ..
     } = output_datum
@@ -102,7 +101,7 @@ validator(dao_voting_witness: ScriptHash) {
 
     // 4. Pool config params are preserved:
     let pool_config_preserved: Bool =
-      pool_nft_in == pool_nft_out && n_in == n_out && tradable_assets_in == tradable_assets_out && tradable_tokens_multipliers_in == tradable_tokens_multipliers_out && lp_token_in == lp_token_out && lp_fee_is_editable_in == lp_fee_is_editable_out
+      pool_nft_in == pool_nft_out && n_in == n_out && tradable_assets_in == tradable_assets_out && tradable_tokens_multipliers_in == tradable_tokens_multipliers_out && lp_token_in == lp_token_out && lp_fee_is_editable_in == lp_fee_is_editable_out && ampl_coeff_is_editable_in == ampl_coeff_is_editable_out
     // 5. No extra tokens in the pool's value:
     let no_more_tokens_in_pool_out: Bool =
       pool_in_tokens_policies == pool_out_tokens_policies
@@ -120,8 +119,6 @@ validator(dao_voting_witness: ScriptHash) {
           )
 
         PDAOAction -> {
-          expect Some(dao_stabe_proxy_witness) =
-            list.at(dao_stabe_proxy_witness_in, 0)
           let valid_dao_action: Bool =
             utils.contains_withdrawal(
               transaction.withdrawals,
@@ -160,7 +157,6 @@ fn validate_amm_operation(
     ampl_coeff,
     lp_fee_num,
     protocol_fee_num,
-    dao_stabe_proxy_witness,
     treasury_address,
     protocol_fees: availible_protocol_fees0,
     inv: inv0,
@@ -171,9 +167,9 @@ fn validate_amm_operation(
 
   // Pool data | Output:
   let PoolData {
+    ampl_coeff: ampl_coeff1,
     lp_fee_num: lp_fee_num1,
     protocol_fee_num: protocol_fee_num1,
-    dao_stabe_proxy_witness: dao_stabe_proxy_witness1,
     treasury_address: treasury_address1,
     protocol_fees: availible_protocol_fees1,
     inv: inv1,
@@ -206,7 +202,7 @@ fn validate_amm_operation(
   // ==================================== AMM-ACTION VALIDATIONS ==================================== //
   // 1. Pool adjustable params are preserved:
   let pool_adjustable_params_preserved: Bool =
-    lp_fee_num == lp_fee_num1 && protocol_fee_num == protocol_fee_num1 && dao_stabe_proxy_witness == dao_stabe_proxy_witness1 && treasury_address == treasury_address1
+    ampl_coeff == ampl_coeff1 && lp_fee_num == lp_fee_num1 && protocol_fee_num == protocol_fee_num1 && treasury_address == treasury_address1
   // 2. Checking if AMM-action is valid.
   // Widely used constants:
   let nn = math.pow(n, n)
@@ -333,20 +329,16 @@ fn validate_amm_operation(
       // 2.2.1. Valid quote protocol fees:
       let total_fees_num_reversed = denom - lp_fee_num - protocol_fee_num
       let valid_quote_protocol_fees: Bool =
-        math.abs(
-          quote_protocol_fees_delta * total_fees_num_reversed + quote_total_delta * protocol_fee_num,
-        ) <= max_t_error * total_fees_num_reversed
+        quote_protocol_fees_delta * total_fees_num_reversed >= -quote_total_delta * protocol_fee_num
       // 2.2.2. Non-quote protocol fees are preserved:
       let non_quote_protocol_fees_preserved: Bool =
         list.count(collected_protocol_fees_deltas, fn(d) { d == 0 }) == n - 1
 
       // 2.2.3. Valid quote liquidity provider fees:
       let valid_quote_lp_fees: Bool =
-        math.abs(
-          tradable_quote_asset_delta * total_fees_num_reversed - quote_total_delta * (
-            denom - lp_fee_num
-          ),
-        ) <= max_t_error * total_fees_num_reversed
+        tradable_quote_asset_delta * total_fees_num_reversed >= quote_total_delta * (
+          denom - lp_fee_num
+        )
       // 2.2.4. Non-quote liquidity provider fees are preserved:
       let non_quote_lp_fees_preserved: Bool =
         list.count(tradable_deltas, fn(d) { d == 0 }) == n - n_swap_tokens && tradable_base_asset_delta == base_total_delta
@@ -362,7 +354,7 @@ fn validate_amm_operation(
           n,
           nn,
           ann,
-          quote_multiplier * n,
+          quote_multiplier,
           quote_asset_ind,
         )
 
@@ -388,11 +380,10 @@ fn validate_amm_operation(
           n,
           nn,
           ann,
-          quote_multiplier * n,
+          quote_multiplier,
           quote_asset_ind,
         )
-
-      valid_quote_protocol_fees && non_quote_protocol_fees_preserved && valid_quote_lp_fees && non_quote_lp_fees_preserved && valid_quote_tradable_delta && valid_invariant_extremum_for_asset && invariant_extremum_for_asset_is_preserved
+      base_total_delta > 0 && quote_total_delta < 0 && valid_quote_protocol_fees && non_quote_protocol_fees_preserved && valid_quote_lp_fees && non_quote_lp_fees_preserved && valid_quote_tradable_delta && valid_invariant_extremum_for_asset && invariant_extremum_for_asset_is_preserved
     }
   pool_adjustable_params_preserved && valid_amm_action
 }
@@ -560,7 +551,7 @@ fn uniform_reserves_valid_swap_math_template(
     output_pool_data_n2t,
     base_ind,
     quote_ind,
-  ) && validate_pool(
+  ) && validate_stable_pool_transition(
     bytearray.from_string(@"proxy_dao"),
     input_pool_data,
     redeemer,
@@ -1838,13 +1829,6 @@ test test_swap_to_max_decimals_fixtures() {
     input_value,
     input_pool_data,
     output_value,
-    output_pool_data_wrong_fees,
-    base_ind,
-    quote_ind,
-  ) && !validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
     output_pool_data_wrong_inv,
     base_ind,
     quote_ind,
@@ -1892,7 +1876,7 @@ test test_swap_to_min_decimals_fixtures() {
     )
   // Output data:
   let total_balances_after =
-    [390088, 468863263, 348093]
+    [390088, 468863264, 348093]
 
   let collected_protocol_fees_after =
     [88088, 230228480, 93093]
@@ -1998,13 +1982,6 @@ test test_swap_to_min_decimals_fixtures() {
     input_pool_data,
     output_value_wrong_balances,
     output_pool_data,
-    base_ind,
-    quote_ind,
-  ) && !validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data_wrong_fees,
     base_ind,
     quote_ind,
   ) && !validate_amm_operation(

@@ -9,7 +9,11 @@ use splash/stableswap/types.{
 use splash/stableswap/utils
 
 validator {
-  fn redeem(datum: RedeemData, action: OrderAction, ctx: ScriptContext) -> Bool {
+  fn stable_redeem(
+    datum: RedeemData,
+    action: OrderAction,
+    ctx: ScriptContext,
+  ) -> Bool {
     let ScriptContext { transaction, .. } = ctx
     let Transaction { extra_signatories, .. } = transaction
     let RedeemData { redeemer, .. } = datum

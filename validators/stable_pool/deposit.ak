@@ -8,7 +8,7 @@ use splash/stableswap/types.{
 }
 
 validator {
-  fn deposit(
+  fn stable_deposit(
     datum: DepositData,
     action: OrderAction,
     ctx: ScriptContext,

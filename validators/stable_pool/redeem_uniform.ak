@@ -9,7 +9,7 @@ use splash/stableswap/types.{
 use splash/stableswap/utils
 
 validator {
-  fn redeem_uniform(
+  fn stable_redeem_uniform(
     datum: RedeemUniformData,
     action: OrderAction,
     ctx: ScriptContext,

@@ -16,15 +16,17 @@ pub type PoolData {
   // Identifier of the liquidity token, representing user's share in the pool | Immutable:
   lp_token: Asset,
   // Flag if liquidity provider fee is editable | Immutable:
+  ampl_coeff_is_editable: Bool,
+  // Invariant's amplification coefficient | Mutable if 'ampl_coeff_is_editable' is True:
   lp_fee_is_editable: Bool,
-  // Invariant's amplification coefficient | Mutable:
+  // Flag if amplification coefficient is editable | Immutable:
   ampl_coeff: Int,
-  // Numerator of the liquidity provider fee | Mutable:
+  // Numerator of the liquidity provider fee | Mutable if 'lp_fee_is_editable' is True::
   lp_fee_num: Int,
   // Numerator of the protocol fee share | Mutable:
   protocol_fee_num: Int,
   // Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool | Mutable:
-  dao_stabe_proxy_witness: List<ScriptHash>,
+  dao_stabe_proxy_witness: ScriptHash,
   // Treasury address | Mutable:
   treasury_address: ScriptHash,
   // Collected (and currently available) protocol fees in the tradable assets native units | Mutable:
@@ -108,9 +110,8 @@ pub type DAOAction {
   // - 0: Update liquidity provider num;
   // - 1: Update protocol fee num;
   // - 2: Update treasury address;
-  // - 3: Update DAO-proxy witness;
-  // - 4: Withdrawn protocol fees;
-  // - 5: Update 'ampl_coeff' value;
-  // - 6: Update staking credential of the pool.
+  // - 3: Withdrawn protocol fees;
+  // - 4: Update 'ampl_coeff' value;
+  // - 5: Update staking credential of the pool.
   dao_action_ix: Int,
 }

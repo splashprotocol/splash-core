@@ -164,10 +164,9 @@ And, in the same manner, we adjust $D_{n*}$ solution to ensure that it is an ext
     1. Update liquidity provider fee;
     2. Update protocol fee;
     3. Update treasury address;
-    4. Update proxy DAO witness;
-    5. Withdrawn protocol fees to distribute between Splash token holders;
-    6. Update stake credential;
-    7. Update amplification coefficient.
+    4. Withdrawn protocol fees to distribute between Splash token holders;
+    5. Update stake credential;
+    6. Update amplification coefficient.
 4. Main protocol validators are StablePool and StablePool-proxy DAO,
    order contracts can be modified by users.
 
@@ -199,11 +198,12 @@ Data related to the pool (`Immutable` stands for pool configuration parameters) 
 | `tradable_assets`             | `List<Asset>`      | Identifiers of the tradable assets                                                                                                      | `Immutable` |
 | `tradable_tokens_multipliers` | `List<Int>`        | Precision multipliers for calculations, i.e. precision / decimals. Precision must be fixed as maximum value of tradable tokens decimals | `Immutable` |
 | `lp_token`                    | `Asset`            | Identifier of the liquidity token asset                                                                                                 | `Immutable` |
+| `ampl_coeff_is_editable`          | `Bool`             | Flag if amplification coefficient is editable                                                                                                                  | `Immutable` |
 | `lp_fee_is_editable`          | `Bool`             | Flag if liquidity provider fee is editable                                                                                                                  | `Immutable` |
 | `ampl_coeff`                  | `Integer`          | StableSwap invariant amplification coefficient                                                                                          | `Mutable`   |
 | `lp_fee_num`                  | `Integer`          | Numerator of the liquidity provider fee                                                                                                 | `Mutable`   |
 | `protocol_fee_num`            | `Integer`          | Numerator of the protocol fee share                                                                                                     | `Mutable`   |
-| `dao_stabe_proxy_witness`     | `List<ScriptHash>` | Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool                                    | `Mutable`   |
+| `dao_stabe_proxy_witness`     | `ScriptHash` | Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool                                    | `Mutable`   |
 | `treasury_address`            | `ScriptKeyHash`    | Treasury address                                                                                                                        | `Mutable`   |
 | `protocol_fees`               | `List<Int>`        | Collected (and currently available) protocol fees in the tradable assets native units                                                   | `Mutable`   |
 | `inv`                         | `Integer`          | Actual value of the pool's invariant                                                                                                    | `Mutable`   |
@@ -357,7 +357,6 @@ Proxy-DAO contract must validate that:
    1. Update liquidity provider fee;
    2. Update protocol fee;
    3. Update treasury address;
-   4. Update proxy DAO witness;
-   5. Withdrawn protocol fees to distribute between Splash token holders;
-   6. Update stake credential;
-   7. Update amplification coefficient.
+   4. Withdrawn protocol fees to distribute between Splash token holders;
+   5. Update stake credential;
+   6. Update amplification coefficient.
