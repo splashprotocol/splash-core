@@ -8,6 +8,8 @@ pub type PoolData {
   pool_nft: Asset,
   // Number of tradable assets in the pool | Immutable:
   n: Int,
+  // Amplification coefficient multiplied by n ^ (2n) | Mutable:
+  an2n: Int,
   // Identifiers of the tradable assets | Immutable:
   tradable_assets: List<Asset>,
   // Precision multipliers for calculations, i.e. precision / decimals.
@@ -15,12 +17,10 @@ pub type PoolData {
   tradable_tokens_multipliers: List<Int>,
   // Identifier of the liquidity token, representing user's share in the pool | Immutable:
   lp_token: Asset,
-  // Flag if liquidity provider fee is editable | Immutable:
-  ampl_coeff_is_editable: Bool,
   // Invariant's amplification coefficient | Mutable if 'ampl_coeff_is_editable' is True:
+  ampl_coeff_is_editable: Bool,
+  // Flag if liquidity provider fee is editable | Immutable:
   lp_fee_is_editable: Bool,
-  // Flag if amplification coefficient is editable | Immutable:
-  ampl_coeff: Int,
   // Numerator of the liquidity provider fee | Mutable if 'lp_fee_is_editable' is True::
   lp_fee_num: Int,
   // Numerator of the protocol fee share | Mutable:
@@ -31,18 +31,22 @@ pub type PoolData {
   treasury_address: ScriptHash,
   // Collected (and currently available) protocol fees in the tradable assets native units | Mutable:
   protocol_fees: List<Int>,
-  // Actual value of the pool's invariant | Mutable:
-  inv: Int,
+  // Constant to optimize invariant validation | Mutable:
+  alpha: Int,
+  // Constant to optimize invariant validation | Mutable:
+  betta: Int,
 }
 
 /// Pool action types.
 pub type PoolAction {
-  AMMAction {
-    // Value of the 'option_int0' is index of base asset for swap and native invariant value for deposit/redeem.
-    option_int0: Int,
-    // Value of the 'option_int0' is index of quote asset for swap and invariant with LP fees value for deposit/redeem.
-    option_int1: Int,
-  }
+  AMMAction { context_values_list: List<Int> }
+
+  // "context_values_list" for deposit/redeem actions contains:
+  // - 0: Value of the StableSwap invariant for the output state;
+  // "context_values_list" for swap actions contains:
+  // - 0: Value of the StableSwap invariant for the output state;
+  // - 1: Index of the base asset;
+  // - 2: Index of the quote asset;
   PDAOAction
 }
 

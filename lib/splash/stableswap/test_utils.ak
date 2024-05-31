@@ -1,6 +1,7 @@
 use aiken/bytearray
 use aiken/int
 use aiken/list
+use aiken/math
 use aiken/string
 use aiken/transaction.{
   InlineDatum, Input, Output, OutputReference, ScriptContext, Spend, Transaction,
@@ -10,6 +11,7 @@ use aiken/transaction/credential.{from_script, with_delegation_script}
 use aiken/transaction/value.{Value}
 use splash/plutus.{Asset}
 use splash/stableswap/types.{DAOData, PoolData}
+use splash/stableswap/utils
 
 const default_lovelace_value = 1_000_000_000_000_000
 
@@ -42,27 +44,38 @@ test test_generate_tradable_assets() {
 
 /// Returns PoolData and Value with a given params for t2t pool:
 pub fn t2t_pool_state(
-  tradable_balances: List<Int>,
+  n: Int,
+  balances: List<Int>,
   lp_balance: Int,
   pool_nft_policy_string: String,
   pool_nft_name_string: String,
-  n: Int,
   tradable_assets: List<Asset>,
   tradable_decimals: List<Int>,
   lp_policy_string: String,
   lp_name_string: String,
-  ampl_coeff: Int,
+  an2n: Int,
   lp_fee_num: Int,
   protocol_fee_num: Int,
   dao_policy_string: String,
   treasury_address_string: String,
   protocol_fees: List<Int>,
-  inv: Int,
 ) -> (PoolData, Value) {
+  let nn = math.pow(n, n)
+
   let tradable_decimals_sorted = list.sort(tradable_decimals, int.compare)
   expect Some(precision) = list.last(tradable_decimals_sorted)
   let tradable_tokens_multipliers =
     list.map(tradable_decimals, fn(x) { precision / x })
+
+  let tradable_balances = utils.lists_diff(balances, protocol_fees)
+
+  let tradable_balances_calc =
+    utils.lists_mult(tradable_balances, tradable_tokens_multipliers)
+  let total_sum_calc_after = utils.sum(tradable_balances_calc)
+  let total_prod_calc_after = utils.prod(tradable_balances_calc)
+  let alpha = ( an2n - nn ) * total_prod_calc_after
+  let betta = an2n * total_prod_calc_after * total_sum_calc_after
+
   let pool_data =
     PoolData {
       pool_nft: Asset {
@@ -70,6 +83,7 @@ pub fn t2t_pool_state(
         name: bytearray.from_string(pool_nft_name_string),
       },
       n,
+      an2n,
       tradable_assets,
       tradable_tokens_multipliers,
       lp_token: Asset {
@@ -78,19 +92,19 @@ pub fn t2t_pool_state(
       },
       ampl_coeff_is_editable: True,
       lp_fee_is_editable: True,
-      ampl_coeff,
       lp_fee_num,
       protocol_fee_num,
       dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
       treasury_address: bytearray.from_string(treasury_address_string),
       protocol_fees,
-      inv,
+      alpha,
+      betta,
     }
 
   expect Some(asset0) = list.at(tradable_assets, 0)
   expect Some(asset1) = list.at(tradable_assets, 1)
-  expect Some(balance0) = list.at(tradable_balances, 0)
-  expect Some(balance1) = list.at(tradable_balances, 1)
+  expect Some(balance0) = list.at(balances, 0)
+  expect Some(balance1) = list.at(balances, 1)
 
   let min_value =
     value.from_lovelace(default_lovelace_value)
@@ -104,7 +118,7 @@ pub fn t2t_pool_state(
       min_value
     } else if n == 3 {
       expect Some(asset2) = list.at(tradable_assets, 2)
-      expect Some(balance2) = list.at(tradable_balances, 2)
+      expect Some(balance2) = list.at(balances, 2)
 
       let extra_value =
         value.zero()
@@ -112,9 +126,9 @@ pub fn t2t_pool_state(
       value.merge(min_value, extra_value)
     } else if n == 4 {
       expect Some(asset2) = list.at(tradable_assets, 2)
-      expect Some(balance2) = list.at(tradable_balances, 2)
+      expect Some(balance2) = list.at(balances, 2)
       expect Some(asset3) = list.at(tradable_assets, 3)
-      expect Some(balance3) = list.at(tradable_balances, 3)
+      expect Some(balance3) = list.at(balances, 3)
 
       let extra_value =
         value.zero()
@@ -130,27 +144,38 @@ pub fn t2t_pool_state(
 
 /// Returns PoolData and Value with a given params for n2t pool:
 pub fn n2t_pool_state(
-  tradable_balances: List<Int>,
+  n: Int,
+  balances: List<Int>,
   lp_balance: Int,
   pool_nft_policy_string: String,
   pool_nft_name_string: String,
-  n: Int,
   tradable_assets: List<Asset>,
   tradable_decimals: List<Int>,
   lp_policy_string: String,
   lp_name_string: String,
-  ampl_coeff: Int,
+  an2n: Int,
   lp_fee_num: Int,
   protocol_fee_num: Int,
   dao_policy_string: String,
   treasury_address_string: String,
   protocol_fees: List<Int>,
-  inv: Int,
 ) -> (PoolData, Value) {
+  let nn = math.pow(n, n)
+
   let tradable_decimals_sorted = list.sort(tradable_decimals, int.compare)
   expect Some(precision) = list.last(tradable_decimals_sorted)
   let tradable_tokens_multipliers =
     list.map(tradable_decimals, fn(x) { precision / x })
+
+  let tradable_balances = utils.lists_diff(balances, protocol_fees)
+
+  let tradable_balances_calc =
+    utils.lists_mult(tradable_balances, tradable_tokens_multipliers)
+  let total_sum_calc_after = utils.sum(tradable_balances_calc)
+  let total_prod_calc_after = utils.prod(tradable_balances_calc)
+  let alpha = ( an2n - nn ) * total_prod_calc_after
+  let betta = an2n * total_prod_calc_after * total_sum_calc_after
+
   let pool_data =
     PoolData {
       pool_nft: Asset {
@@ -166,18 +191,19 @@ pub fn n2t_pool_state(
       },
       ampl_coeff_is_editable: True,
       lp_fee_is_editable: True,
-      ampl_coeff,
+      an2n,
       lp_fee_num,
       protocol_fee_num,
       dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
       treasury_address: bytearray.from_string(treasury_address_string),
       protocol_fees,
-      inv,
+      alpha,
+      betta,
     }
 
   expect Some(asset1) = list.at(tradable_assets, 1)
-  expect Some(balance0) = list.at(tradable_balances, 0)
-  expect Some(balance1) = list.at(tradable_balances, 1)
+  expect Some(balance0) = list.at(balances, 0)
+  expect Some(balance1) = list.at(balances, 1)
 
   let min_value =
     value.from_lovelace(balance0)
@@ -190,7 +216,7 @@ pub fn n2t_pool_state(
       min_value
     } else if n == 3 {
       expect Some(asset2) = list.at(tradable_assets, 2)
-      expect Some(balance2) = list.at(tradable_balances, 2)
+      expect Some(balance2) = list.at(balances, 2)
 
       let extra_value =
         value.zero()
@@ -198,9 +224,9 @@ pub fn n2t_pool_state(
       value.merge(min_value, extra_value)
     } else if n == 4 {
       expect Some(asset2) = list.at(tradable_assets, 2)
-      expect Some(balance2) = list.at(tradable_balances, 2)
+      expect Some(balance2) = list.at(balances, 2)
       expect Some(asset3) = list.at(tradable_assets, 3)
-      expect Some(balance3) = list.at(tradable_balances, 3)
+      expect Some(balance3) = list.at(balances, 3)
 
       let extra_value =
         value.zero()

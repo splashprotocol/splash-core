@@ -1,4 +1,5 @@
 use aiken/bytearray
+use aiken/int
 use aiken/list
 use aiken/math
 use aiken/transaction.{
@@ -21,10 +22,7 @@ const lp_emission = 9223372036854775807
 const denom = 100_000
 
 // Number of tokens participating in the swap AMM-operation:
-const n_swap_tokens = 2
-
-// Constants for fees numerators averaging in imbalanced deposit/redeem amm-actions:
-const imbalance_fee_avg_denom = 4
+const n_tradable_tokens = 2
 
 /// Main pool validator:
 validator(dao_voting_witness: ScriptHash) {
@@ -108,14 +106,13 @@ validator(dao_voting_witness: ScriptHash) {
     // 6. Action is valid:
     let valid_action: Bool =
       when action is {
-        AMMAction(option_int0, option_int1) ->
+        AMMAction(context_values_list) ->
           validate_amm_operation(
             input_value,
             input_datum,
             output_value,
             output_datum,
-            option_int0,
-            option_int1,
+            context_values_list,
           )
 
         PDAOAction -> {
@@ -144,22 +141,22 @@ fn validate_amm_operation(
   input_datum: PoolData,
   output_value: Value,
   output_datum: PoolData,
-  option_int0: Int,
-  option_int1: Int,
+  context_values_list: List<Int>,
 ) -> Bool {
   // ==================================== INPUT DATA ==================================== //
   // Pool config constants for calculations | Input:
   let PoolData {
-    n,
     tradable_assets,
     tradable_tokens_multipliers,
     lp_token,
-    ampl_coeff,
+    n,
+    an2n,
     lp_fee_num,
     protocol_fee_num,
     treasury_address,
     protocol_fees: availible_protocol_fees0,
-    inv: inv0,
+    alpha: alpha0,
+    betta: betta0,
     ..
   } = input_datum
 
@@ -167,12 +164,13 @@ fn validate_amm_operation(
 
   // Pool data | Output:
   let PoolData {
-    ampl_coeff: ampl_coeff1,
+    an2n: an2n1,
     lp_fee_num: lp_fee_num1,
     protocol_fee_num: protocol_fee_num1,
     treasury_address: treasury_address1,
     protocol_fees: availible_protocol_fees1,
-    inv: inv1,
+    alpha: alpha1,
+    betta: betta1,
     ..
   } = output_datum
   // ==================================== CALCULATING DELTAS ==================================== //
@@ -182,6 +180,11 @@ fn validate_amm_operation(
   let lp_amount1 =
     value.quantity_of(output_value, lp_token_policy, lp_token_name)
   let delta_lp = lp_amount1 - lp_amount0
+  // Collected protocol fees:
+  let collected_protocol_fees_deltas =
+    utils.lists_diff(availible_protocol_fees1, availible_protocol_fees0)
+
+  // =============================== CALCULATING COMMONLY USED VALUES =============================== //
   // Total balances:
   let balances_total0 =
     utils.extract_target_balances(tradable_assets, input_value)
@@ -194,198 +197,119 @@ fn validate_amm_operation(
     utils.lists_diff(balances_total0, availible_protocol_fees0)
   let tradable_balances1 =
     utils.lists_diff(balances_total1, availible_protocol_fees1)
+  // Convert to common precision for calculations:
+  let tradable_balances_calc1 =
+    utils.lists_mult(tradable_balances1, tradable_tokens_multipliers)
 
-  // Collected protocol fees:
-  let collected_protocol_fees_deltas =
-    utils.lists_diff(availible_protocol_fees1, availible_protocol_fees0)
+  // Widely used constanst:
+  let total_sum_calc_after = utils.sum(tradable_balances_calc1)
+  let total_prod_calc_after = utils.prod(tradable_balances_calc1)
+  let nn = math.pow(n, n)
+  expect Some(d1) = list.at(context_values_list, 0)
+  let d1n1 = math.pow(d1, n + 1)
 
   // ==================================== AMM-ACTION VALIDATIONS ==================================== //
   // 1. Pool adjustable params are preserved:
   let pool_adjustable_params_preserved: Bool =
-    ampl_coeff == ampl_coeff1 && lp_fee_num == lp_fee_num1 && protocol_fee_num == protocol_fee_num1 && treasury_address == treasury_address1
-  // 2. Checking if AMM-action is valid.
-  // Widely used constants:
-  let nn = math.pow(n, n)
-  let ann = ampl_coeff * nn
+    an2n == an2n1 && lp_fee_num == lp_fee_num1 && protocol_fee_num == protocol_fee_num1 && treasury_address == treasury_address1
 
-  // Converting all balances to the equal precision:
-  let tradable_balances_calc1 =
-    utils.lists_mult(tradable_balances1, tradable_tokens_multipliers)
+  // 2. Checking if constants alpha and betta are valid in the output datum:
+  let alpha_after = ( an2n - nn ) * total_prod_calc_after
+  let betta_after = an2n * total_prod_calc_after * total_sum_calc_after
+  let valid_alpha_betta: Bool = alpha1 == alpha_after && betta1 == betta_after
+
+  // 3. Checking if AMM-action is valid.
   let valid_amm_action =
     if delta_lp != 0 {
-      // 2.1. Deposit || Redeem.
-      // 2.1.1. Checking the invariant.
-      let valid_invariant_extremum: Bool =
-        utils.check_invariant_extremum(
-          tradable_balances_calc1,
-          n,
+      // 3.1. Deposit || Redeem.
+      // 3.1.1. Checking the invariant.
+      let valid_invariant_for_lq_operation: Bool =
+        utils.check_invariant(
           nn,
-          ann,
-          inv1,
+          an2n,
+          alpha0,
+          betta0,
+          d1,
+          d1n1,
+          total_sum_calc_after,
+          total_prod_calc_after,
         )
 
-      // 2.1.2. Checking the native invariant.
-      // Calculating final balances without latest fees:
-      let tradable_balances_no_fees1 =
-        utils.lists_diff(balances_total1, availible_protocol_fees0)
-
-      let tradable_balances_no_fees_calc1 =
-        utils.lists_mult(
-          tradable_balances_no_fees1,
-          tradable_tokens_multipliers,
+      // 3.1.2. Checking LP token delta:
+      let supply_lp = lp_emission - lp_amount0
+      let delta_supply_lp_candidates =
+        list.map2(
+          tradable_balances0,
+          tradable_balances1,
+          fn(b0, b1) { supply_lp * b1 / b0 - supply_lp },
         )
-      let inv_native = option_int0
-      let valid_native_invariant_extremum: Bool =
-        utils.check_invariant_extremum(
-          tradable_balances_no_fees_calc1,
-          n,
-          nn,
-          ann,
-          inv_native,
-        )
-
-      // 2.1.3. Checking protocol fees:
-      // Calculating ideal balances (uniform deltas case):
-      let ideal_tradable_balances1 =
-        list.map(tradable_balances0, fn(b) { b * inv_native / inv0 })
-
-      // Calculating difference from the ideal balances:
-      let balance_difference_from_ideal =
-        utils.lists_abs_diff(
-          tradable_balances_no_fees1,
-          ideal_tradable_balances1,
-        )
-
-      let avg_fee_denom = imbalance_fee_avg_denom * ( n - 1 ) * denom
-
-      let protocol_fees_for_liquidity_operation =
-        list.map(
-          balance_difference_from_ideal,
-          fn(diff) { n * protocol_fee_num * diff / avg_fee_denom },
-        )
-
-      let valid_protocol_fees: Bool =
-        collected_protocol_fees_deltas == protocol_fees_for_liquidity_operation
-
-      // 2.1.4. Checking liquitidy providers' fees:
-      let lp_fees_for_liquidity_operation =
-        list.map(
-          balance_difference_from_ideal,
-          fn(diff) { n * lp_fee_num * diff / avg_fee_denom },
-        )
-      let tradable_balances_no_lp_fees1 =
-        list.map3(
-          tradable_balances_no_fees1,
-          protocol_fees_for_liquidity_operation,
-          lp_fees_for_liquidity_operation,
-          fn(a, b, c) { a - b - c },
-        )
-      let tradable_balances_no_lp_fees_calc1 =
-        utils.lists_mult(
-          tradable_balances_no_lp_fees1,
-          tradable_tokens_multipliers,
-        )
-
-      let inv_with_lp_fees = option_int1
-      let valid_lp_fees: Bool =
-        utils.check_invariant_extremum(
-          tradable_balances_no_lp_fees_calc1,
-          n,
-          nn,
-          ann,
-          inv_with_lp_fees,
-        )
-
-      // 2.1.5. Checking LP token delta:
-      let delta_supply_lp =
-        ( inv_with_lp_fees - inv0 ) * ( lp_emission - lp_amount0 ) / inv0
-
+      let delta_supply_lp_candidates_sorted =
+        list.sort(delta_supply_lp_candidates, int.compare)
+      expect Some(delta_supply_lp) =
+        list.head(delta_supply_lp_candidates_sorted)
       let valid_lp_delta: Bool = -delta_lp == delta_supply_lp
-      valid_invariant_extremum && valid_native_invariant_extremum && valid_protocol_fees && valid_lp_fees && valid_lp_delta
+
+      valid_invariant_for_lq_operation && valid_lp_delta
     } else {
-      // 2.2. Swap.
+      // 3.2. Swap.
       // Deltas:
       let tradable_deltas =
         utils.lists_diff(tradable_balances1, tradable_balances0)
       let total_deltas = utils.lists_diff(balances_total1, balances_total0)
 
       // Base asset info:
-      let base_asset_ind = option_int0
+      expect Some(base_asset_ind) = list.at(context_values_list, 1)
       expect Some(tradable_base_asset_delta) =
         list.at(tradable_deltas, base_asset_ind)
       expect Some(base_total_delta) = list.at(total_deltas, base_asset_ind)
 
       // Quote asset info:
-      let quote_asset_ind = option_int1
+      expect Some(quote_asset_ind) = list.at(context_values_list, 2)
 
       expect Some(tradable_quote_asset_delta) =
         list.at(tradable_deltas, quote_asset_ind)
+
       expect Some(quote_protocol_fees_delta) =
         list.at(collected_protocol_fees_deltas, quote_asset_ind)
-      expect Some(quote_total_delta) = list.at(total_deltas, quote_asset_ind)
-      expect Some(quote_multiplier) =
-        list.at(tradable_tokens_multipliers, quote_asset_ind)
 
-      // 2.2.1. Valid quote protocol fees:
+      expect Some(quote_total_delta) = list.at(total_deltas, quote_asset_ind)
+
+      // 3.2.1. Valid quote protocol fees:
       let total_fees_num_reversed = denom - lp_fee_num - protocol_fee_num
       let valid_quote_protocol_fees: Bool =
         quote_protocol_fees_delta * total_fees_num_reversed >= -quote_total_delta * protocol_fee_num
-      // 2.2.2. Non-quote protocol fees are preserved:
+      // 3.2.2. Non-quote protocol fees are preserved:
       let non_quote_protocol_fees_preserved: Bool =
         list.count(collected_protocol_fees_deltas, fn(d) { d == 0 }) == n - 1
 
-      // 2.2.3. Valid quote liquidity provider fees:
+      // 3.2.3. Valid quote liquidity provider fees:
       let valid_quote_lp_fees: Bool =
         tradable_quote_asset_delta * total_fees_num_reversed >= quote_total_delta * (
           denom - lp_fee_num
         )
-      // 2.2.4. Non-quote liquidity provider fees are preserved:
+      // 3.2.4. Non-quote liquidity provider fees are preserved:
       let non_quote_lp_fees_preserved: Bool =
-        list.count(tradable_deltas, fn(d) { d == 0 }) == n - n_swap_tokens && tradable_base_asset_delta == base_total_delta
-      // 2.2.5. Valid quote tradable delta:
+        list.count(tradable_deltas, fn(d) { d == 0 }) == n - n_tradable_tokens && tradable_base_asset_delta == base_total_delta
+      // 3.2.5. Valid quote tradable delta:
       let valid_quote_tradable_delta: Bool =
         quote_total_delta == tradable_quote_asset_delta + quote_protocol_fees_delta
 
-      // 2.2.5. Valid invariant value:
-      let valid_invariant_extremum_for_asset: Bool =
-        utils.check_invariant_extremum_for_asset(
-          tradable_balances_calc1,
-          inv1,
-          n,
+      // 3.2.6. Valid invariant value:
+      let valid_invariant_for_swap: Bool =
+        utils.check_invariant(
           nn,
-          ann,
-          quote_multiplier,
-          quote_asset_ind,
+          an2n,
+          alpha0,
+          betta0,
+          d1,
+          d1n1,
+          total_sum_calc_after,
+          total_prod_calc_after,
         )
 
-      // 2.2.6. Invariant value is preserved during calculations.
-      // We need to check than valid inv value was used fot swap calculations: 
-      let tradable_balances_no_last_lp_fees_calc1 =
-        list.indexed_map(
-          tradable_balances_calc1,
-          fn(i, b) {
-            if i == quote_asset_ind {
-              (
-                b / quote_multiplier * total_fees_num_reversed + quote_total_delta * lp_fee_num
-              ) / total_fees_num_reversed * quote_multiplier
-            } else {
-              b
-            }
-          },
-        )
-      let invariant_extremum_for_asset_is_preserved: Bool =
-        utils.check_invariant_extremum_for_asset(
-          tradable_balances_no_last_lp_fees_calc1,
-          inv0,
-          n,
-          nn,
-          ann,
-          quote_multiplier,
-          quote_asset_ind,
-        )
-      base_total_delta > 0 && quote_total_delta < 0 && valid_quote_protocol_fees && non_quote_protocol_fees_preserved && valid_quote_lp_fees && non_quote_lp_fees_preserved && valid_quote_tradable_delta && valid_invariant_extremum_for_asset && invariant_extremum_for_asset_is_preserved
+      valid_quote_protocol_fees && non_quote_protocol_fees_preserved && valid_quote_lp_fees && non_quote_lp_fees_preserved && valid_quote_tradable_delta && valid_invariant_for_swap
     }
-  pool_adjustable_params_preserved && valid_amm_action
+  pool_adjustable_params_preserved && valid_alpha_betta && valid_amm_action
 }
 
 // ================================================= TESTS ================================================= //
@@ -417,11 +341,11 @@ fn uniform_reserves_valid_swap_math_template(
 
   let (input_pool_data, input_value) =
     t2t_pool_state(
+      n,
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -432,7 +356,6 @@ fn uniform_reserves_valid_swap_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_before,
-      inv_before,
     )
   let tradable_assets_n2t = list.drop(tradable_assets, 1)
   let tradable_assets_n2t =
@@ -440,11 +363,11 @@ fn uniform_reserves_valid_swap_math_template(
 
   let (input_pool_data_n2t, input_value_n2t) =
     n2t_pool_state(
+      n,
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets_n2t,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -455,7 +378,6 @@ fn uniform_reserves_valid_swap_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_before,
-      inv_before,
     )
   // Output data:
   let quote_lp_fees = base_amount * input_pool_data.lp_fee_num / denom
@@ -487,15 +409,15 @@ fn uniform_reserves_valid_swap_math_template(
       },
     )
 
-  let inv_after = inv_before + quote_lp_fees
+  let inv_after = inv_before + quote_lp_fees - 1
 
   let (output_pool_data, output_value) =
     t2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -506,16 +428,15 @@ fn uniform_reserves_valid_swap_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after,
-      inv_after,
     )
 
   let (output_pool_data_n2t, output_value_nt2) =
     n2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets_n2t,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -526,7 +447,6 @@ fn uniform_reserves_valid_swap_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after,
-      inv_after,
     )
   let ctx =
     make_pool_state_transition_context(
@@ -535,22 +455,20 @@ fn uniform_reserves_valid_swap_math_template(
       output_pool_data,
       output_value,
     )
-  let redeemer = PoolRedeemer(0, 0, AMMAction(base_ind, quote_ind))
+  let redeemer = PoolRedeemer(0, 0, AMMAction([inv_after, base_ind, quote_ind]))
   // Validation:
   validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    base_ind,
-    quote_ind,
+    [inv_after, base_ind, quote_ind],
   ) && validate_amm_operation(
     input_value_n2t,
     input_pool_data_n2t,
     output_value_nt2,
     output_pool_data_n2t,
-    base_ind,
-    quote_ind,
+    [inv_after, base_ind, quote_ind],
   ) && validate_stable_pool_transition(
     bytearray.from_string(@"proxy_dao"),
     input_pool_data,
@@ -584,11 +502,11 @@ fn uniform_reserves_invalid_swap_math_template(
 
   let (input_pool_data, input_value) =
     t2t_pool_state(
+      n,
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -599,7 +517,6 @@ fn uniform_reserves_invalid_swap_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_before,
-      inv_before,
     )
   // Output data:
   let quote_lp_fees = base_amount * input_pool_data.lp_fee_num / denom
@@ -649,11 +566,11 @@ fn uniform_reserves_invalid_swap_math_template(
 
   let (output_pool_data, output_value) =
     t2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -664,15 +581,14 @@ fn uniform_reserves_invalid_swap_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after,
-      inv_after,
     )
   let (_, output_value_wrong_balance) =
     t2t_pool_state(
+      n,
       total_balances_after_wrong,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -683,7 +599,6 @@ fn uniform_reserves_invalid_swap_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after,
-      inv_after,
     )
   // Wrong protocol fees:
   let collected_protocol_fees_after_wrong =
@@ -699,11 +614,11 @@ fn uniform_reserves_invalid_swap_math_template(
     )
   let (output_pool_data_wrong_protocol_fees, _) =
     t2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -714,83 +629,39 @@ fn uniform_reserves_invalid_swap_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after_wrong,
-      inv_after,
     )
   // Wrong invariants:
   let inv_after_wrong = inv_before + quote_lp_fees - quote_protocol_fees - 1
 
-  let (output_pool_data_wrong_inv, _) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_before,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals_before,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a_before,
-      lp_fee_num_before,
-      protocol_fee_num_before,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after,
-      inv_after_wrong,
-    )
-
-  let (output_pool_data_wrong_inv_and_fees, _) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_before,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals_before,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a_before,
-      lp_fee_num_before,
-      protocol_fee_num_before,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after_wrong,
-      inv_after_wrong,
-    )
   // Validations:
   validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_balance,
     output_pool_data,
-    base_ind,
-    quote_ind,
+    [inv_after, base_ind, quote_ind],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_protocol_fees,
-    base_ind,
-    quote_ind,
+    [inv_after, base_ind, quote_ind],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
-    output_pool_data_wrong_inv,
-    base_ind,
-    quote_ind,
+    output_pool_data,
+    [inv_after_wrong, base_ind, quote_ind],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
-    output_pool_data_wrong_inv_and_fees,
-    base_ind,
-    quote_ind,
+    output_pool_data_wrong_protocol_fees,
+    [inv_after_wrong, base_ind, quote_ind],
   )
 }
 
-// // =================================== DEPOSIT/REDEEM TEST TEMPLATES =================================== //
+// // // =================================== DEPOSIT/REDEEM TEST TEMPLATES =================================== //
 fn uniform_reserves_valid_lq_math_template(
   n: Int,
   delta: Int,
@@ -812,25 +683,24 @@ fn uniform_reserves_valid_lq_math_template(
 
   let inv_before = default_token_value * n
   let lp_balance_before = lp_emission - inv_before
-
+  let an2n = a_before * math.pow(n, 2 * n)
   let (input_pool_data, input_value) =
     t2t_pool_state(
+      n,
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
       @"pool_lp_name",
-      a_before,
+      an2n,
       lp_fee_num_before,
       protocol_fee_num_before,
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_before,
-      inv_before,
     )
   // Output data:
   let new_token_value =
@@ -846,22 +716,21 @@ fn uniform_reserves_valid_lq_math_template(
   let lp_balance_after = lp_emission - inv_after
   let (output_pool_data, output_value) =
     t2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
       @"pool_lp_name",
-      a_before,
+      an2n,
       lp_fee_num_before,
       protocol_fee_num_before,
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_before,
-      inv_after,
     )
   // Validation:
   validate_amm_operation(
@@ -869,8 +738,7 @@ fn uniform_reserves_valid_lq_math_template(
     input_pool_data,
     output_value,
     output_pool_data,
-    inv_after,
-    inv_after,
+    [inv_after],
   )
 }
 
@@ -883,6 +751,7 @@ fn uniform_reserves_invalid_lq_math_template(
   deposit: Bool,
 ) -> Bool {
   let default_token_value = 1_000_000_000_000_000
+  let default_protocol_fee_value = 1_000_000
   let default_decimal = 1
 
   let tradable_assets =
@@ -891,18 +760,19 @@ fn uniform_reserves_invalid_lq_math_template(
   // Input data:
   let total_balances_before = list.repeat(default_token_value, n)
   let tradable_decimals_before = list.repeat(default_decimal, n)
-  let collected_protocol_fees_before = list.repeat(default_token_value, n)
+  let collected_protocol_fees_before =
+    list.repeat(default_protocol_fee_value, n)
 
   let inv_before = default_token_value * n
   let lp_balance_before = lp_emission - inv_before
 
   let (input_pool_data, input_value) =
     t2t_pool_state(
+      n,
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -913,7 +783,6 @@ fn uniform_reserves_invalid_lq_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_before,
-      inv_before,
     )
 
   // Output data:
@@ -939,11 +808,11 @@ fn uniform_reserves_invalid_lq_math_template(
 
   let (output_pool_data, output_value_wrong_balance) =
     t2t_pool_state(
+      n,
       total_balances_after_wrong,
       lp_balance_after,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -954,17 +823,16 @@ fn uniform_reserves_invalid_lq_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_before,
-      inv_after,
     )
 
   // Wrong protocol fees:
   let (output_pool_data_wrong_protocol_fees, output_value) =
     t2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -975,38 +843,16 @@ fn uniform_reserves_invalid_lq_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after_wrong,
-      inv_after,
-    )
-
-  // Wrong invariant:
-  let (output_pool_data_wrong_inv, _) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals_before,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a_before,
-      lp_fee_num_before,
-      protocol_fee_num_before,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_before,
-      inv_after_wrong,
     )
 
   // Wrong LP balance:
   let (_, output_value_wrong_lp) =
     t2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_after_wrong,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals_before,
       @"pool_lp_policy",
@@ -1017,7 +863,6 @@ fn uniform_reserves_invalid_lq_math_template(
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_before,
-      inv_after,
     )
   // Validations:
   validate_amm_operation(
@@ -1025,36 +870,25 @@ fn uniform_reserves_invalid_lq_math_template(
     input_pool_data,
     output_value_wrong_balance,
     output_pool_data,
-    inv_after,
-    inv_after,
+    [inv_after],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_protocol_fees,
-    inv_after,
-    inv_after,
+    [inv_after],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
-    output_pool_data_wrong_inv,
-    inv_after,
-    inv_after,
-  ) && validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data_wrong_inv,
-    inv_after,
-    inv_after,
+    output_pool_data,
+    [inv_after_wrong],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_lp,
     output_pool_data,
-    inv_after,
-    inv_after,
+    [inv_after],
   )
 }
 
@@ -1117,178 +951,6 @@ test test_uniform_deposit_with_invalid_math() {
   list.count(validation_results0, fn(r) { r == False }) == n_cases
 }
 
-test test_deposit_fixtures() {
-  let n = 3
-  let a = 3000
-  let lp_fee_num = 200
-  let protocol_fee_num = 500
-  let tradable_assets =
-    generate_tradable_assets(@"some_pool_token", @"some_pool_token_name", n)
-  let tradable_decimals =
-    [1_000, 1_000_000, 1_000]
-  // Input data:
-  let total_balances_before =
-    [10476100039226, 8543419899, 97149583]
-  let collected_protocol_fees_before =
-    [3922600039226, 1989919899, 31614583]
-  let inv_before = 440436474588133
-  let lp_balance_before = lp_emission - inv_before
-
-  let (input_pool_data, input_value) =
-    t2t_pool_state(
-      total_balances_before,
-      lp_balance_before,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_before,
-      inv_before,
-    )
-  // Output data:
-  let total_balances_after =
-    [12059477004396, 607565348976096, 3331844339354]
-  let total_balances_after_wrong =
-    [12059477004393, 607565348976095, 333184433935]
-  let collected_protocol_fees_after =
-    [4244248533159, 1140834312991, 6275394390]
-  let collected_protocol_fees_after_wrong =
-    [4574056297365, 1282900260424, 7052970847]
-  let inv_after = 11746814561387838
-  let inv_native = 12075811814236382
-  let inv_with_lp_fees = 11615215184277714
-
-  let lp_balance_after = lp_emission - inv_with_lp_fees
-
-  let (output_pool_data, output_value) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after,
-      inv_after,
-    )
-  // Output with error:
-  // 1. Wrong balances:
-  let (_, output_value_wrong_balances) =
-    t2t_pool_state(
-      total_balances_after_wrong,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after,
-      inv_after,
-    )
-  // 2. Wrong fees:
-  let (output_pool_data_wrong_fees, _) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after_wrong,
-      inv_after,
-    )
-
-  // 3. Wrong invariant:
-  let inv_after_wrong = inv_after - 1
-  let (output_pool_data_wrong_inv, _) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after_wrong,
-      inv_after_wrong,
-    )
-  // Validations:
-  validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data,
-    inv_native,
-    inv_with_lp_fees,
-  ) && !validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value_wrong_balances,
-    output_pool_data,
-    inv_native,
-    inv_with_lp_fees,
-  ) && !validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data_wrong_fees,
-    inv_native,
-    inv_with_lp_fees,
-  ) && !validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data_wrong_fees,
-    inv_native,
-    inv_with_lp_fees,
-  ) && !validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data_wrong_inv,
-    inv_native,
-    inv_with_lp_fees,
-  )
-}
-
 // // =================================== REDEEM TESTS =================================== //
 test test_uniform_redeem_with_valid_math() {
   let lp_fee_num = 112
@@ -1346,178 +1008,6 @@ test test_uniform_redeem_with_invalid_math() {
     )
   let n_cases = list.length(n_list)
   list.count(validation_results0, fn(r) { r == False }) == n_cases
-}
-
-test test_redeem_fixtures() {
-  let n = 3
-  let a = 300
-  let lp_fee_num = 200
-  let protocol_fee_num = 500
-  let tradable_assets =
-    generate_tradable_assets(@"some_pool_token", @"some_pool_token_name", n)
-  let tradable_decimals =
-    [1_000, 1_000_000, 1_000]
-  // Input data:
-  let total_balances_before =
-    [8902100023486, 10811342578, 75424880]
-  let collected_protocol_fees_before =
-    [2348600023486, 4257842578, 9889880]
-  let inv_before = 249586736899936
-  let lp_balance_before = lp_emission - inv_before
-
-  let (input_pool_data, input_value) =
-    t2t_pool_state(
-      total_balances_before,
-      lp_balance_before,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_before,
-      inv_before,
-    )
-  // Output data:
-  let total_balances_after =
-    [8902099890353, 10661342428, 75359815]
-  let collected_protocol_fees_after =
-    [2348673260795, 4258050590, 9890490]
-  let inv_after = 248095188067828
-  let inv_native = 248099155340753
-  let inv_with_lp_fees = 248093601150476
-
-  let total_balances_after_wrong =
-    [8902099890351, 10661342428, 75359813]
-  let collected_protocol_fees_after_wrong =
-    [2348673260795, 4258050590, 9890304]
-  let lp_balance_after = lp_emission - inv_with_lp_fees
-
-  let (output_pool_data, output_value) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after,
-      inv_after,
-    )
-  // Output with error:
-  // 1. Wrong balances:
-  let (_, output_value_wrong_balances) =
-    t2t_pool_state(
-      total_balances_after_wrong,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after,
-      inv_after,
-    )
-  // 2. Wrong fees:
-  let (output_pool_data_wrong_fees, _) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after_wrong,
-      inv_after,
-    )
-
-  // 3. Wrong invariant:
-  let inv_after_wrong = inv_after - 1
-  let (output_pool_data_wrong_inv, _) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after_wrong,
-      inv_after_wrong,
-    )
-  // Validations:
-  validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data,
-    inv_native,
-    inv_with_lp_fees,
-  ) && !validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value_wrong_balances,
-    output_pool_data,
-    inv_native,
-    inv_with_lp_fees,
-  ) && !validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data_wrong_fees,
-    inv_native,
-    inv_with_lp_fees,
-  ) && !validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data_wrong_fees,
-    inv_native,
-    inv_with_lp_fees,
-  ) && !validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data_wrong_inv,
-    inv_native,
-    inv_with_lp_fees,
-  )
 }
 
 // =================================== SWAP TESTS =================================== //
@@ -1675,6 +1165,7 @@ test test_swap_to_max_decimals_fixtures() {
   let quote_ind = 1
   let n = 3
   let a = 300
+  let an2n = a * math.pow(n, 2 * n)
   let lp_fee_num = 20000
   let protocol_fee_num = 50000
   let tradable_assets =
@@ -1691,22 +1182,21 @@ test test_swap_to_max_decimals_fixtures() {
 
   let (input_pool_data, input_value) =
     t2t_pool_state(
+      n,
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals,
       @"pool_lp_policy",
       @"pool_lp_name",
-      a,
+      an2n,
       lp_fee_num,
       protocol_fee_num,
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_before,
-      inv_before,
     )
   // Output data:
   let total_balances_after =
@@ -1715,26 +1205,25 @@ test test_swap_to_max_decimals_fixtures() {
   let collected_protocol_fees_after =
     [88088, 243498560, 93093]
 
-  let inv_after = 774400041
+  let inv_after = 774400040
   let lp_balance_after = lp_balance_before
   let (output_pool_data, output_value) =
     t2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals,
       @"pool_lp_policy",
       @"pool_lp_name",
-      a,
+      an2n,
       lp_fee_num,
       protocol_fee_num,
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after,
-      inv_after,
     )
   // Output with error:
   // 1. Wrong balances:
@@ -1742,96 +1231,71 @@ test test_swap_to_max_decimals_fixtures() {
     [390088, 428943460, 348092]
   let (_, output_value_wrong_balances) =
     t2t_pool_state(
+      n,
       total_balances_after_wrong,
       lp_balance_after,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals,
       @"pool_lp_policy",
       @"pool_lp_name",
-      a,
+      an2n,
       lp_fee_num,
       protocol_fee_num,
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after,
-      inv_after,
     )
   // 2. Wrong fees:
   let collected_protocol_fees_after_wrong =
     [88088, 220047215, 93093]
   let (output_pool_data_wrong_fees, _) =
     t2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals,
       @"pool_lp_policy",
       @"pool_lp_name",
-      a,
+      an2n,
       lp_fee_num,
       protocol_fee_num,
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after_wrong,
-      inv_after,
     )
 
   // 3. Wrong invariant:
-  let inv_after_wrong = inv_after - 1
-  let (output_pool_data_wrong_inv, _) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after_wrong,
-      inv_after_wrong,
-    )
+  let inv_after_wrong = inv_before - 1
   // Validations:
   validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    base_ind,
-    quote_ind,
+    [inv_after, base_ind, quote_ind],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_balances,
     output_pool_data,
-    base_ind,
-    quote_ind,
+    [inv_after, base_ind, quote_ind],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_fees,
-    base_ind,
-    quote_ind,
+    [inv_after, base_ind, quote_ind],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
-    output_pool_data_wrong_inv,
-    base_ind,
-    quote_ind,
+    output_pool_data,
+    [inv_after_wrong, base_ind, quote_ind],
   )
 }
 
@@ -1841,6 +1305,7 @@ test test_swap_to_min_decimals_fixtures() {
   let quote_ind = 1
   let n = 3
   let a = 300
+  let an2n = a * math.pow(n, 2 * n)
   let lp_fee_num = 20000
   let protocol_fee_num = 50000
   let tradable_assets =
@@ -1857,22 +1322,21 @@ test test_swap_to_min_decimals_fixtures() {
 
   let (input_pool_data, input_value) =
     t2t_pool_state(
+      n,
       total_balances_before,
       lp_balance_before,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals,
       @"pool_lp_policy",
       @"pool_lp_name",
-      a,
+      an2n,
       lp_fee_num,
       protocol_fee_num,
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_before,
-      inv_before,
     )
   // Output data:
   let total_balances_after =
@@ -1885,22 +1349,21 @@ test test_swap_to_min_decimals_fixtures() {
   let lp_balance_after = lp_balance_before
   let (output_pool_data, output_value) =
     t2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals,
       @"pool_lp_policy",
       @"pool_lp_name",
-      a,
+      an2n,
       lp_fee_num,
       protocol_fee_num,
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after,
-      inv_after,
     )
   // Output with error:
   // 1. Wrong balances:
@@ -1908,95 +1371,70 @@ test test_swap_to_min_decimals_fixtures() {
     [390088, 428943460, 348092]
   let (_, output_value_wrong_balances) =
     t2t_pool_state(
+      n,
       total_balances_after_wrong,
       lp_balance_after,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals,
       @"pool_lp_policy",
       @"pool_lp_name",
-      a,
+      an2n,
       lp_fee_num,
       protocol_fee_num,
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after,
-      inv_after,
     )
   // 2. Wrong fees:
   let collected_protocol_fees_after_wrong =
     [88088, 220047215, 93093]
   let (output_pool_data_wrong_fees, _) =
     t2t_pool_state(
+      n,
       total_balances_after,
       lp_balance_after,
       @"pool_nft_policy",
       @"pool_nft_name",
-      n,
       tradable_assets,
       tradable_decimals,
       @"pool_lp_policy",
       @"pool_lp_name",
-      a,
+      an2n,
       lp_fee_num,
       protocol_fee_num,
       @"dao_stable_policy",
       @"tr_policy",
       collected_protocol_fees_after_wrong,
-      inv_after,
     )
 
   // 3. Wrong invariant:
-  let inv_after_wrong = inv_after - 1
-  let (output_pool_data_wrong_inv, _) =
-    t2t_pool_state(
-      total_balances_after,
-      lp_balance_after,
-      @"pool_nft_policy",
-      @"pool_nft_name",
-      n,
-      tradable_assets,
-      tradable_decimals,
-      @"pool_lp_policy",
-      @"pool_lp_name",
-      a,
-      lp_fee_num,
-      protocol_fee_num,
-      @"dao_stable_policy",
-      @"tr_policy",
-      collected_protocol_fees_after_wrong,
-      inv_after_wrong,
-    )
+  let inv_after_wrong = inv_before - 1
   // Validations:
   validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    base_ind,
-    quote_ind,
+    [inv_after, base_ind, quote_ind],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_balances,
     output_pool_data,
-    base_ind,
-    quote_ind,
+    [inv_after, base_ind, quote_ind],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_fees,
-    base_ind,
-    quote_ind,
+    [inv_after, base_ind, quote_ind],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
-    output_pool_data_wrong_inv,
-    base_ind,
-    quote_ind,
+    output_pool_data,
+    [inv_after_wrong, base_ind, quote_ind],
   )
 }

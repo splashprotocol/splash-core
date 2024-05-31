@@ -52,10 +52,10 @@ A n^n \sum x_i + D = D A n^n + \frac{D^{n + 1}}{n^n \prod x_i}
 
 Parameters $n$ and $A$ are constants, thus, set of variables involved in the
 invariant calculation is $((x_i)_{i = 1}^{n}, D)$.
-However, analytically calculate the value of one of them when the values of all others are known
+However, analytically calculate the value of $D$ when all others values are known
 is possible only for $n = 2$.
-When pool consists of $n = 3$ assets and more the only way to calculate target values of the
-invariants' variables is to solve it numerically.
+When pool consists of $n = 3$ assets and more the only way to calculate target value of the
+invariants is to solve it numerically.
 Numerical solution methods are usually used to solve equations that are too difficult for us to solve by hand.
 Each method is an iterative process that can approximate solutions to an equation with a predefined accuracy.
 
@@ -112,12 +112,6 @@ Iteration obviously doesn't have to be infinite.
 The condition for stopping the numerical calculation procedure is $y_{n + 1} - y_{n} <= 1$.
 However, $1$ is just the minimal grid step and the step calculated from Newton’s method may be less than $1$ in the
 last iterations.
-Thus, we will carry out additional calculation steps to find the extremum of the invariant error function.
-
-Let $I_{n*} = f(y_{n*})$ be the invariant calculation error of the numeric solution.
-We calculate $I_{n* + 1} = f(y_{n* + 1})$ and $I_{n* - 1} = f(y_{n* - 1})$ and, if $I_{n* - 1} > I_{n*} < I_{n* + 1}$
-then $y_{n*}$ is the final solution.
-If not, we continue to shift to the right until the extremum condition is met (usually this doesn't more than 2 steps).
 
 Finally, the amount of token $j$ to be received by the trader can be calculated as ${dy = y_{init} - y_{fin}}$,
 where $y_{init}$ is the balance of token $j$
@@ -144,19 +138,17 @@ D_{n + 1} = D_n - \frac{f(D_n)}{f'(D_n)} = \frac{(Ann S + n D_P) D_n}{(Ann - 1) 
 \end{equation}
 ```
 
-And, in the same manner, we adjust $D_{n*}$ solution to ensure that it is an extremum of the invariant error.
-
 ## Protocol functionality
 
 **Actions**
 
-1. Deposit liquidity (tokens can be deposited in arbitrary amounts in contrast to CP AMM);
-2. Redeem liquidity (tokens can be redeemed in arbitrary amounts in contrast to CP AMM);
+1. Deposit liquidity (tokens can be deposited only according to the current pool ratio);
+2. Redeem liquidity (tokens can be redeemed only according to the current pool ratio);
 3. Swap from token `X`  to `Y`.
 
 **Features**
 
-1. Two types of fees are applied to every imbalanced AMM operation:
+1. Two types of fees are applied to every swap operation:
     2. Liquidity provider fees;
     2. Protocol fees (treasury for Splash token holders).
 2. All fees are accumulated inside the pool;
@@ -172,11 +164,7 @@ And, in the same manner, we adjust $D_{n*}$ solution to ensure that it is an ext
 
 **Restrictions**
 
-1. Fees aren't applied on deposits/redeems that don't change the ratio of assets in the pool,
-   but in case of so-called imbalance deposits/redeems fees are applied as if the user had made a swap to the balanced
-   assets ratio. Thus, if user wants to deposit mostly in asset `X`, he must still have a
-   small amount of asset `Y` to pay the imbalance fee;
-2. Fees rates are equal to all assets in the pool.
+1. Fees rates are equal for all assets in the pool.
 
 ## eUTXO protocol design
 
@@ -191,22 +179,23 @@ AMM-orders TX images.
 
 Data related to the pool (`Immutable` stands for pool configuration parameters) is as follows:
 
-| Field                         | Type               | Description                                                                                                                             | State       |
-|-------------------------------|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------|-------------|
-| `pool_nft`                    | `Asset`            | Identifier of the pool                                                                                                                  | `Immutable` |
-| `n`                           | `Int`              | Number of tradable assets in the pool                                                                                                   | `Immutable` |
-| `tradable_assets`             | `List<Asset>`      | Identifiers of the tradable assets                                                                                                      | `Immutable` |
-| `tradable_tokens_multipliers` | `List<Int>`        | Precision multipliers for calculations, i.e. precision / decimals. Precision must be fixed as maximum value of tradable tokens decimals | `Immutable` |
-| `lp_token`                    | `Asset`            | Identifier of the liquidity token asset                                                                                                 | `Immutable` |
-| `ampl_coeff_is_editable`          | `Bool`             | Flag if amplification coefficient is editable                                                                                                                  | `Immutable` |
-| `lp_fee_is_editable`          | `Bool`             | Flag if liquidity provider fee is editable                                                                                                                  | `Immutable` |
-| `ampl_coeff`                  | `Integer`          | StableSwap invariant amplification coefficient                                                                                          | `Mutable`   |
-| `lp_fee_num`                  | `Integer`          | Numerator of the liquidity provider fee                                                                                                 | `Mutable`   |
-| `protocol_fee_num`            | `Integer`          | Numerator of the protocol fee share                                                                                                     | `Mutable`   |
-| `dao_stabe_proxy_witness`     | `ScriptHash` | Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool                                    | `Mutable`   |
-| `treasury_address`            | `ScriptKeyHash`    | Treasury address                                                                                                                        | `Mutable`   |
-| `protocol_fees`               | `List<Int>`        | Collected (and currently available) protocol fees in the tradable assets native units                                                   | `Mutable`   |
-| `inv`                         | `Integer`          | Actual value of the pool's invariant                                                                                                    | `Mutable`   |
+| Field                         | Type            | Description                                                                                                                             | State       |
+|-------------------------------|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------|-------------|
+| `pool_nft`                    | `Asset`         | Identifier of the pool                                                                                                                  | `Immutable` |
+| `n`                           | `Int`           | Number of tradable assets in the pool                                                                                                   | `Immutable` |
+| `tradable_assets`             | `List<Asset>`   | Identifiers of the tradable assets                                                                                                      | `Immutable` |
+| `tradable_tokens_multipliers` | `List<Int>`     | Precision multipliers for calculations, i.e. precision / decimals. Precision must be fixed as maximum value of tradable tokens decimals | `Immutable` |
+| `lp_token`                    | `Asset`         | Identifier of the liquidity token asset                                                                                                 | `Immutable` |
+| `ampl_coeff_is_editable`      | `Bool`          | Flag if amplification coefficient is editable                                                                                           | `Immutable` |
+| `lp_fee_is_editable`          | `Bool`          | Flag if liquidity provider fee is editable                                                                                              | `Immutable` |
+| `an2n`                        | `Integer`       | Amplification coefficient multiplied by n ^ (2n)                                                                                        | `Mutable`   |
+| `lp_fee_num`                  | `Integer`       | Numerator of the liquidity provider fee                                                                                                 | `Mutable`   |
+| `protocol_fee_num`            | `Integer`       | Numerator of the protocol fee share                                                                                                     | `Mutable`   |
+| `dao_stabe_proxy_witness`     | `ScriptHash`    | Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool                                    | `Mutable`   |
+| `treasury_address`            | `ScriptKeyHash` | Treasury address                                                                                                                        | `Mutable`   |
+| `protocol_fees`               | `List<Int>`     | Collected (and currently available) protocol fees in the tradable assets native units                                                   | `Mutable`   |
+| `alpha`                       | `Integer`       | Constant to optimize invariant validation                                                                                               | `Mutable`   |
+| `betta`                       | `Integer`       | Constant to optimize invariant validation                                                                                               | `Mutable`   |
 
 #### Tokens
 
@@ -231,10 +220,12 @@ Pool validator must validate that:
 5. No more tokens are in the pool output;
 6. Action is valid:
     1. In case of AMM action (Deposit/Redeem/Swap):
-        2. Valid protocol fees;
-        3. Valid liquidity provider fees;
-        4. Valid tradable and liquidity token deltas;
-        5. Calculations were performed according to the StableSwap invariant with pool params.
+        1. Pool adjustable params are preserved;
+        2. Action is performed according to the StableSwap logic;
+        3. Valid protocol fees;
+        4. Valid liquidity provider fees;
+        5. Valid tradable and liquidity token deltas;
+        6. Calculations were performed according to the StableSwap invariant with pool params.
     2. In case of DAO-actions:
         1. Action is confirmed by the proxy-StablePool DAO script;
         2. Action is confirmed by the Splash DAO voting script.
@@ -340,7 +331,6 @@ are: `deposit/redeem/swap`). It allows to add different logic to the protocol wi
 pool contract.
 The pool will only verify that the corresponding script and Splash DAO voting confirmed action.
 
-
 #### Data
 
 | Field      | Type    | Description                   |
@@ -354,9 +344,9 @@ Proxy-DAO contract must validate that:
 1. Pool invariant values are preserved;
 2. `LP` tokens are preserved
 3. Action is valid. The proxy-DAO contract ensures the correctness of the following actions:
-   1. Update liquidity provider fee;
-   2. Update protocol fee;
-   3. Update treasury address;
-   4. Withdrawn protocol fees to distribute between Splash token holders;
-   5. Update stake credential;
-   6. Update amplification coefficient.
+    1. Update liquidity provider fee;
+    2. Update protocol fee;
+    3. Update treasury address;
+    4. Withdrawn protocol fees to distribute between Splash token holders;
+    5. Update stake credential;
+    6. Update amplification coefficient.
