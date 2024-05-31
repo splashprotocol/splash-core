@@ -245,8 +245,7 @@ fn validate_amm_operation(
         )
       let delta_supply_lp_candidates_sorted =
         list.sort(delta_supply_lp_candidates, int.compare)
-      expect Some(delta_supply_lp) =
-        list.head(delta_supply_lp_candidates_sorted)
+      expect Some(delta_supply_lp) = if delta_lp < 0 { list.head(delta_supply_lp_candidates_sorted)} else {list.last(delta_supply_lp_candidates_sorted)}
       let valid_lp_delta: Bool = -delta_lp == delta_supply_lp
 
       valid_invariant_for_lq_operation && valid_lp_delta
