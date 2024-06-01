@@ -245,7 +245,8 @@ fn validate_amm_operation(
         )
       let delta_supply_lp_candidates_sorted =
         list.sort(delta_supply_lp_candidates, int.compare)
-      expect Some(delta_supply_lp) = if delta_lp < 0 { list.head(delta_supply_lp_candidates_sorted)} else {list.last(delta_supply_lp_candidates_sorted)}
+      expect Some(delta_supply_lp) =
+        list.head(delta_supply_lp_candidates_sorted)
       let valid_lp_delta: Bool = -delta_lp == delta_supply_lp
 
       valid_invariant_for_lq_operation && valid_lp_delta
@@ -710,9 +711,25 @@ fn uniform_reserves_valid_lq_math_template(
     }
 
   let total_balances_after = list.repeat(new_token_value, n)
+  let total_balances_after =
+    list.indexed_map(
+      total_balances_after,
+      fn(i, x) {
+        if i == 0 {
+          x + delta / 2
+        } else {
+          x
+        }
+      },
+    )
 
-  let inv_after = new_token_value * n
-  let lp_balance_after = lp_emission - inv_after
+  let inv_after =
+    if deposit {
+      new_token_value * n
+    } else {
+      ( new_token_value + delta / 2 ) * n
+    }
+  let lp_balance_after = lp_emission - new_token_value * n
   let (output_pool_data, output_value) =
     t2t_pool_state(
       n,
@@ -792,9 +809,18 @@ fn uniform_reserves_invalid_lq_math_template(
       default_token_value - delta
     }
 
-  let new_token_value_wrong = new_token_value - 1
   let total_balances_after = list.repeat(new_token_value, n)
-  let total_balances_after_wrong = list.repeat(new_token_value_wrong, n)
+  let total_balances_after_wrong =
+    list.indexed_map(
+      total_balances_after,
+      fn(i, x) {
+        if i == 0 {
+          x - delta / 2
+        } else {
+          x
+        }
+      },
+    )
 
   let inv_after = new_token_value * n
   let inv_after_wrong = new_token_value * n - 1
