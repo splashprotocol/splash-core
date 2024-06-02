@@ -14,7 +14,7 @@ import WhalePoolsDex.PConstants
 import Data.Either
 
 import Eval
-import Gen.Utils
+import Gen.Utils hiding (BalancePool(..))
 
 import PlutusLedgerApi.V2
 import Plutarch.Api.V2 as PV2
@@ -167,6 +167,7 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withSh
     context  = toData $ mkContext txInInfo purpose
     redeemer = toData $ DAORedeemer action 0
 
+  let 
     correctResult = 
       case testResultShouldBe of
         Success -> Right()

@@ -1,8 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module WhalePoolsDex.PContracts.PDeposit (
-    DepositConfig (..),
+module WhalePoolsDex.PContracts.PDepositBalance (
+    DepositBalanceConfig (..),
     depositValidatorT,
 ) where
 
@@ -22,14 +22,14 @@ import PExtra.Ada
 import PExtra.List (pelemAt)
 import PExtra.Monadic (tlet, tletField, tmatch)
 
-import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap, pmin, tletUnwrap)
-import WhalePoolsDex.PContracts.POrder     (OrderAction (Apply, Refund), OrderRedeemer)
-import WhalePoolsDex.PContracts.PFeeSwitch (extractPoolConfig)
+import WhalePoolsDex.PContracts.PApi          (containsSignature, getRewardValue', maxLqCap, pmin, tletUnwrap)
+import WhalePoolsDex.PContracts.POrder        (OrderAction (Apply, Refund), OrderRedeemer)
+import WhalePoolsDex.PContracts.PFeeSwitchBalancePool (extractBalancePoolConfig)
 
-import qualified WhalePoolsDex.Contracts.Proxy.Deposit as D
+import qualified WhalePoolsDex.Contracts.Proxy.DepositBalance as D
 
-newtype DepositConfig (s :: S)
-    = DepositConfig
+newtype DepositBalanceConfig (s :: S)
+    = DepositBalanceConfig
         ( Term
             s
             ( PDataRecord
@@ -48,12 +48,12 @@ newtype DepositConfig (s :: S)
     deriving
         (PIsData, PDataFields, PlutusType)
 
-instance DerivePlutusType DepositConfig where type DPTStrat _ = PlutusTypeData
+instance DerivePlutusType DepositBalanceConfig where type DPTStrat _ = PlutusTypeData
 
-instance PUnsafeLiftDecl DepositConfig where type PLifted DepositConfig = D.DepositConfig
-deriving via (DerivePConstantViaData D.DepositConfig DepositConfig) instance (PConstantDecl D.DepositConfig)
+instance PUnsafeLiftDecl DepositBalanceConfig where type PLifted DepositBalanceConfig = D.DepositBalanceConfig
+deriving via (DerivePConstantViaData D.DepositBalanceConfig DepositBalanceConfig) instance (PConstantDecl D.DepositBalanceConfig)
 
-depositValidatorT :: ClosedTerm (DepositConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
+depositValidatorT :: ClosedTerm (DepositBalanceConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
 depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
     ctx  <- pletFieldsC @'["txInfo", "purpose"] ctx'
     conf <- pletFieldsC @'["x", "y", "lq", "poolNft", "exFee", "rewardPkh", "stakePkh", "collateralAda"] conf'
@@ -63,7 +63,7 @@ depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
 
         rewardPkh = getField @"rewardPkh" conf
         txInfo'   = getField @"txInfo" ctx
-        action    = getField @"action" redeemer
+        action = getField @"action" redeemer
     
     txInfo  <- pletFieldsC @'["inputs", "outputs", "signatories"] txInfo'
     
@@ -97,7 +97,7 @@ depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                             nftAmount = assetClassValueOf # poolValue # requiredNft
                         in nftAmount #== 1
                 
-                poolInputDatum <- tlet $ extractPoolConfig # pool
+                poolInputDatum <- tlet $ extractBalancePoolConfig # pool
                 poolConf       <- pletFieldsC @'["treasuryX", "treasuryY"] poolInputDatum
                 let
                     treasuryX = getField @"treasuryX" poolConf

@@ -88,22 +88,29 @@ library
   import:          lang
   exposed-modules:
     WhalePoolsDex.Contracts.Proxy.Deposit
+    WhalePoolsDex.Contracts.Proxy.DepositBalance
     WhalePoolsDex.Contracts.Proxy.Swap
     WhalePoolsDex.Contracts.Proxy.Order
     WhalePoolsDex.Contracts.Proxy.Redeem
+    WhalePoolsDex.Contracts.Proxy.RedeemBalance
     WhalePoolsDex.Contracts.Proxy.FeeSwitch
     WhalePoolsDex.Contracts.Pool
     WhalePoolsDex.Contracts.PoolBFee
+    WhalePoolsDex.Contracts.BalancePool
     WhalePoolsDex.PContracts.PApi
     WhalePoolsDex.PContracts.PAssets
+    WhalePoolsDex.PContracts.PBalancePool
     WhalePoolsDex.PContracts.PDeposit
+    WhalePoolsDex.PContracts.PDepositBalance
     WhalePoolsDex.PContracts.POrder
     WhalePoolsDex.PContracts.PPool
     WhalePoolsDex.PContracts.PPoolBFee
     WhalePoolsDex.PContracts.PRedeem
+    WhalePoolsDex.PContracts.PRedeemBalance
     WhalePoolsDex.PContracts.PSwap
     WhalePoolsDex.PContracts.PSimpleStaking
     WhalePoolsDex.PContracts.PStakingWithPkhLock
+    WhalePoolsDex.PContracts.PFeeSwitchBalancePool
     WhalePoolsDex.PContracts.PFeeSwitch
     WhalePoolsDex.PStakingValidators
     WhalePoolsDex.PMintingValidators
@@ -115,7 +122,6 @@ library
     PExtra.List
     PExtra.Maybe
     PExtra.Monadic
-    PExtra.Num
     PExtra.Pair
     PExtra.PTriple
 
@@ -141,6 +147,7 @@ test-suite cardano-dex-contracts-test
     Gen.Models
     Gen.FeeSwitchGen
     Gen.DepositGen
+    Gen.BalancePoolGen
     Gen.PoolGen
     Gen.SwapGen
     Gen.RedeemGen
@@ -153,6 +160,7 @@ test-suite cardano-dex-contracts-test
     Tests.Redeem
     Tests.Staking
     Tests.FeeSwitch
+    Tests.BalancePool
     Tests.FeeSwitchBFee
     Tests.Api
     Eval
@@ -177,3 +185,4 @@ test-suite cardano-dex-contracts-test
     , plutus-core
     , serialise
     , hw-hedgehog
+    , HasBigDecimal

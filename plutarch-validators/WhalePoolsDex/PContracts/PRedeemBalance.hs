@@ -1,8 +1,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module WhalePoolsDex.PContracts.PRedeem (
-    RedeemConfig (..),
-    redeemValidatorT,
+module WhalePoolsDex.PContracts.PRedeemBalance (
+    RedeemBalanceConfig (..),
+    redeemBalanceValidatorT,
 ) where
 
 import qualified GHC.Generics  as GHC
@@ -20,14 +20,14 @@ import PExtra.Ada     (pIsAda)
 import PExtra.Monadic (tlet, tmatch)
 import PExtra.PTriple (PTuple3, ptuple3)
 
-import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap, zeroAsData)
-import WhalePoolsDex.PContracts.POrder     (OrderAction (Apply, Refund), OrderRedeemer)
-import WhalePoolsDex.PContracts.PFeeSwitch (extractPoolConfig)
+import WhalePoolsDex.PContracts.PApi                  (containsSignature, getRewardValue', maxLqCap, zeroAsData)
+import WhalePoolsDex.PContracts.POrder                (OrderAction (Apply, Refund), OrderRedeemer)
+import WhalePoolsDex.PContracts.PFeeSwitchBalancePool (extractBalancePoolConfig)
 
-import qualified WhalePoolsDex.Contracts.Proxy.Redeem as R
+import qualified WhalePoolsDex.Contracts.Proxy.RedeemBalance as R
 
-newtype RedeemConfig (s :: S)
-    = RedeemConfig
+newtype RedeemBalanceConfig (s :: S)
+    = RedeemBalanceConfig
         ( Term
             s
             ( PDataRecord
@@ -45,13 +45,13 @@ newtype RedeemConfig (s :: S)
     deriving
         (PIsData, PDataFields, PlutusType)
 
-instance DerivePlutusType RedeemConfig where type DPTStrat _ = PlutusTypeData
+instance DerivePlutusType RedeemBalanceConfig where type DPTStrat _ = PlutusTypeData
 
-instance PUnsafeLiftDecl RedeemConfig where type PLifted RedeemConfig = R.RedeemConfig
-deriving via (DerivePConstantViaData R.RedeemConfig RedeemConfig) instance (PConstantDecl R.RedeemConfig)
+instance PUnsafeLiftDecl RedeemBalanceConfig where type PLifted RedeemBalanceConfig = R.RedeemBalanceConfig
+deriving via (DerivePConstantViaData R.RedeemBalanceConfig RedeemBalanceConfig) instance (PConstantDecl R.RedeemBalanceConfig)
 
-redeemValidatorT :: ClosedTerm (RedeemConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
-redeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
+redeemBalanceValidatorT :: ClosedTerm (RedeemBalanceConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
+redeemBalanceValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
     ctx      <- pletFieldsC @'["txInfo", "purpose"] ctx'
     conf     <- pletFieldsC @'["x", "y", "lq", "poolNft", "exFee", "rewardPkh", "stakePkh"] conf'
     redeemer <- pletFieldsC @'["poolInIx", "orderInIx", "rewardOutIx", "action"] redeemer'
@@ -93,7 +93,7 @@ redeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                             nftAmount   = assetClassValueOf # poolValue # requiredNft
                         in nftAmount #== 1
 
-                poolInputDatum <- tlet $ extractPoolConfig # pool
+                poolInputDatum <- tlet $ extractBalancePoolConfig # pool
                 poolConf       <- pletFieldsC @'["treasuryX", "treasuryY"] poolInputDatum
                 let
                     treasuryX = getField @"treasuryX" poolConf

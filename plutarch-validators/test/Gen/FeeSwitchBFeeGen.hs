@@ -35,7 +35,7 @@ import WhalePoolsDex.PMintingValidators
 import qualified PlutusLedgerApi.V1 as Plutus
 import Gen.Models (mkAdaValue, mkValues, mkValue, genAssetClass, genPkh, genCSRandom, genTxId, genTxOutRef, genValidatorHash, mkContext)
 import Gen.DepositGen (unsafeFromEither, mkByteString)
-import Gen.Utils
+import Gen.Utils hiding (BalancePool(..))
 
 import WhalePoolsDex.Contracts.PoolBFee
 
