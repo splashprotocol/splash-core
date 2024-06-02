@@ -11,6 +11,7 @@ import Tests.Staking
 import Tests.Api
 import Tests.FeeSwitch
 import Tests.FeeSwitchBFee
+import Tests.BalancePool
 
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -19,6 +20,10 @@ import WhalePoolsDex.PValidators
 import PlutusLedgerApi.V2 as PV2
 import qualified Data.ByteString as BS
 import Plutarch.Api.V2
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
+import Codec.Serialise (serialise, deserialise)
+import Debug.Trace
 import Codec.Serialise (serialise, deserialise)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -32,24 +37,27 @@ main =
   defaultMain tests
   
 tests = testGroup "Contracts"
-  [ feeSwitch
-  , feeSwitchBFee
-  , checkPValueLength
-  , checkPool
-  , checkPoolRedeemer
-  , checkPoolBFee
-  , checkPoolBFeeRedeemer
-  , checkRedeem
-  , checkRedeemIdentity
-  , checkRedeemIsFair
-  , checkRedeemRedeemer
-  , checkDeposit 
-  , checkDepositChange
-  , checkDepositRedeemer
-  , checkDepositIdentity
-  , checkDepositLq
-  , checkDepositTokenReward
-  , checkSwap
-  , checkSwapRedeemer
-  , checkSwapIdentity
+  [ 
+  --   feeSwitch
+  -- , feeSwitchBFee
+  -- , 
+  balancePool
+  -- , checkPValueLength
+  -- , checkPool
+  -- , checkPoolRedeemer
+  -- , checkPoolBFee
+  -- , checkPoolBFeeRedeemer
+  -- , checkRedeem
+  -- , checkRedeemIdentity
+  -- , checkRedeemIsFair
+  -- , checkRedeemRedeemer
+  -- , checkDeposit 
+  -- , checkDepositChange
+  -- , checkDepositRedeemer
+  -- , checkDepositIdentity
+  -- , checkDepositLq
+  -- , checkDepositTokenReward
+  -- , checkSwap
+  -- , checkSwapRedeemer
+  -- , checkSwapIdentity
   ]

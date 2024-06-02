@@ -5,6 +5,9 @@ module WhalePoolsDex.PValidators (
     redeemValidator,
     validatorAddress,
     wrapValidator,
+    depositBalanceValidator,
+    redeemBalanceValidator,
+    poolBalanceValidator
     stableDepositValidator,
     stableRedeemValidator
 ) where
@@ -12,11 +15,14 @@ module WhalePoolsDex.PValidators (
 import PlutusLedgerApi.V1.Scripts (Validator (getValidator))
 import PlutusLedgerApi.V1.Address
 
-import qualified WhalePoolsDex.PContracts.PDeposit  as PD
-import qualified WhalePoolsDex.PContracts.PPool     as PP
-import qualified WhalePoolsDex.PContracts.PPoolBFee as PPB
-import qualified WhalePoolsDex.PContracts.PRedeem   as PR
-import qualified WhalePoolsDex.PContracts.PSwap     as PS
+import qualified WhalePoolsDex.PContracts.PDeposit      as PD
+import qualified WhalePoolsDex.PContracts.PPool         as PP
+import qualified WhalePoolsDex.PContracts.PBalancePool  as PBP
+import qualified WhalePoolsDex.PContracts.PPoolBFee     as PPB
+import qualified WhalePoolsDex.PContracts.PRedeem       as PR
+import qualified WhalePoolsDex.PContracts.PSwap         as PS
+import qualified WhalePoolsDex.PContracts.PDepositBalance as PBD
+import qualified WhalePoolsDex.PContracts.PRedeemBalance  as PBR
 
 import qualified WhalePoolsDex.PContracts.PDepositStable as PSD
 import qualified WhalePoolsDex.PContracts.PRedeemStable  as PSR
@@ -43,6 +49,9 @@ poolValidator = mkValidator $ wrapValidator PP.poolValidatorT
 poolBFeeValidator :: Validator
 poolBFeeValidator = mkValidator $ wrapValidator PPB.poolValidatorT
 
+poolBalanceValidator :: Validator
+poolBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBP.balancePoolValidatorT
+
 swapValidator :: Validator
 swapValidator = mkValidator $ wrapValidator PS.swapValidatorT
 
@@ -51,6 +60,12 @@ depositValidator = mkValidator $ wrapValidator PD.depositValidatorT
 
 redeemValidator :: Validator
 redeemValidator = mkValidator $ wrapValidator PR.redeemValidatorT
+
+depositBalanceValidator :: Validator
+depositBalanceValidator = mkValidator $ wrapValidator PBD.depositValidatorT
+
+redeemBalanceValidator :: Validator
+redeemBalanceValidator = mkValidator $ wrapValidator PBR.redeemValidatorT
 
 stableDepositValidator :: Validator
 stableDepositValidator = mkValidator $ wrapValidator PSD.stableDepositValidatorT
