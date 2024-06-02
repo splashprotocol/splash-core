@@ -17,9 +17,7 @@ import PlutusLedgerApi.V1.Credential
 data BalancePoolConfig = BalancePoolConfig
     { poolNft     :: AssetClass
     , poolX       :: AssetClass
-    , weightX     :: Integer
     , poolY       :: AssetClass
-    , weightY     :: Integer
     , poolLq      :: AssetClass
     , poolFeeNum  :: Integer
     , treasuryFee :: Integer
@@ -27,8 +25,6 @@ data BalancePoolConfig = BalancePoolConfig
     , treasuryY   :: Integer
     , daoPolicy   :: [StakingCredential]
     , treasuryAddress :: ValidatorHash
-    , invariant   :: Integer
-    , invariantLength :: Integer
     }
     deriving stock (Show)
 
@@ -63,9 +59,6 @@ instance PlutusTx.ToData BalancePoolAction where
 data BalancePoolRedeemer = BalancePoolRedeemer
     { action :: BalancePoolAction
     , selfIx :: Integer
-    , g :: [Integer]
-    , t :: [Integer]
-    , lList :: [Integer]
     }
     deriving (Show)
 

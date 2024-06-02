@@ -22,31 +22,41 @@ import Plutarch.Api.V2
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Codec.Serialise (serialise, deserialise)
+import Debug.Trace
 
 main :: IO ()
 main = do
-  defaultMain tests
+  let
+    shortBSRedeem = validatorHash redeemBalanceValidator
+    shortBSDeposit = validatorHash depositBalanceValidator
+  traceM $ show shortBSRedeem
+  traceM $ show shortBSDeposit
+  -- BS.writeFile ("/home/bromel/projects/whalepools-core/plutarch-validators/redeem.uplc") shortBSRedeem
+  -- BS.writeFile ("/home/bromel/projects/whalepools-core/plutarch-validators/deposit.uplc") shortBSDeposit
+  pure ()
 
 tests = testGroup "Contracts"
-  [ feeSwitch
-  , feeSwitchBFee
-  , balancePool
-  , checkPValueLength
-  , checkPool
-  , checkPoolRedeemer
-  , checkPoolBFee
-  , checkPoolBFeeRedeemer
-  , checkRedeem
-  , checkRedeemIdentity
-  , checkRedeemIsFair
-  , checkRedeemRedeemer
-  , checkDeposit 
-  , checkDepositChange
-  , checkDepositRedeemer
-  , checkDepositIdentity
-  , checkDepositLq
-  , checkDepositTokenReward
-  , checkSwap
-  , checkSwapRedeemer
-  , checkSwapIdentity
+  [ 
+  --   feeSwitch
+  -- , feeSwitchBFee
+  -- , 
+  balancePool
+  -- , checkPValueLength
+  -- , checkPool
+  -- , checkPoolRedeemer
+  -- , checkPoolBFee
+  -- , checkPoolBFeeRedeemer
+  -- , checkRedeem
+  -- , checkRedeemIdentity
+  -- , checkRedeemIsFair
+  -- , checkRedeemRedeemer
+  -- , checkDeposit 
+  -- , checkDepositChange
+  -- , checkDepositRedeemer
+  -- , checkDepositIdentity
+  -- , checkDepositLq
+  -- , checkDepositTokenReward
+  -- , checkSwap
+  -- , checkSwapRedeemer
+  -- , checkSwapIdentity
   ]

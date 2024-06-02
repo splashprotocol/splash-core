@@ -42,9 +42,7 @@ newtype BalancePoolConfig (s :: S)
             ( PDataRecord
                 '[ "poolNft"          ':= PAssetClass
                  , "poolX"            ':= PAssetClass
-                 , "weightX"          ':= PInteger
                  , "poolY"            ':= PAssetClass
-                 , "weightY"          ':= PInteger
                  , "poolLq"           ':= PAssetClass
                  , "feeNum"           ':= PInteger
                  , "treasuryFee"      ':= PInteger
@@ -52,8 +50,6 @@ newtype BalancePoolConfig (s :: S)
                  , "treasuryY"        ':= PInteger
                  , "DAOPolicy"        ':= PBuiltinList (PAsData PStakingCredential)
                  , "treasuryAddress"  ':= PValidatorHash
-                 , "invariant"        ':= PInteger
-                 , "invariantLength"  ':= PInteger
                  ]
             )
         )
@@ -118,12 +114,6 @@ newtype BalancePoolRedeemer (s :: S)
             ( PDataRecord
                 '[ "action" ':= BalancePoolAction
                  , "selfIx" ':= PInteger
-                 -- for swap, deposit / redeem (All assets) contains: gX, gY
-                 , "g"     ':= PBuiltinList (PAsData PInteger)
-                 -- for swap, deposit / redeem (All assets) contains: tX, tY
-                 , "t"     ':= PBuiltinList (PAsData PInteger)
-                 -- info about internals lengths
-                 , "lengths" ':= PBuiltinList (PAsData PInteger)
                  ]
             )
         )
@@ -144,193 +134,24 @@ parseDatum :: ClosedTerm (PDatum :--> BalancePoolConfig)
 parseDatum = plam $ \newDatum -> unTermCont $ do
   PDatum poolDatum <- pmatchC newDatum
   tletUnwrap $ ptryFromData @(BalancePoolConfig) $ poolDatum
-
-pIntLength :: ClosedTerm (PInteger :--> PInteger)
-pIntLength = plam $ \integerToProcess -> pIntLengthInternal # integerToProcess # 1
-
-pIntLengthInternal :: Term s (PInteger :--> PInteger :--> PInteger)
-pIntLengthInternal =
-    phoistAcyclic $
-        pfix #$ plam $ \self integerToProcess accLength ->
-            plet (pdiv # integerToProcess # (pconstant 10)) $ \divided ->
-            pif
-                (divided #== (pconstant 0))
-                (accLength #- (pconstant 1))
-                (self # divided # (accLength #+ (pconstant 1)))
-
-checkLength :: Term s (PInteger :--> PInteger :--> PInteger)
-checkLength = phoistAcyclic $ plam $ \origValue apLength ->
-    plet (ppow10 # apLength) $ \upperBound ->
-        plet (pdiv # upperBound # (pconstant 10)) $ \lowerBound -> unTermCont $ do
-            pure (pif (lowerBound #<= origValue #&& origValue #< upperBound)
-                (apLength)
-                (perror))
-
-roundToTest :: Term s (PInteger :--> PInteger :--> PInteger :--> PInteger)
-roundToTest = phoistAcyclic $ plam $ \origValue roundIdx lengthTest -> unTermCont $ do
-    checkedLength <- tlet $ checkLength # origValue # lengthTest
-    denum         <- tlet $ (ppow10 # (checkedLength - roundIdx))
-    roundingDenum <- tlet $ ptryPositive # denum
-    rational      <- tlet $ (pcon $ PRational origValue roundingDenum)
-    pure $ pround # rational
-
-verifyGTValues ::
-    Term s
-        (    PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PBool
-        )
-verifyGTValues = plam $ \tokenBalance tokenBalanceLength tokenWeight tokenG tokenT tokenGLength tokenTPowWeightLength ->
-    plet (checkLength # tokenBalance # tokenBalanceLength) $ \_ ->
-      (roundToTest # tokenG # tokenBalanceLength # tokenGLength) #== (roundToTest # (ppow # tokenT # tokenWeight) # tokenBalanceLength # tokenTPowWeightLength)
-
-verifyGEquality ::
-    Term s
-        (    PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PBool
-        )
-verifyGEquality = phoistAcyclic $ plam $ \leftSideMultiplicator rightSideRaw tokenG tokenWeight leftSideLength rightSideLength -> unTermCont $ do
-    degree      <- tlet $ (pdiv # pDen # tokenWeight)
-    leftSideRaw <- tlet $ (ppow # tokenG # degree) #* leftSideMultiplicator
-    leftSide    <- tlet $ roundToTest # leftSideRaw # rightSideLength # leftSideLength
-    gEDiff      <- tlet $ leftSide - rightSideRaw
-    let
-        validGEquality = pif
-            ( gEDiff #<= (pconstant 0) )
-            ( (pconstant (-1)) #<= gEDiff )
-            ( gEDiff #<= (pconstant 1) )
-
-    pure validGEquality
-
-verifyTExpEquality ::
-    Term s
-        (    PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PBool
-        )
-verifyTExpEquality = phoistAcyclic $
-    plam $ \tokenT rightSide rightSideLength tokenTPowLength -> unTermCont $ do
-       leftSideRounded <- tlet $ (roundToTest # (ppow # tokenT # pDen) # rightSideLength # tokenTPowLength)
-       delta <- tlet (leftSideRounded - rightSide)
-       tlet (checkLength # rightSide # rightSideLength)
-       let
-            validDelta = pif
-                ( delta #<= (pconstant 0) )
-                ( (pconstant (-1)) #<= delta )
-                ( delta #<= (pconstant 1) )
-
-       pure $ validDelta
-
-validGTAndTokenDeltaWithFees ::
-    ClosedTerm
-        (    PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PBool
-        )
-validGTAndTokenDeltaWithFees = phoistAcyclic $
-    -- leftSideMultiplicator = feeDen
-    -- leftSide  = (ppow # tokenG # degree) #* leftSideMultiplicator
-    -- rightSide = (prevTokenBalance #* feeDen + tokenDelta #* fees)
-    plam $ \prevTokenBalance newTokenBalanceLength tokenWeight tokenDelta tokenG tokenGLength tokenT tokenTPowLength tokenTPowWeightLength leftSideLength rightSideLength fees ->
-        let
-            correctGandT = verifyGTValues # (prevTokenBalance #+ tokenDelta) # newTokenBalanceLength # tokenWeight # tokenG # tokenT # tokenGLength # tokenTPowWeightLength
-
-            correctTokenValue = pif
-                ( (pmod # pDen # tokenWeight) #== (pconstant 0) )
-                ( verifyGEquality    # feeDen # (prevTokenBalance #* feeDen + tokenDelta #* fees) # tokenG # tokenWeight # leftSideLength # rightSideLength )  --( leftSide #== rightSide )
-                ( verifyTExpEquality # tokenT # (prevTokenBalance #* feeDen + tokenDelta #* fees) # rightSideLength # tokenTPowLength )
-
-        in correctGandT #&& correctTokenValue
-
--- Common task is validate G against T and new token value 
-validGTAndTokenDeltaWithoutFees ::
-    Term s
-        (    PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PBool
-        )
-validGTAndTokenDeltaWithoutFees = phoistAcyclic $
-    -- leftSideMultiplicator = (pconstant 1)
-    -- leftSide  = (ppow # tokenG # degree) #* leftSideMultiplicator
-    -- rightSide = (prevTokenBalance + tokenDelta)
-    plam $ \prevTokenBalance prevTokenBalanceLength tokenWeight tokenDelta tokenG tokenGLength tokenT tokenTPowLength tokenTPowWeightLength leftSideLength rightSideLength ->
-        let
-            correctGandT = verifyGTValues # (prevTokenBalance + tokenDelta) # prevTokenBalanceLength # tokenWeight # tokenG # tokenT # tokenGLength # tokenTPowWeightLength
-
-            correctTokenValue = pif
-                ( (pmod # pDen # tokenWeight) #== (pconstant 0) )
-                ( verifyGEquality    # (pconstant 1) # (prevTokenBalance + tokenDelta) # tokenG # tokenWeight # leftSideLength # rightSideLength )
-                ( verifyTExpEquality # tokenT # (prevTokenBalance + tokenDelta) # rightSideLength # tokenTPowLength )
-
-        in (correctGandT #&& correctTokenValue)
-
+    
 validSwap :: 
     ClosedTerm 
         (    BalancePoolState 
         :--> BalancePoolState 
         :--> BalancePoolConfig 
-        :--> BalancePoolConfig 
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
-        :--> PInteger
+        :--> BalancePoolConfig
         :--> PBool
         )
-validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newTx newGY newTy gXgYLength newXBalanceLength newGXLength newTxPowLength newTxPowWeightLength leftSideLengthX rightSideLengthX newYBalanceLength newGYLength newTyPowLength newTyPowWeightLength leftSideLengthY rightSideLengthY -> unTermCont $ do
+validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermCont $ do
     prevState  <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] prevState'
     newState   <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] newState'
-    prevConfig <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant", "invariantLength"] prevPoolConfig
+    prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress"] prevPoolConfig
     newConfig  <- pletFieldsC @'["treasuryX", "treasuryY"] newPoolConfig
     let
         prevPoolNft = getField @"poolNft" prevConfig
         prevPoolX   = getField @"poolX"  prevConfig
-        weightX     = getField @"weightX" prevConfig
         prevPoolY   = getField @"poolY"  prevConfig
-        weightY     = getField @"weightY" prevConfig
         prevPoolLq  = getField @"poolLq" prevConfig
         feeNum      = getField @"feeNum" prevConfig
         treasuryFee = getField @"treasuryFee" prevConfig
@@ -338,8 +159,6 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
         prevTreasuryY = getField @"treasuryY" prevConfig
         prevDAOPolicy = getField @"DAOPolicy" prevConfig
         prevTreasuryAddress = getField @"treasuryAddress" prevConfig
-        prevInvariant = getField @"invariant" prevConfig
-        invariantLength = getField @"invariantLength" prevConfig
 
         newTreasuryX = getField @"treasuryX" newConfig
         newTreasuryY = getField @"treasuryY" newConfig
@@ -357,51 +176,44 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
     dy  <- tlet $ newY - prevY
     dlq <- tlet $ newLq - prevLq
 
-    newInvarianRounded    <- tlet $ roundToTest # (newGX #* newGY) # invariantLength # gXgYLength
-    invariantRoundingDiff <- tlet $ newInvarianRounded - prevInvariant
-
     let
-        -- Verify that new value of invariant equals to previous
-        newInvariantIsCorrect = pif
-            ( invariantRoundingDiff #<= (pconstant 0) )
-            ( (pconstant (-1)) #<= invariantRoundingDiff )
-            ( invariantRoundingDiff #<= (pconstant 1) )
+        fullFeeNum = feeNum - treasuryFee
 
-        -- g,t related to tokens with fees
+        currentInvariant = prevX * (prevY * prevY * prevY * prevY)
 
-        -- leftSideMultiplicator = feeDen
-        -- leftSide  = (ppow # tokenG # degree) #* leftSideMultiplicator
-        -- rightSide = (prevTokenBalance #* feeDen + tokenDelta #* fees)
-
-        -- without fees
-        -- leftSideMultiplicator = (pconstant 1)
-        -- leftSide  = (ppow # tokenG # degree) #* leftSideMultiplicator
-        -- rightSide = (prevTokenBalance + tokenDelta)
-
-        correctTokensUpdate =
+        newXPart =
             pif
-                ( zero #< dx )
-                ( 
-                    (validGTAndTokenDeltaWithFees # prevX # newXBalanceLength # weightX # dx # newGX # newGXLength # newTx # newTxPowLength # newTxPowWeightLength # leftSideLengthX # rightSideLengthX # (feeNum - treasuryFee)) 
-                #&& (validGTAndTokenDeltaWithoutFees # prevY # newYBalanceLength # weightY # dy # newGY # newGYLength # newTy # newTyPowLength # newTyPowWeightLength # leftSideLengthY # rightSideLengthY) 
-                )
-                (   (validGTAndTokenDeltaWithoutFees # prevX # newXBalanceLength # weightX # dx # newGX # newGXLength # newTx # newTxPowLength # newTxPowWeightLength # leftSideLengthX # rightSideLengthX) 
-                #&& (validGTAndTokenDeltaWithFees # prevY # newYBalanceLength # weightY # dy # newGY # newGYLength # newTy # newTyPowLength # newTyPowWeightLength # leftSideLengthY # rightSideLengthY # (feeNum - treasuryFee))
-                )
+                (zero #< dx)
+                (prevX + (pdiv # (dx * fullFeeNum) # feeDen))
+                (prevX + dx)
+
+        newYPart =
+            pif
+                (zero #< dx)
+                (prevY + dy)
+                (prevY + pdiv # (dy * fullFeeNum) # feeDen)
+
+        newInvariant = newXPart * (newYPart * newYPart * newYPart * newYPart)
 
         correctTreasuryUpdate =
             pif
-                ( zero #< dx )
-                ( ((feeDen * prevTreasuryX + (dx * treasuryFee)) #<= ((newTreasuryX + 1) * feeDen)) #&& (prevTreasuryY #== newTreasuryY) )
-                ( ((feeDen * prevTreasuryY + (dy * treasuryFee)) #<= ((newTreasuryY + 1) * feeDen)) #&& (prevTreasuryX #== newTreasuryX) )
+                (zero #< dx)
+                (newTreasuryX #== (prevTreasuryX + (pdiv # (dx * treasuryFee) # feeDen)))
+                (newTreasuryY #== (prevTreasuryY + (pdiv # (dy * treasuryFee) # feeDen)))
+
+        anotherTokenTreasuryCorrect =
+            pif
+                (zero #< dx)
+                (prevTreasuryY #== newTreasuryY)
+                (prevTreasuryX #== newTreasuryX)
+
+    correctInv <- tlet $ currentInvariant #<= newInvariant
 
     newExpectedConfig <-
         tcon $ (BalancePoolConfig $
             pdcons @"poolNft" @PAssetClass # pdata prevPoolNft
                 #$ pdcons @"poolX" @PAssetClass # pdata prevPoolX
-                #$ pdcons @"weightX" @PInteger # pdata weightX
                 #$ pdcons @"poolY" @PAssetClass # pdata prevPoolY
-                #$ pdcons @"weightY" @PInteger # pdata weightY
                 #$ pdcons @"poolLq" @PAssetClass # pdata prevPoolLq
                 #$ pdcons @"feeNum" @PInteger # pdata feeNum
                 #$ pdcons @"treasuryFee" @PInteger # pdata treasuryFee
@@ -409,14 +221,12 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig newGX newT
                 #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
-                #$ pdcons @"invariant" @PInteger # pdata prevInvariant
-                #$ pdcons @"invariantLength" @PInteger # pdata invariantLength
                     # pdnil)
 
     pure $
-        (   newInvariantIsCorrect 
-        #&& correctTokensUpdate 
+        (   correctInv 
         #&& correctTreasuryUpdate 
+        #&& anotherTokenTreasuryCorrect 
         #&& (newPoolConfig #== newExpectedConfig)
         #&& (dlq #== zero)
         )
@@ -462,14 +272,11 @@ validDepositRedeemAllTokens ::
 validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermCont $ do
     prevState  <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] prevState'
     newState   <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] newState'
-    prevConfig <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant", "invariantLength"] prevPoolConfig
-    newConfig  <- pletFieldsC @'["invariant", "invariantLength"] newPoolConfig
+    prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress"] prevPoolConfig
     let
         prevPoolNft = getField @"poolNft" prevConfig
         prevPoolX   = getField @"poolX"  prevConfig
-        weightX     = getField @"weightX" prevConfig
         prevPoolY   = getField @"poolY"  prevConfig
-        weightY     = getField @"weightY" prevConfig
         prevPoolLq  = getField @"poolLq" prevConfig
         feeNum      = getField @"feeNum" prevConfig
         treasuryFee = getField @"treasuryFee" prevConfig
@@ -477,10 +284,6 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
         prevTreasuryY = getField @"treasuryY" prevConfig
         prevDAOPolicy = getField @"DAOPolicy" prevConfig
         prevTreasuryAddress = getField @"treasuryAddress" prevConfig
-        prevInvariant = getField @"invariant" prevConfig
-
-        newInvariant       = getField @"invariant" newConfig
-        newInvariantLength = getField @"invariantLength" newConfig
         
         prevX  = pfromData $ getField @"reservesX" prevState
         prevY  = pfromData $ getField @"reservesY" prevState
@@ -495,27 +298,14 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
     dlq <- tlet $ newLq - prevLq
 
     let
-        newCalculatedInvariant = pdiv # ((prevX + dx) #* prevInvariant) # prevX
-
-        invariantroundUpIsNecessary = 0 #< (pmod # ((prevX + dx) #* prevInvariant) # prevX)
-
-        normalizedInvariant =
-            pif (invariantroundUpIsNecessary)
-                (newCalculatedInvariant #+ 1)
-                (newCalculatedInvariant)
-
         xDepositRedeemIsValid = correctLpTokenDelta # prevLq # dlq # dx # prevX
         yDepositRedeemIsValid = correctLpTokenDelta # prevLq # dlq # dy # prevY
-
-    tlet (checkLength # newInvariant # newInvariantLength)
 
     newExpectedConfig <-
         tcon $ (BalancePoolConfig $
             pdcons @"poolNft" @PAssetClass # pdata prevPoolNft
                 #$ pdcons @"poolX" @PAssetClass # pdata prevPoolX
-                #$ pdcons @"weightX" @PInteger # pdata weightX
                 #$ pdcons @"poolY" @PAssetClass # pdata prevPoolY
-                #$ pdcons @"weightY" @PInteger # pdata weightY
                 #$ pdcons @"poolLq" @PAssetClass # pdata prevPoolLq
                 #$ pdcons @"feeNum" @PInteger # pdata feeNum
                 #$ pdcons @"treasuryFee" @PInteger # pdata treasuryFee
@@ -523,13 +313,10 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
                 #$ pdcons @"treasuryY" @PInteger # pdata prevTreasuryY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
-                #$ pdcons @"invariant" @PInteger # pdata newInvariant
-                #$ pdcons @"invariantLength" @PInteger # pdata newInvariantLength
                     # pdnil)
 
     pure $ 
-        (   normalizedInvariant #== newInvariant
-        #&& xDepositRedeemIsValid
+        (   xDepositRedeemIsValid
         #&& yDepositRedeemIsValid
         #&& newPoolConfig #== newExpectedConfig
         )
@@ -562,15 +349,10 @@ readPoolState = phoistAcyclic $
 
 balancePoolValidatorT :: ClosedTerm (BalancePoolConfig :--> BalancePoolRedeemer :--> PScriptContext :--> PBool)
 balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
-    redeemer <- pletFieldsC @'["action", "selfIx", "g", "t", "lengths"] redeemer'
+    redeemer <- pletFieldsC @'["action", "selfIx"] redeemer'
     let
         selfIx = getField @"selfIx" redeemer
         action = getField @"action" redeemer
-
-        gList = getField @"g" redeemer
-        tList = getField @"t" redeemer
-
-        lList = getField @"lengths" redeemer
 
     ctx <- pletFieldsC @'["txInfo", "purpose"] ctx'
     let txinfo' = getField @"txInfo" ctx
@@ -622,28 +404,7 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
     pure $
         selfIdentity #&& (pmatch action $ \case
             Swap    -> unTermCont $ do
-
-                gx <- tletUnwrap $ phead # gList
-                gy <- tletUnwrap $ pelemAt # (pconstant 1) # gList
-                tx <- tletUnwrap $ phead # tList
-                ty <- tletUnwrap $ pelemAt # (pconstant 1) # tList
-
-                -- Parsing length list
-                gXgYLength           <- tletUnwrap $ phead # lList
-                newXBalanceLength    <- tletUnwrap $ pelemAt # (pconstant 1)  # lList
-                newGXLength          <- tletUnwrap $ pelemAt # (pconstant 2)  # lList
-                newTxPowLength       <- tletUnwrap $ pelemAt # (pconstant 3)  # lList
-                newTxPowWeightLength <- tletUnwrap $ pelemAt # (pconstant 4)  # lList
-                leftSideLengthX      <- tletUnwrap $ pelemAt # (pconstant 5)  # lList
-                rightSideLengthX     <- tletUnwrap $ pelemAt # (pconstant 6)  # lList
-                newYBalanceLength    <- tletUnwrap $ pelemAt # (pconstant 7)  # lList
-                newGYLength          <- tletUnwrap $ pelemAt # (pconstant 8)  # lList
-                newTyPowLength       <- tletUnwrap $ pelemAt # (pconstant 9)  # lList
-                newTyPowWeightLength <- tletUnwrap $ pelemAt # (pconstant 10) # lList
-                leftSideLengthY      <- tletUnwrap $ pelemAt # (pconstant 11) # lList
-                rightSideLengthY     <- tletUnwrap $ pelemAt # (pconstant 12) # lList  
-                
-                pure $ noMoreTokens #&& scriptPreserved #&& (validSwap # s0 # s1 # conf # newConfig # gx # tx # gy # ty # gXgYLength # newXBalanceLength # newGXLength # newTxPowLength # newTxPowWeightLength # leftSideLengthX # rightSideLengthX # newYBalanceLength # newGYLength # newTyPowLength # newTyPowWeightLength # leftSideLengthY # rightSideLengthY)
+                pure $ noMoreTokens #&& scriptPreserved #&& (validSwap # s0 # s1 # conf # newConfig)
             DAOAction -> validDAOAction # conf # txinfo'
             _ ->         noMoreTokens #&& scriptPreserved #&& (validDepositRedeemAllTokens # s0 # s1 # conf # newConfig)
         )

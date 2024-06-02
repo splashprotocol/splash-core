@@ -83,36 +83,24 @@ instance PlutusType DAOAction where
             )
 
 -- All SwitchFee actions shouldn't modify main poolConfig elements: poolNft, poolX, poolY, poolLq, lqBound, feeNum
-validateCommonFields :: PMemberFields BalancePoolConfig '["poolNft", "poolX", "poolY", "poolLq", "weightX", "weightY", "invariant", "invariantLength"] s as => HRec as -> HRec as -> Term s PBool
+validateCommonFields :: PMemberFields BalancePoolConfig '["poolNft", "poolX", "poolY", "poolLq"] s as => HRec as -> HRec as -> Term s PBool
 validateCommonFields prevConfig newConfig =
   let
     prevPoolNft   = getField @"poolNft" prevConfig
     prevPoolX     = getField @"poolX"   prevConfig
-    prevWeightX   = getField @"weightX"  prevConfig
     prevPoolY     = getField @"poolY"   prevConfig
-    prevWeightY   = getField @"weightY"  prevConfig
     prevPoolLq    = getField @"poolLq"  prevConfig
-    prevInvariant = getField @"invariant"  prevConfig
-    prevInvariantLength = getField @"invariantLength"  prevConfig
 
     newPoolNft   = getField @"poolNft" newConfig
     newPoolX     = getField @"poolX"   newConfig
-    newWeightX   = getField @"weightX"   newConfig
     newPoolY     = getField @"poolY"   newConfig
-    newWeightY   = getField @"weightY"   newConfig
     newPoolLq    = getField @"poolLq"  newConfig
-    newInvariant = getField @"invariant" newConfig
-    newInvariantLength = getField @"invariantLength" newConfig
 
     commonFieldsValid = 
       prevPoolNft    #== newPoolNft   #&&
       prevPoolX      #== newPoolX     #&&
-      prevWeightX    #== newWeightX   #&&
       prevPoolY      #== newPoolY     #&&
-      prevWeightY    #== newWeightY   #&&
-      prevPoolLq     #== newPoolLq    #&&
-      prevInvariant  #== newInvariant #&&
-      prevInvariantLength #== newInvariantLength
+      prevPoolLq     #== newPoolLq
 
   in commonFieldsValid
 
@@ -220,8 +208,8 @@ daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \
   poolInputAddr  <- tletField @"address" poolInputResolved
   poolOutputAddr <- tletField @"address" successor
 
-  prevConf <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant", "invariantLength"] poolInputDatum
-  newConf  <- pletFieldsC @'["poolNft", "poolX", "weightX", "poolY", "weightY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "invariant", "invariantLength"] poolOutputDatum
+  prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress"] poolInputDatum
+  newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress"] poolOutputDatum
   let
     validSignaturesQty =
       pfoldl # plam (\acc pkh -> pif (containsSignature # signatories # pkh) (acc + 1) acc) # 0 # daoPkhs
