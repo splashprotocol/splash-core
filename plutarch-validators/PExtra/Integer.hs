@@ -2,6 +2,7 @@ module PExtra.Integer (
     podd,
     peven,
     ppow,
+    ppow10
 ) where
 
 import Plutarch.Prelude
@@ -31,6 +32,58 @@ pexp' = phoistAcyclic $
             (n #== 0)
             1
             $ pif (podd # n) a 1 * (psquare #$ self # a # (pdiv # n # 2))
+
+ppow10 :: Term s (PInteger :--> PInteger)
+ppow10 = phoistAcyclic $
+    plam $ \n ->
+        pif
+            (n #< 0)
+            perror
+            (pexp10' # n)
+
+pexp10' :: Term s (PInteger :--> PInteger)
+pexp10' = phoistAcyclic $
+    pfix #$ plam $ \self n ->
+        pif
+            (n #< 12)
+            (pexp10constant' # n)
+            $ pif (podd # n) (pconstant 10) 1 * (psquare #$ self # (pdiv # n # 2))
+
+-- max degree is 11
+pexp10constant' :: Term s (PInteger :--> PInteger)
+pexp10constant' = phoistAcyclic $
+    plam $ \n ->
+        pif
+            ( n #== 11 )
+            (pconstant 100000000000)
+            ( pif (n #== 10)
+              (pconstant 10000000000)
+              ( pif (n #== 9)
+                (pconstant 1000000000)
+                ( pif (n #== 8)
+                  (pconstant 100000000)
+                  ( pif (n #== 7)
+                    (pconstant 10000000)
+                    ( pif (n #== 6)
+                      (pconstant 1000000)
+                      ( pif (n #== 5)
+                        (pconstant 100000)
+                        ( pif (n #== 4)
+                          (pconstant 10000)
+                          ( pif (n #== 3)
+                            (pconstant 1000)
+                            ( pif (n #== 2)
+                              (pconstant 100)
+                              $ pif (n #== 1) (pconstant 10) (pconstant 1)
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
 
 psquare :: Term s (PInteger :--> PInteger)
 psquare = phoistAcyclic $ plam $ \x' -> plet x' $ \x -> x * x

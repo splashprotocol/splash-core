@@ -265,7 +265,6 @@ poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                                         (zero #< dx)
                                         (-dy * (rx0 * feeDen' + dxf) #<= ry0 * dxf)
                                         (-dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
-                            ptraceC $ pshow validSwap
                             pure $ noMoreTokens #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
                         DAOAction -> validDAOAction # conf # txinfo'
                         _ -> unTermCont $ do
