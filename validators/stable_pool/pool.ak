@@ -263,6 +263,7 @@ fn validate_amm_operation(
 
       // 3.2.1. Valid quote protocol fees:
       let total_fees_num_reversed = denom - lp_fee_num - protocol_fee_num
+
       let valid_quote_protocol_fees: Bool =
         quote_protocol_fees_delta * total_fees_num_reversed >= -quote_total_delta * protocol_fee_num
       // 3.2.2. Non-quote protocol fees are preserved:
@@ -271,7 +272,7 @@ fn validate_amm_operation(
 
       // 3.2.3. Valid quote liquidity provider fees:
       let valid_quote_lp_fees: Bool =
-        tradable_quote_asset_delta * total_fees_num_reversed >= quote_total_delta * (
+        tradable_quote_asset_delta * total_fees_num_reversed <= quote_total_delta * (
           denom - lp_fee_num
         )
       // 3.2.4. Non-quote liquidity provider fees are preserved:
