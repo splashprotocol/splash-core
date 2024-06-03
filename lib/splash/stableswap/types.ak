@@ -34,7 +34,7 @@ pub type PoolData {
   // Constant to optimize invariant validation | Mutable:
   alpha: Int,
   // Constant to optimize invariant validation | Mutable:
-  betta: Int,
+  beta: Int,
 }
 
 /// Pool action types.

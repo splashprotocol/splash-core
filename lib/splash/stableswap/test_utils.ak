@@ -74,7 +74,7 @@ pub fn t2t_pool_state(
   let total_sum_calc_after = utils.sum(tradable_balances_calc)
   let total_prod_calc_after = utils.prod(tradable_balances_calc)
   let alpha = ( an2n - nn ) * total_prod_calc_after
-  let betta = an2n * total_prod_calc_after * total_sum_calc_after
+  let beta = an2n * total_prod_calc_after * total_sum_calc_after
 
   let pool_data =
     PoolData {
@@ -98,7 +98,7 @@ pub fn t2t_pool_state(
       treasury_address: bytearray.from_string(treasury_address_string),
       protocol_fees,
       alpha,
-      betta,
+      beta,
     }
 
   expect Some(asset0) = list.at(tradable_assets, 0)
@@ -174,7 +174,7 @@ pub fn n2t_pool_state(
   let total_sum_calc_after = utils.sum(tradable_balances_calc)
   let total_prod_calc_after = utils.prod(tradable_balances_calc)
   let alpha = ( an2n - nn ) * total_prod_calc_after
-  let betta = an2n * total_prod_calc_after * total_sum_calc_after
+  let beta = an2n * total_prod_calc_after * total_sum_calc_after
 
   let pool_data =
     PoolData {
@@ -198,7 +198,7 @@ pub fn n2t_pool_state(
       treasury_address: bytearray.from_string(treasury_address_string),
       protocol_fees,
       alpha,
-      betta,
+      beta,
     }
 
   expect Some(asset1) = list.at(tradable_assets, 1)

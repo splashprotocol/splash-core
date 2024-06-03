@@ -135,7 +135,7 @@ fn validate_stable_proxy_dao_action(
     treasury_address: treasury_addr0,
     protocol_fees: protocol_fees0,
     alpha: alpha0,
-    betta: betta0,
+    beta: beta0,
     lp_token,
     ..
   } = input_datum
@@ -153,7 +153,7 @@ fn validate_stable_proxy_dao_action(
     treasury_address: treasury_addr1,
     protocol_fees: protocol_fees1,
     alpha: alpha1,
-    betta: betta1,
+    beta: beta1,
     ..
   } = output_datum
   // Liquidity tokens | Output:
@@ -161,7 +161,7 @@ fn validate_stable_proxy_dao_action(
     value.quantity_of(output_value, lp_token_policy, lp_token_name)
 
   // 1. Pool invariant value is preserved:
-  let invatiant_preserved: Bool = alpha0 == alpha1 && betta0 == betta1
+  let invatiant_preserved: Bool = alpha0 == alpha1 && beta0 == beta1
   // 2. LP tokens are preserved:
   let lp_token_preserved: Bool = lp_amount0 == lp_amount1
 

@@ -149,9 +149,9 @@ D_{n + 1} = D_n - \frac{f(D_n)}{f'(D_n)} = \frac{(Ann S + n D_P) D_n}{(Ann - 1) 
 **Features**
 
 1. Two types of fees are applied to every swap operation:
-    2. Liquidity provider fees;
+    1. Liquidity provider fees;
     2. Protocol fees (treasury for Splash token holders).
-2. All fees are accumulated inside the pool;
+2. All fees are accumulated in the pool;
 3. Support of DAO-actions:
     1. Update liquidity provider fee;
     2. Update protocol fee;
@@ -317,7 +317,7 @@ Redeem order validator must validate that:
 
 1. Order interacts with the desired pool;
 2. Expected amounts of all tokens are received by redeemer;
-4. Redeemer is valid.
+3. Redeemer is valid.
 
 ### Swap
 

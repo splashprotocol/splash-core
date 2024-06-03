@@ -156,7 +156,7 @@ fn validate_amm_operation(
     treasury_address,
     protocol_fees: availible_protocol_fees0,
     alpha: alpha0,
-    betta: betta0,
+    beta: beta0,
     ..
   } = input_datum
 
@@ -170,7 +170,7 @@ fn validate_amm_operation(
     treasury_address: treasury_address1,
     protocol_fees: availible_protocol_fees1,
     alpha: alpha1,
-    betta: betta1,
+    beta: beta1,
     ..
   } = output_datum
   // ==================================== CALCULATING DELTAS ==================================== //
@@ -213,10 +213,10 @@ fn validate_amm_operation(
   let pool_adjustable_params_preserved: Bool =
     an2n == an2n1 && lp_fee_num == lp_fee_num1 && protocol_fee_num == protocol_fee_num1 && treasury_address == treasury_address1
 
-  // 2. Checking if constants alpha and betta are valid in the output datum:
+  // 2. Checking if constants alpha and beta are valid in the output datum:
   let alpha_after = ( an2n - nn ) * total_prod_calc_after
-  let betta_after = an2n * total_prod_calc_after * total_sum_calc_after
-  let valid_alpha_betta: Bool = alpha1 == alpha_after && betta1 == betta_after
+  let beta_after = an2n * total_prod_calc_after * total_sum_calc_after
+  let valid_alpha_beta: Bool = alpha1 == alpha_after && beta1 == beta_after
 
   // 3. Checking if AMM-action is valid.
   let valid_amm_action =
@@ -228,7 +228,7 @@ fn validate_amm_operation(
           nn,
           an2n,
           alpha0,
-          betta0,
+          beta0,
           d1,
           d1n1,
           total_sum_calc_after,
@@ -300,7 +300,7 @@ fn validate_amm_operation(
           nn,
           an2n,
           alpha0,
-          betta0,
+          beta0,
           d1,
           d1n1,
           total_sum_calc_after,
@@ -309,7 +309,7 @@ fn validate_amm_operation(
 
       valid_quote_protocol_fees && non_quote_protocol_fees_preserved && valid_quote_lp_fees && non_quote_lp_fees_preserved && valid_quote_tradable_delta && valid_invariant_for_swap
     }
-  pool_adjustable_params_preserved && valid_alpha_betta && valid_amm_action
+  pool_adjustable_params_preserved && valid_alpha_beta && valid_amm_action
 }
 
 // ================================================= TESTS ================================================= //
