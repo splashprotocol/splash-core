@@ -40,9 +40,6 @@ pub type PoolData {
 /// Pool action types.
 pub type PoolAction {
   AMMAction { context_values_list: List<Int> }
-
-  // "context_values_list" for deposit/redeem actions contains:
-  // - 0: Value of the StableSwap invariant for the output state;
   // "context_values_list" for swap actions contains:
   // - 0: Value of the StableSwap invariant for the output state;
   // - 1: Index of the base asset;

@@ -202,11 +202,9 @@ fn validate_amm_operation(
     utils.lists_mult(tradable_balances1, tradable_tokens_multipliers)
 
   // Widely used constanst:
+  let nn = math.pow(n, n)
   let total_sum_calc_after = utils.sum(tradable_balances_calc1)
   let total_prod_calc_after = utils.prod(tradable_balances_calc1)
-  let nn = math.pow(n, n)
-  expect Some(d1) = list.at(context_values_list, 0)
-  let d1n1 = math.pow(d1, n + 1)
 
   // ==================================== AMM-ACTION VALIDATIONS ==================================== //
   // 1. Pool adjustable params are preserved:
@@ -222,20 +220,7 @@ fn validate_amm_operation(
   let valid_amm_action =
     if delta_lp != 0 {
       // 3.1. Deposit || Redeem.
-      // 3.1.1. Checking the invariant.
-      let valid_invariant_for_lq_operation: Bool =
-        utils.check_invariant(
-          nn,
-          an2n,
-          alpha0,
-          beta0,
-          d1,
-          d1n1,
-          total_sum_calc_after,
-          total_prod_calc_after,
-        )
-
-      // 3.1.2. Checking LP token delta:
+      // 3.1.1. Checking LP token delta:
       let supply_lp = lp_emission - lp_amount0
       let delta_supply_lp_candidates =
         list.map2(
@@ -247,11 +232,13 @@ fn validate_amm_operation(
         list.sort(delta_supply_lp_candidates, int.compare)
       expect Some(delta_supply_lp) =
         list.head(delta_supply_lp_candidates_sorted)
-      let valid_lp_delta: Bool = -delta_lp == delta_supply_lp
+      let valid_lp_delta: Bool = -delta_lp <= delta_supply_lp
 
-      valid_invariant_for_lq_operation && valid_lp_delta
+      valid_lp_delta
     } else {
       // 3.2. Swap.
+      expect Some(d1) = list.at(context_values_list, 0)
+      let d1n1 = math.pow(d1, n + 1)
       // Deltas:
       let tradable_deltas =
         utils.lists_diff(tradable_balances1, tradable_balances0)
@@ -723,18 +710,32 @@ fn uniform_reserves_valid_lq_math_template(
       },
     )
 
-  let inv_after =
-    if deposit {
-      new_token_value * n
-    } else {
-      ( new_token_value + delta / 2 ) * n
-    }
   let lp_balance_after = lp_emission - new_token_value * n
+  let lp_balance_after_extra_lp = lp_balance_after + default_token_value
   let (output_pool_data, output_value) =
     t2t_pool_state(
       n,
       total_balances_after,
       lp_balance_after,
+      @"pool_nft_policy",
+      @"pool_nft_name",
+      tradable_assets,
+      tradable_decimals_before,
+      @"pool_lp_policy",
+      @"pool_lp_name",
+      an2n,
+      lp_fee_num_before,
+      protocol_fee_num_before,
+      @"dao_stable_policy",
+      @"tr_policy",
+      collected_protocol_fees_before,
+    )
+
+  let (_, output_value_extra_lp) =
+    t2t_pool_state(
+      n,
+      total_balances_after,
+      lp_balance_after_extra_lp,
       @"pool_nft_policy",
       @"pool_nft_name",
       tradable_assets,
@@ -754,7 +755,13 @@ fn uniform_reserves_valid_lq_math_template(
     input_pool_data,
     output_value,
     output_pool_data,
-    [inv_after],
+    [],
+  ) && validate_amm_operation(
+    input_value,
+    input_pool_data,
+    output_value_extra_lp,
+    output_pool_data,
+    [],
   )
 }
 
@@ -823,7 +830,6 @@ fn uniform_reserves_invalid_lq_math_template(
     )
 
   let inv_after = new_token_value * n
-  let inv_after_wrong = new_token_value * n - 1
   let lp_balance_after = lp_emission - inv_after
   let lp_balance_after_wrong = lp_emission - inv_after - 1
 
@@ -895,25 +901,19 @@ fn uniform_reserves_invalid_lq_math_template(
     input_pool_data,
     output_value_wrong_balance,
     output_pool_data,
-    [inv_after],
+    [],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_protocol_fees,
-    [inv_after],
-  ) && validate_amm_operation(
-    input_value,
-    input_pool_data,
-    output_value,
-    output_pool_data,
-    [inv_after_wrong],
+    [],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_lp,
     output_pool_data,
-    [inv_after],
+    [],
   )
 }
 

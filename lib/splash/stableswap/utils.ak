@@ -121,11 +121,7 @@ pub fn check_invariant(
   let alpha_after = ( an2n - nn ) * total_prod_calc_after
   let beta_after = an2n * total_prod_calc_after * total_sum_calc_after
 
-  if alpha_after >= alpha_before {
-    dn1 + alpha_before * d - beta_before >= 0 && dn1 + alpha_after * d - beta_after <= 0
-  } else {
-    dn1 + alpha_before * d - beta_before <= 0 && dn1 + alpha_after * d - beta_after >= 0
-  }
+  dn1 + alpha_before * d - beta_before >= 0 && dn1 + alpha_after * d - beta_after <= 0
 }
 
 /// Extract tokens balances from the given value.
