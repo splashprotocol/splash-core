@@ -1,7 +1,6 @@
 use aiken/bytearray
 use aiken/int
 use aiken/list
-use aiken/math
 use aiken/string
 use aiken/transaction.{
   InlineDatum, Input, Output, OutputReference, ScriptContext, Spend, Transaction,
@@ -11,7 +10,6 @@ use aiken/transaction/credential.{from_script, with_delegation_script}
 use aiken/transaction/value.{Value}
 use splash/plutus.{Asset}
 use splash/stableswap/types.{DAOData, PoolData}
-use splash/stableswap/utils
 
 const default_lovelace_value = 1_000_000_000_000_000
 
@@ -60,21 +58,10 @@ pub fn t2t_pool_state(
   treasury_address_string: String,
   protocol_fees: List<Int>,
 ) -> (PoolData, Value) {
-  let nn = math.pow(n, n)
-
   let tradable_decimals_sorted = list.sort(tradable_decimals, int.compare)
   expect Some(precision) = list.last(tradable_decimals_sorted)
   let tradable_tokens_multipliers =
     list.map(tradable_decimals, fn(x) { precision / x })
-
-  let tradable_balances = utils.lists_diff(balances, protocol_fees)
-
-  let tradable_balances_calc =
-    utils.lists_mult(tradable_balances, tradable_tokens_multipliers)
-  let total_sum_calc_after = utils.sum(tradable_balances_calc)
-  let total_prod_calc_after = utils.prod(tradable_balances_calc)
-  let alpha = ( an2n - nn ) * total_prod_calc_after
-  let beta = an2n * total_prod_calc_after * total_sum_calc_after
 
   let pool_data =
     PoolData {
@@ -97,8 +84,6 @@ pub fn t2t_pool_state(
       dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
       treasury_address: bytearray.from_string(treasury_address_string),
       protocol_fees,
-      alpha,
-      beta,
     }
 
   expect Some(asset0) = list.at(tradable_assets, 0)
@@ -160,21 +145,10 @@ pub fn n2t_pool_state(
   treasury_address_string: String,
   protocol_fees: List<Int>,
 ) -> (PoolData, Value) {
-  let nn = math.pow(n, n)
-
   let tradable_decimals_sorted = list.sort(tradable_decimals, int.compare)
   expect Some(precision) = list.last(tradable_decimals_sorted)
   let tradable_tokens_multipliers =
     list.map(tradable_decimals, fn(x) { precision / x })
-
-  let tradable_balances = utils.lists_diff(balances, protocol_fees)
-
-  let tradable_balances_calc =
-    utils.lists_mult(tradable_balances, tradable_tokens_multipliers)
-  let total_sum_calc_after = utils.sum(tradable_balances_calc)
-  let total_prod_calc_after = utils.prod(tradable_balances_calc)
-  let alpha = ( an2n - nn ) * total_prod_calc_after
-  let beta = an2n * total_prod_calc_after * total_sum_calc_after
 
   let pool_data =
     PoolData {
@@ -197,8 +171,6 @@ pub fn n2t_pool_state(
       dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
       treasury_address: bytearray.from_string(treasury_address_string),
       protocol_fees,
-      alpha,
-      beta,
     }
 
   expect Some(asset1) = list.at(tradable_assets, 1)

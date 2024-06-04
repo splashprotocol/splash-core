@@ -1,5 +1,6 @@
 use aiken/dict.{Dict}
 use aiken/list
+use aiken/math
 use aiken/transaction/credential.{Inline, ScriptCredential, StakeCredential}
 use aiken/transaction/value.{Value}
 use splash/plutus.{Asset, ScriptHash}
@@ -109,18 +110,26 @@ test test_list_prod() {
 /// Checks if StableSwap invariant is changed in the valid interval.
 /// Note: input reserves must be reduced to equal denominator (precision):
 pub fn check_invariant(
-  nn: Int,
+  n: Int,
   an2n: Int,
-  alpha_before: Int,
-  beta_before: Int,
   d: Int,
   dn1: Int,
-  total_sum_calc_after: Int,
-  total_prod_calc_after: Int,
+  tradable_balances_calc_before: List<Int>,
+  tradable_balances_calc_after: List<Int>,
 ) -> Bool {
-  let alpha_after = ( an2n - nn ) * total_prod_calc_after
-  let beta_after = an2n * total_prod_calc_after * total_sum_calc_after
+  let nn = math.pow(n, n)
+  let total_prod_calc_before = prod(tradable_balances_calc_before)
 
+  let total_prod_calc_after = prod(tradable_balances_calc_after)
+
+  let an2n_nn = an2n - nn
+  let alpha_before = an2n_nn * total_prod_calc_before
+  let beta_before =
+    an2n * total_prod_calc_before * sum(tradable_balances_calc_before)
+
+  let alpha_after = an2n_nn * total_prod_calc_after
+  let beta_after =
+    an2n * total_prod_calc_after * sum(tradable_balances_calc_after)
   dn1 + alpha_before * d - beta_before >= 0 && dn1 + alpha_after * d - beta_after <= 0
 }
 

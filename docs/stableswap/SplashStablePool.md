@@ -194,8 +194,6 @@ Data related to the pool (`Immutable` stands for pool configuration parameters) 
 | `dao_stabe_proxy_witness`     | `ScriptHash`    | Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool                                    | `Mutable`   |
 | `treasury_address`            | `ScriptKeyHash` | Treasury address                                                                                                                        | `Mutable`   |
 | `protocol_fees`               | `List<Int>`     | Collected (and currently available) protocol fees in the tradable assets native units                                                   | `Mutable`   |
-| `alpha`                       | `Integer`       | Constant to optimize invariant validation                                                                                               | `Mutable`   |
-| `betta`                       | `Integer`       | Constant to optimize invariant validation                                                                                               | `Mutable`   |
 
 #### Tokens
 
@@ -341,9 +339,8 @@ The pool will only verify that the corresponding script and Splash DAO voting co
 
 Proxy-DAO contract must validate that:
 
-1. Pool invariant values are preserved;
-2. `LP` tokens are preserved
-3. Action is valid. The proxy-DAO contract ensures the correctness of the following actions:
+1. `LP` tokens are preserved
+2. Action is valid. The proxy-DAO contract ensures the correctness of the following actions:
     1. Update liquidity provider fee;
     2. Update protocol fee;
     3. Update treasury address;

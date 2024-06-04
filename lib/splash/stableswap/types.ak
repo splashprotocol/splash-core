@@ -31,10 +31,6 @@ pub type PoolData {
   treasury_address: ScriptHash,
   // Collected (and currently available) protocol fees in the tradable assets native units | Mutable:
   protocol_fees: List<Int>,
-  // Constant to optimize invariant validation | Mutable:
-  alpha: Int,
-  // Constant to optimize invariant validation | Mutable:
-  beta: Int,
 }
 
 /// Pool action types.
