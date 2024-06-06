@@ -6,13 +6,14 @@ use splash/plutus.{Asset, ScriptHash, VerificationKeyHash}
 pub type PoolDataT2T {
   // Identifier of the pool | Immutable:
   pool_nft: Asset,
-  // StableSwap invariant amplification coefficient | Mutable if 'ampl_coeff_is_editable' is True:
+  // StableSwap invariant amplification coefficient multiplied by 'n ^ (2n)',
+  // where 'n' is the number of tradable assets | Mutable if 'ampl_coeff_is_editable' is True:
   an2n: Int,
   // Identifiers of the tradable assets | Immutable:
   asset_x: Asset,
   asset_y: Asset,
   // Precision multipliers for calculations, i.e. precision / decimals.
-  // Precision must be fixed as a maximum value of tradable tokens decimals | Immutable:
+  // Precision must be fixed as a maximum value of tradable assets decimals | Immutable:
   multiplier_x: Int,
   multiplier_y: Int,
   // Identifier of the liquidity token, representing user's share in the pool | Immutable:
@@ -38,14 +39,15 @@ pub type PoolDataT2T {
 pub type PoolDataT2T2T {
   // Identifier of the pool | Immutable:
   pool_nft: Asset,
-  // StableSwap invariant amplification coefficient | Mutable if 'ampl_coeff_is_editable' is True:
+  // StableSwap invariant amplification coefficient multiplied by 'n ^ (2n)',
+  // where 'n' is the number of tradable assets | Mutable if 'ampl_coeff_is_editable' is True:
   an2n: Int,
   // Identifiers of the tradable assets | Immutable:
   asset_x: Asset,
   asset_y: Asset,
   asset_z: Asset,
   // Precision multipliers for calculations, i.e. precision / decimals.
-  // Precision must be fixed as a maximum value of tradable tokens decimals | Immutable:
+  // Precision must be fixed as a maximum value of tradable assets decimals | Immutable:
   multiplier_x: Int,
   multiplier_y: Int,
   multiplier_z: Int,

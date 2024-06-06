@@ -28,7 +28,7 @@ const nn = 4
 // Maximum allowed error for swap output in minimal units of the corresponding asset:
 const max_swap_error = 2
 
-/// Main pool validator for pool with 2 tradable tokens (X/Y).
+/// Main pool validator for pool with 2 tradable assets (X/Y).
 /// Special exact math validation implementation: the pool only allows actions that exactly match the math
 /// of the StableSwap equation, regular pools only check that reserves are safu.
 validator(dao_voting_witness: ScriptHash) {
@@ -208,8 +208,8 @@ fn validate_amm_operation(
   let protocol_fees_y_delta = protocol_fees_y1 - protocol_fees_y0
 
   // ==================================== AMM-ACTION VALIDATIONS ==================================== //
-  // 1. Pool adjustable params are preserved:
-  let pool_adjustable_params_preserved: Bool =
+  // 1. Pool mutable params are preserved:
+  let pool_mutable_params_preserved: Bool =
     an2n == an2n1 && lp_fee_num == lp_fee_num1 && protocol_fee_num == protocol_fee_num1 && treasury_address == treasury_address1
 
   // 2. Checking if AMM-action is valid.
@@ -240,7 +240,6 @@ fn validate_amm_operation(
         tradable_quote_after,
         tradable_base_delta,
         tradable_quote_delta,
-        base_protocol_fees_delta,
         quote_protocol_fees_delta,
         base_total_delta,
         quote_total_delta,
@@ -255,7 +254,6 @@ fn validate_amm_operation(
             x_tradable1,
             y_tradable_delta,
             x_tradable_delta,
-            protocol_fees_y_delta,
             protocol_fees_x_delta,
             y_total_delta,
             x_total_delta,
@@ -270,7 +268,6 @@ fn validate_amm_operation(
             y_tradable1,
             x_tradable_delta,
             y_tradable_delta,
-            protocol_fees_x_delta,
             protocol_fees_y_delta,
             x_total_delta,
             y_total_delta,
@@ -283,11 +280,8 @@ fn validate_amm_operation(
         quote_protocol_fees_delta * f_rev >= -quote_total_delta * protocol_fee_num
       // 2.2.2. Non-quote protocol fees are preserved:
       let non_quote_protocol_fees_preserved: Bool =
-        base_protocol_fees_delta == 0
-      // 2.2.3. Non-quote liquidity provider fees are preserved:
-      let non_quote_lp_fees_preserved: Bool =
         tradable_base_delta == base_total_delta
-      // 2.2.4. Validate the StableSwap invariant value (includes validation of the quote liquidity provider fees).
+      // 2.2.3. Validate the StableSwap invariant value (includes validation of the quote liquidity provider fees).
       // Extra '-1' is to ensure that reserves don't decrease as a result of rounding from division
       // when restoring the value of the liquidity provider fees.
       let tradable_quote_after_no_last_lp_fees =
@@ -309,9 +303,9 @@ fn validate_amm_operation(
           tradable_base_after,
           tradable_quote_after_no_last_lp_fees,
         )
-      valid_quote_protocol_fees && non_quote_protocol_fees_preserved && non_quote_lp_fees_preserved && valid_invariant_for_swap
+      valid_quote_protocol_fees && non_quote_protocol_fees_preserved && valid_invariant_for_swap
     }
-  pool_adjustable_params_preserved && valid_amm_action
+  pool_mutable_params_preserved && valid_amm_action
 }
 
 /// Checks if StableSwap invariant is valid:
