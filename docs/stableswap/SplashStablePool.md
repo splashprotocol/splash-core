@@ -51,7 +51,7 @@ A n^n \sum x_i + D = D A n^n + \frac{D^{n + 1}}{n^n \prod x_i}
 ```
 
 Parameters $n$ and $A$ are constants, thus, set of variables involved in the
-invariant calculation is $((x_i)_{i = 1}^{n}, D)$.
+invariant calculation is $\{\{x_i\}_{i = 1}^{n}, D\}$.
 However, analytically calculate the value of $D$ when all others values are known
 is possible only for $n = 2$.
 When pool consists of $n = 3$ assets and more the only way to calculate target value of the
@@ -78,7 +78,7 @@ x_{n + 1} = x_n - \frac{f(x_n)}{f'(x_n)}
 where $f(x_n)$ is continuously differentiable in the vicinity of the root (StableSwap satisfies this property).
 
 Let’s say the trader wants to know the amount of $j$ tokens he will
-receive for trading $\delta x_i ~(i \neq j)$ amount of token $i$.
+receive for trading $\delta x_i ~(i \neq j)$ amount of token $i$ using only integer operations.
 In this case, the input token is $i$, and the output token
 is $j$. The updated amount of $i$ in the pool is $x = x_i + \delta x_i$.
 Since the token amounts always need to follow the StableSwap invariant,
@@ -140,11 +140,11 @@ D_{n + 1} = D_n - \frac{f(D_n)}{f'(D_n)} = \frac{(Ann S + n D_P) D_n}{(Ann - 1) 
 
 ## Protocol functionality
 
-**Actions**
+**AMM Actions**
 
 1. Deposit liquidity (tokens can be deposited only according to the current pool ratio);
 2. Redeem liquidity (tokens can be redeemed only according to the current pool ratio);
-3. Swap from token `X`  to `Y`.
+3. Swap from token $i$ to $j$.
 
 **Features**
 
@@ -159,53 +159,70 @@ D_{n + 1} = D_n - \frac{f(D_n)}{f'(D_n)} = \frac{(Ann S + n D_P) D_n}{(Ann - 1) 
     4. Withdrawn protocol fees to distribute between Splash token holders;
     5. Update stake credential;
     6. Update amplification coefficient.
-4. Main protocol validators are StablePool and StablePool-proxy DAO,
+4. Main protocol validators are pool and proxy-DAO,
    order contracts can be modified by users.
 
 **Restrictions**
 
-1. Fees rates are equal for all assets in the pool.
+1. Fees rates are equal for all assets in the pool, i.e. no bidirectional fees support.
 
 ## eUTXO protocol design
 
-General idea is to put all numerical calculations described above into off-chain code and check on-chain
-only validity of the StableSwap invariant with the correct parameters and balances.
+General idea of is to put all AMM-calculations described above into off-chain code and check on-chain
+only validity of the StableSwap invariant with a given parameters and balances.
 More details about off-chain flow can be found below in the descriptions of off-chain operator's actions in the
 AMM-orders TX images.
 
-### Stable3Pool
+To optimize the code, we divided the pool contracts as follows:
+
+- Pool T2T - main pool validator for pool with 2 tradable assets (`X/Y`), the validator ensures that the reserves are
+  safu;
+- Pool T2T exact - main pool validator for pool with 2 tradable assets (`X/Y`). Special exact math validation
+  implementation: the pool only allows actions that exactly match the math of the StableSwap equation;
+- Pool T2T2T - main pool validator for pool with 2 tradable assets (`X/Y/Z`), the validator ensures that the reserves
+  are safu.
+
+**Note:** the native asset can be one of tradable assets in any pool.
+
+Each pool has a proxy-DAO contract:
+
+- Proxy-DAO T2T - validates correctness of DAO-actions in the Pool T2T / Pool T2T exact pool;
+- Proxy-DAO T2T2T - validates correctness of DAO-actions in the Pool T2T2T pool.
+
+### Pool T2T / Pool T2T exact
 
 #### Data
 
 Data related to the pool (`Immutable` stands for pool configuration parameters) is as follows:
 
-| Field                         | Type            | Description                                                                                                                             | State       |
-|-------------------------------|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------|-------------|
-| `pool_nft`                    | `Asset`         | Identifier of the pool                                                                                                                  | `Immutable` |
-| `n`                           | `Int`           | Number of tradable assets in the pool                                                                                                   | `Immutable` |
-| `tradable_assets`             | `List<Asset>`   | Identifiers of the tradable assets                                                                                                      | `Immutable` |
-| `tradable_tokens_multipliers` | `List<Int>`     | Precision multipliers for calculations, i.e. precision / decimals. Precision must be fixed as maximum value of tradable tokens decimals | `Immutable` |
-| `lp_token`                    | `Asset`         | Identifier of the liquidity token asset                                                                                                 | `Immutable` |
-| `ampl_coeff_is_editable`      | `Bool`          | Flag if amplification coefficient is editable                                                                                           | `Immutable` |
-| `lp_fee_is_editable`          | `Bool`          | Flag if liquidity provider fee is editable                                                                                              | `Immutable` |
-| `an2n`                        | `Integer`       | Amplification coefficient multiplied by n ^ (2n)                                                                                        | `Mutable`   |
-| `lp_fee_num`                  | `Integer`       | Numerator of the liquidity provider fee                                                                                                 | `Mutable`   |
-| `protocol_fee_num`            | `Integer`       | Numerator of the protocol fee share                                                                                                     | `Mutable`   |
-| `dao_stabe_proxy_witness`     | `ScriptHash`    | Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool                                    | `Mutable`   |
-| `treasury_address`            | `ScriptKeyHash` | Treasury address                                                                                                                        | `Mutable`   |
-| `protocol_fees`               | `List<Int>`     | Collected (and currently available) protocol fees in the tradable assets native units                                                   | `Mutable`   |
+| Field                     | Type         | Description                                                                                                                                            | State                                          |
+|---------------------------|--------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
+| `pool_nft`                | `Asset`      | Identifier of the pool                                                                                                                                 | `Immutable`                                    |
+| `an2n`                    | `Integer`    | StableSwap invariant amplification coefficient multiplied by `n ^ (2n)`, where `n` is the number of tradable assets                                    | `Mutable` if  `ampl_coeff_is_editable == True` |
+| `asset_x`                 | `Asset`      | Identifier of the tradable asset                                                                                                                       | `Immutable`                                    |
+| `asset_y`                 | `Asset`      | Identifier of the tradable asset                                                                                                                       | `Immutable`                                    |
+| `multiplier_x`            | `Integer`    | Precision multipliers for calculations, i.e. `precision / decimals_x`, where `precision` must be fixed as a maximum value of tradable assets decimals  | `Immutable`                                    |
+| `multiplier_y`            | `Integer`    | Precision multipliers for calculations, i.e. `precision / decimals_y` , where `precision` must be fixed as a maximum value of tradable assets decimals | `Immutable`                                    |
+| `lp_token`                | `Asset`      | Identifier of the liquidity token, representing user's share in the pool                                                                               | `Immutable`                                    |
+| `ampl_coeff_is_editable`  | `Bool`       | Flag if amplification coefficient is editable                                                                                                          | `Immutable`                                    |
+| `lp_fee_is_editable`      | `Bool`       | Flag if liquidity provider fee is editable                                                                                                             | `Immutable`                                    |
+| `lp_fee_num`              | `Integer`    | Numerator of the liquidity provider fee                                                                                                                | `Mutable`    if  `lp_fee_is_editable == True`  |
+| `protocol_fee_num`        | `Integer`    | Numerator of the protocol fee share                                                                                                                    | `Mutable`                                      |
+| `dao_stabe_proxy_witness` | `ScriptHash` | Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool                                                   | `Mutable`                                      |
+| `treasury_address`        | `ScriptHash` | Treasury address                                                                                                                                       | `Mutable`                                      |
+| `protocol_fees_x`         | `Integer`    | Collected (and currently available) protocol fees in the tradable assets native units                                                                  | `Mutable`                                      |
+| `protocol_fees_y`         | `Integer`    | Collected (and currently available) protocol fees in the tradable assets native units                                                                  | `Mutable`                                      |
 
 #### Tokens
 
-In case with `n=3` tradable assets pool's value (excluding ADA will be as follows):
+Pool's value in case of token to token pool (excluding native asset):
 
-| Name       | Description                            | Amount                                              |
-|------------|----------------------------------------|-----------------------------------------------------|
-| `pool_NFT` | NFT to identify the pool               | `1`                                                 |
-| `X`        | Base asset token                       | At least `1`                                        |
-| `Y`        | First quote asset token                | At least `1`                                        |
-| `Z`        | Second quote asset token               | At least `1`                                        |
-| `LP`       | Liquidity token of the `X/Y/Z` triplet | Emission must be `FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF` |
+| Name       | Description                       | Amount                                 |
+|------------|-----------------------------------|----------------------------------------|
+| `pool_NFT` | NFT to identify the pool          | `1`                                    |
+| `X`        | Base asset                        | Positive                               |
+| `Y`        | First quote asset                 | Positive                               |
+| `LP`       | Liquidity token of the `X/Y` pair | Emission must be `9223372036854775807` |
 
 #### Validator
 
@@ -217,114 +234,93 @@ Pool validator must validate that:
 4. Immutable pool configuration parameters are preserved;
 5. No more tokens are in the pool output;
 6. Action is valid:
-    1. In case of AMM action (Deposit/Redeem/Swap):
-        1. Pool adjustable params are preserved;
-        2. Action is performed according to the StableSwap logic;
-        3. Valid protocol fees;
-        4. Valid liquidity provider fees;
-        5. Valid tradable and liquidity token deltas;
-        6. Calculations were performed according to the StableSwap invariant with pool params.
+    1. In case of Swap action:
+        1. Pool's mutable params are preserved;
+        2. Not less than required quote protocol fees was paid;
+        3. Non-quote protocol fees are preserved;
+        4. StableSwap invariant value has not decreased (includes validation of the quote liquidity provider fees).
+    1. In case of Deposit (Redeem) action:
+        1. Pool's mutable params are preserved;
+        2. No more than allowed `LP` tokens was given (Not less than required `LP` tokens was received);
+        3. Protocol fees are preserved;
     2. In case of DAO-actions:
         1. Action is confirmed by the proxy-StablePool DAO script;
         2. Action is confirmed by the Splash DAO voting script.
 
-### Deposit
+**Note:** For Pool T2T exact in case of Deposit (Redeem) action validation 6.2.2
+is strict and In case of Swap action validation 6.1.4 checks that invariant value is exactly between final and shifted
+by 'max_swap_error' states.
 
-![Deposit](images/stable3_deposit.svg)
-
-##### Data
-
-With arbitrary amount of tokens deposited:
-
-| Field                    | Type                  | Description                                 |
-|--------------------------|-----------------------|---------------------------------------------|
-| `pool_nft`               | `Asset`               | Identifier of the target pool               |
-| `redeemer`               | `VerificationKeyHash` | Redeemer public key                         |
-| `min_expected_lp_amount` | `Int`                 | Minimum expected amount of liquidity tokens |
-
-##### Tokens
-
-In case with `n=3` tradable assets order's value (excluding ADA will be as follows):
-
-| Name | Description        | Amount                                  |
-|------|--------------------|-----------------------------------------|
-| `X`  | Base asset         | Arbitrary, but at least to pay the fees |
-| `Y`  | First quote asset  | Arbitrary, but at least to pay the fees |
-| `Z`  | Second quote asset | Arbitrary, but at least to pay the fees |
-
-#### Validator
-
-Deposit order validator must validate that:
-
-1. Order interacts with the desired pool;
-2. Not less than expected `LP` token amount is received by redeemer;
-3. Redeemer is valid.
-
-### Redeem
-
-![Deposit](images/stable3_redeem.svg)
-
-##### Data
-
-With arbitrary amount of tokens deposited:
-
-| Field                                   | Type                  | Description                                  |
-|-----------------------------------------|-----------------------|----------------------------------------------|
-| `pool_nft`                              | `Asset`               | Identifier of the target pool                |
-| `redeemer`                              | `VerificationKeyHash` | Redeemer public key                          |
-| `expected_assets`                       | `List<Asset>`         | Expected assets                              |
-| `min_expected_received_assets_balances` | `List<Int>`           | Minimum expected balances of expected tokens |
-| `min_expected_lp_change`                | `Int`                 | Minimum expected balances of `LP` tokens     |
-
-##### Tokens
-
-| Name | Description     | Amount    |
-|------|-----------------|-----------|
-| `LP` | Liquidity token | Arbitrary |
-
-#### Validator
-
-Redeem order validator must validate that:
-
-1. Order interacts with the desired pool;
-2. Expected amounts of expected tokens are received by redeemer;
-3. Valid change is received by redeemer;
-4. Redeemer is valid.
-
-### Redeem Uniform
-
-Redeem in the current balances ration of the pool doesn't assume change of liquidity tokens.
+### Pool T2T2T
 
 #### Data
 
-| Field                                   | Type                  | Description                                      |
-|-----------------------------------------|-----------------------|--------------------------------------------------|
-| `pool_nft`                              | `Asset`               | Identifier of the target pool                    |
-| `redeemer`                              | `VerificationKeyHash` | Redeemer public key                              |
-| `min_expected_received_assets_balances` | `List<Int>`           | Minimum expected balances of all tradable tokens |
+| Field                     | Type         | Description                                                                                                                                            | State                                          |
+|---------------------------|--------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
+| `pool_nft`                | `Asset`      | Identifier of the pool                                                                                                                                 | `Immutable`                                    |
+| `an2n`                    | `Integer`    | StableSwap invariant amplification coefficient multiplied by `n ^ (2n)`, where `n` is the number of tradable assets                                    | `Mutable` if  `ampl_coeff_is_editable == True` |
+| `asset_x`                 | `Asset`      | Identifier of the tradable asset                                                                                                                       | `Immutable`                                    |
+| `asset_y`                 | `Asset`      | Identifier of the tradable asset                                                                                                                       | `Immutable`                                    |
+| `asset_z`                 | `Asset`      | Identifier of the tradable asset                                                                                                                       | `Immutable`                                    |
+| `multiplier_x`            | `Integer`    | Precision multipliers for calculations, i.e. `precision / decimals_x`, where `precision` must be fixed as a maximum value of tradable assets decimals  | `Immutable`                                    |
+| `multiplier_y`            | `Integer`    | Precision multipliers for calculations, i.e. `precision / decimals_y` , where `precision` must be fixed as a maximum value of tradable assets decimals | `Immutable`                                    |
+| `multiplier_z`            | `Integer`    | Precision multipliers for calculations, i.e. `precision / decimals_z` , where `precision` must be fixed as a maximum value of tradable assets decimals | `Immutable`                                    |
+| `lp_token`                | `Asset`      | Identifier of the liquidity token, representing user's share in the pool                                                                               | `Immutable`                                    |
+| `ampl_coeff_is_editable`  | `Bool`       | Flag if amplification coefficient is editable                                                                                                          | `Immutable`                                    |
+| `lp_fee_is_editable`      | `Bool`       | Flag if liquidity provider fee is editable                                                                                                             | `Immutable`                                    |
+| `lp_fee_num`              | `Integer`    | Numerator of the liquidity provider fee                                                                                                                | `Mutable`    if  `lp_fee_is_editable == True`  |
+| `protocol_fee_num`        | `Integer`    | Numerator of the protocol fee share                                                                                                                    | `Mutable`                                      |
+| `dao_stabe_proxy_witness` | `ScriptHash` | Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool                                                   | `Mutable`                                      |
+| `treasury_address`        | `ScriptHash` | Treasury address                                                                                                                                       | `Mutable`                                      |
+| `protocol_fees_x`         | `Integer`    | Collected (and currently available) protocol fees in the tradable assets native units                                                                  | `Mutable`                                      |
+| `protocol_fees_y`         | `Integer`    | Collected (and currently available) protocol fees in the tradable assets native units                                                                  | `Mutable`                                      |
+| `protocol_fees_z`         | `Integer`    | Collected (and currently available) protocol fees in the tradable assets native units                                                                  | `Mutable`                                      |
 
-##### Tokens
+#### Tokens
 
-| Name | Description | Amount    |
-|------|-------------|-----------|
-| `LP` | Base asset  | Arbitrary |
+Pool's value in case of token to token pool (excluding native asset):
+
+Pool's value in case of token to token to token pool (excluding native asset):
+
+| Name       | Description                            | Amount                                 |
+|------------|----------------------------------------|----------------------------------------|
+| `pool_NFT` | NFT to identify the pool               | `1`                                    |
+| `X`        | Base asset token                       | Positive                               |
+| `Y`        | First quote token                      | Positive                               |
+| `Z`        | Second quote token                     | Positive                               |
+| `LP`       | Liquidity token of the `X/Y/Z` triplet | Emission must be `9223372036854775807` |
 
 #### Validator
 
-Redeem order validator must validate that:
+Pool validator must validate that (similar to the described above):
 
-1. Order interacts with the desired pool;
-2. Expected amounts of all tokens are received by redeemer;
-3. Redeemer is valid.
+1. Pool input is valid;
+2. Pool address is preserved;
+3. Pool NFT is preserved;
+4. Immutable pool configuration parameters are preserved;
+5. No more tokens are in the pool output;
+6. Action is valid:
+    1. In case of Swap action:
+        1. Pool's mutable params are preserved;
+        2. Not less than required quote protocol fees was paid;
+        3. Non-quote protocol fees are preserved;
+        4. StableSwap invariant value has not decreased (includes validation of the quote liquidity provider fees).
+    1. In case of Deposit (Redeem) action:
+        1. Pool's mutable params are preserved;
+        2. No more than allowed `LP` tokens was given (Not less than required `LP` tokens was received);
+        3. Protocol fees are preserved;
+    2. In case of DAO-actions:
+        1. Action is confirmed by the proxy-StablePool DAO script;
+        2. Action is confirmed by the Splash DAO voting script.
 
 ### Swap
 
-![Swap](images/stable3_swap.svg)
+![Swap](images/stable_swap.svg)
 Swap order is implemented as uniform Splash AMM-order.
 
-### StablePool-proxy DAO
+### Proxy-DAO T2T / Proxy-DAO T2T2T
 
-The StablePool-proxy DAO contract is a separate contract that verifies the correctness of non-AMM actions (AMM actions
+The proxy-DAO contract is a separate contract that verifies the correctness of non-AMM actions (AMM actions
 are: `deposit/redeem/swap`). It allows to add different logic to the protocol without significantly affecting the main
 pool contract.
 The pool will only verify that the corresponding script and Splash DAO voting confirmed action.
