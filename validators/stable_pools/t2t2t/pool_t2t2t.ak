@@ -236,7 +236,7 @@ fn validate_amm_operation(
 
       // 2.1.2. Protocol fees are preserved:
       let protocol_fees_preserved: Bool =
-        protocol_fees_x_delta == 0 && protocol_fees_y_delta == 0 && protocol_fees_z_delta == 0
+        protocol_fees_x_delta >= 0 && protocol_fees_y_delta >= 0 && protocol_fees_z_delta >= 0
 
       valid_lp_delta && protocol_fees_preserved
     } else {

@@ -239,16 +239,16 @@ Pool validator must validate that:
         2. Not less than required quote protocol fees was paid;
         3. Non-quote protocol fees are preserved;
         4. StableSwap invariant value has not decreased (includes validation of the quote liquidity provider fees).
-    1. In case of Deposit (Redeem) action:
+    2. In case of Deposit (Redeem) action:
         1. Pool's mutable params are preserved;
         2. No more than allowed `LP` tokens was given (Not less than required `LP` tokens was received);
-        3. Protocol fees are preserved;
-    2. In case of DAO-actions:
+        3. Protocol fees don't decrease;
+    3. In case of DAO-actions:
         1. Action is confirmed by the proxy-StablePool DAO script;
         2. Action is confirmed by the Splash DAO voting script.
 
-**Note:** For Pool T2T exact in case of Deposit (Redeem) action validation 6.2.2
-is strict and In case of Swap action validation 6.1.4 checks that invariant value is exactly between final and shifted
+**Note:** For Pool T2T exact in case of Deposit (Redeem) action validations 6.2.2 and  6.2.3 
+is strict and in case of Swap action validation 6.1.4 checks that invariant value is exactly between final and shifted
 by 'max_swap_error' states.
 
 ### Pool T2T2T
@@ -314,9 +314,9 @@ Pool validator must validate that (similar to the described above):
         2. Action is confirmed by the Splash DAO voting script.
 
 ### Swap
+Swap order is implemented as uniform Splash AMM-order.
 
 ![Swap](images/stable_swap.svg)
-Swap order is implemented as uniform Splash AMM-order.
 
 ### Proxy-DAO T2T / Proxy-DAO T2T2T
 
