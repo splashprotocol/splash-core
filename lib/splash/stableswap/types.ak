@@ -2,26 +2,60 @@ use splash/plutus.{Asset, ScriptHash, VerificationKeyHash}
 
 // ==================================== POOL ==================================== //
 
-/// Pool data.
-pub type PoolData {
+/// Pool data T2T.
+pub type PoolDataT2T {
   // Identifier of the pool | Immutable:
   pool_nft: Asset,
-  // Number of tradable assets in the pool | Immutable:
-  n: Int,
-  // Amplification coefficient multiplied by n ^ (2n) | Mutable:
+  // StableSwap invariant amplification coefficient | Mutable if 'ampl_coeff_is_editable' is True:
   an2n: Int,
   // Identifiers of the tradable assets | Immutable:
-  tradable_assets: List<Asset>,
+  asset_x: Asset,
+  asset_y: Asset,
   // Precision multipliers for calculations, i.e. precision / decimals.
-  // Precision must be fixed as maximum value of tradable tokens decimals | Immutable:
-  tradable_tokens_multipliers: List<Int>,
+  // Precision must be fixed as a maximum value of tradable tokens decimals | Immutable:
+  multiplier_x: Int,
+  multiplier_y: Int,
   // Identifier of the liquidity token, representing user's share in the pool | Immutable:
   lp_token: Asset,
-  // Invariant's amplification coefficient | Mutable if 'ampl_coeff_is_editable' is True:
+  // Flag if amplification coefficient is editable | Immutable:
   ampl_coeff_is_editable: Bool,
   // Flag if liquidity provider fee is editable | Immutable:
   lp_fee_is_editable: Bool,
-  // Numerator of the liquidity provider fee | Mutable if 'lp_fee_is_editable' is True::
+  // Numerator of the liquidity provider fee | Mutable if 'lp_fee_is_editable' is True:
+  lp_fee_num: Int,
+  // Numerator of the protocol fee share | Mutable:
+  protocol_fee_num: Int,
+  // Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool | Immutable:
+  dao_stabe_proxy_witness: ScriptHash,
+  // Treasury address | Mutable:
+  treasury_address: ScriptHash,
+  // Collected (and currently available) protocol fees in the tradable assets native units | Mutable:
+  protocol_fees_x: Int,
+  protocol_fees_y: Int,
+}
+
+/// Pool data T2T2T.
+pub type PoolDataT2T2T {
+  // Identifier of the pool | Immutable:
+  pool_nft: Asset,
+  // StableSwap invariant amplification coefficient | Mutable if 'ampl_coeff_is_editable' is True:
+  an2n: Int,
+  // Identifiers of the tradable assets | Immutable:
+  asset_x: Asset,
+  asset_y: Asset,
+  asset_z: Asset,
+  // Precision multipliers for calculations, i.e. precision / decimals.
+  // Precision must be fixed as a maximum value of tradable tokens decimals | Immutable:
+  multiplier_x: Int,
+  multiplier_y: Int,
+  multiplier_z: Int,
+  // Identifier of the liquidity token, representing user's share in the pool | Immutable:
+  lp_token: Asset,
+  // Flag if amplification coefficient is editable | Immutable:
+  ampl_coeff_is_editable: Bool,
+  // Flag if liquidity provider fee is editable | Immutable:
+  lp_fee_is_editable: Bool,
+  // Numerator of the liquidity provider fee | Mutable if 'lp_fee_is_editable' is True:
   lp_fee_num: Int,
   // Numerator of the protocol fee share | Mutable:
   protocol_fee_num: Int,
@@ -30,7 +64,9 @@ pub type PoolData {
   // Treasury address | Mutable:
   treasury_address: ScriptHash,
   // Collected (and currently available) protocol fees in the tradable assets native units | Mutable:
-  protocol_fees: List<Int>,
+  protocol_fees_x: Int,
+  protocol_fees_y: Int,
+  protocol_fees_z: Int,
 }
 
 /// Pool action types.
@@ -38,8 +74,6 @@ pub type PoolAction {
   AMMAction { context_values_list: List<Int> }
   // "context_values_list" for swap actions contains:
   // - 0: Value of the StableSwap invariant for the output state;
-  // - 1: Index of the base asset;
-  // - 2: Index of the quote asset;
   PDAOAction
 }
 
@@ -61,26 +95,15 @@ pub type DepositData {
   min_expected_lp_amount: Int,
 }
 
-pub type RedeemUniformData {
+pub type RedeemDataT2T2T {
   // Identifier of the pool:
   pool_nft: Asset,
   // Redeemer PK:
   redeemer: VerificationKeyHash,
-  // Minimum expected balances of tradable tokens:
-  min_expected_received_assets_balances: List<Int>,
-}
-
-pub type RedeemData {
-  // Identifier of the pool:
-  pool_nft: Asset,
-  // Redeemer PK:
-  redeemer: VerificationKeyHash,
-  // Expected assets:
-  expected_assets: List<Asset>,
-  // Minimum expected balances of tradable tokens:
-  min_expected_received_assets_balances: List<Int>,
-  // Minimum expected balances of LP tokens:
-  min_expected_lp_change: Int,
+  // Minimum expected balances of tradable assets:
+  min_expected_x: Int,
+  min_expected_y: Int,
+  min_expected_z: Int,
 }
 
 /// Order action types.
@@ -104,11 +127,11 @@ pub type DAOAction {
   dao_in_ix: Int,
   dao_out_ix: Int,
   // Value of the 'dao_action_ix' is one from the set:
-  // - 0: Update liquidity provider num;
-  // - 1: Update protocol fee num;
-  // - 2: Update treasury address;
+  // - 0: Update 'lp_fee_num';
+  // - 1: Update 'protocol_fee_num';
+  // - 2: Update 'treasury_address';
   // - 3: Withdrawn protocol fees;
-  // - 4: Update 'ampl_coeff' value;
+  // - 4: Update StableSwap invariant amplification coefficient ('an2n');
   // - 5: Update staking credential of the pool.
   dao_action_ix: Int,
 }
