@@ -232,7 +232,7 @@ fn validate_amm_operation(
       let supply_lp1 = lp_emission - lp_amount1
       let delta_supply = supply_lp1 - supply_lp0
       let valid_lp_delta: Bool =
-        delta_supply * x_total0 <= supply_lp0 * x_total_delta && delta_supply * y_total0 <= supply_lp0 * y_total_delta
+        delta_supply * x_tradable0 <= supply_lp0 * x_tradable_delta && delta_supply * y_tradable0 <= supply_lp0 * y_tradable_delta && delta_supply * z_tradable0 <= supply_lp0 * z_tradable_delta
 
       // 2.1.2. Protocol fees are preserved:
       let protocol_fees_preserved: Bool =
