@@ -97,6 +97,16 @@ pub type DepositData {
   min_expected_lp_amount: Int,
 }
 
+pub type RedeemDataT2T {
+  // Identifier of the pool:
+  pool_nft: Asset,
+  // Redeemer PK:
+  redeemer: VerificationKeyHash,
+  // Minimum expected balances of tradable assets:
+  min_expected_x: Int,
+  min_expected_y: Int,
+}
+
 pub type RedeemDataT2T2T {
   // Identifier of the pool:
   pool_nft: Asset,

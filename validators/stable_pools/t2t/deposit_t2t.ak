@@ -4,7 +4,7 @@ use aiken/transaction/credential.{ScriptCredential, VerificationKeyCredential}
 use aiken/transaction/value.{quantity_of}
 use splash/plutus.{Asset}
 use splash/stableswap/types.{
-  ApplyOrder, CancelOrder, DepositData, OrderAction, PoolDataT2T2T,
+  ApplyOrder, CancelOrder, DepositData, OrderAction, PoolDataT2T,
 }
 
 // LP tokens emisson:
@@ -31,20 +31,16 @@ validator {
           datum: InlineDatum(pool_datum_in),
           ..
         } = pool_input.output
-        expect pool_datum: PoolDataT2T2T = pool_datum_in
-        let PoolDataT2T2T { lp_token, asset_x, asset_y, asset_z, .. } =
-          pool_datum
+        expect pool_datum: PoolDataT2T = pool_datum_in
+        let PoolDataT2T { lp_token, asset_x, asset_y, .. } = pool_datum
         let Asset { policy: asset_x_policy, name: asset_x_name } = asset_x
         let Asset { policy: asset_y_policy, name: asset_y_name } = asset_y
-        let Asset { policy: asset_z_policy, name: asset_z_name } = asset_z
         let Asset { policy: lp_token_policy, name: lp_token_name } = lp_token
 
         let x_total0 =
           value.quantity_of(pool_value, asset_x_policy, asset_x_name)
         let y_total0 =
           value.quantity_of(pool_value, asset_y_policy, asset_y_name)
-        let z_total0 =
-          value.quantity_of(pool_value, asset_z_policy, asset_z_name)
         let lp_total0 =
           value.quantity_of(pool_value, lp_token_policy, lp_token_name)
 
@@ -55,7 +51,6 @@ validator {
         let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
         let x_order = quantity_of(self_value, asset_x_policy, asset_x_name)
         let y_order = quantity_of(self_value, asset_y_policy, asset_y_name)
-        let z_order = quantity_of(self_value, asset_z_policy, asset_z_name)
 
         // Output user data:
         expect Some(user_output) = list.at(outputs, redeemer_out_ix)
@@ -64,7 +59,6 @@ validator {
           quantity_of(value, lp_token_policy, lp_token_name)
         let received_x_change = quantity_of(value, asset_x_policy, asset_x_name)
         let received_y_change = quantity_of(value, asset_y_policy, asset_y_name)
-        let received_z_change = quantity_of(value, asset_z_policy, asset_z_name)
 
         // Validations:
         // 1. Deposited into the valid pool:
@@ -80,8 +74,6 @@ validator {
             x_order - received_x_change
           ) && received_lp_amount * y_total0 >= supply_lp0 * (
             y_order - received_y_change
-          ) && received_lp_amount * z_total0 >= supply_lp0 * (
-            z_order - received_z_change
           )
         // 4. Valid successor:
         let valid_successor: Bool =

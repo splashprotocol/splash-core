@@ -1350,7 +1350,7 @@ test test_swap_to_max_decimals_fixtures() {
 }
 
 test test_swap_to_min_decimals_fixtures() {
-  // 0 -> 1
+  // 1 -> 0
   let n = 2
   let a = 300
   let an2n = a * math.pow(n, 2 * n)
