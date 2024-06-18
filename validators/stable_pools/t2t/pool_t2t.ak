@@ -47,7 +47,10 @@ validator(dao_voting_witness: ScriptHash) {
     } = pool_input
     let Output {
       value: input_value,
-      address: Address { payment_credential: payment_cred_in, .. },
+      address: Address {
+        payment_credential: payment_cred_in,
+        stake_credential: stake_cred_in,
+      },
       ..
     } = pool_input_output
 
@@ -71,7 +74,10 @@ validator(dao_voting_witness: ScriptHash) {
     // Pool output params:
     expect Output {
       value: output_value,
-      address: Address { payment_credential: payment_cred_out, .. },
+      address: Address {
+        payment_credential: payment_cred_out,
+        stake_credential: stake_cred_out,
+      },
       datum: InlineDatum(pool_out_datum),
       ..
     } = pool_out_output
@@ -116,7 +122,7 @@ validator(dao_voting_witness: ScriptHash) {
             output_value,
             output_datum,
             context_values_list,
-          )
+          ) && stake_cred_in == stake_cred_out
 
         PDAOAction -> {
           let valid_dao_action: Bool =
