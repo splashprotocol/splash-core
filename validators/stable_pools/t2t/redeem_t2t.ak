@@ -1,6 +1,6 @@
 use aiken/list
 use aiken/transaction.{InlineDatum, Output, ScriptContext, Transaction}
-use aiken/transaction/credential.{ScriptCredential, VerificationKeyCredential}
+use aiken/transaction/credential.{Inline, VerificationKeyCredential}
 use aiken/transaction/value.{quantity_of}
 use splash/plutus.{Asset}
 use splash/stableswap/types.{
@@ -17,8 +17,6 @@ validator {
     ctx: ScriptContext,
   ) -> Bool {
     let ScriptContext { transaction, .. } = ctx
-    let Transaction { extra_signatories, .. } = transaction
-    let RedeemDataT2T { redeemer, .. } = datum
     when action is {
       ApplyOrder { redeemer_in_ix, redeemer_out_ix, pool_in_ix } -> {
         let Transaction { inputs, outputs, .. } = transaction
@@ -45,8 +43,15 @@ validator {
 
         // Input order data:
         expect Some(self_input) = list.at(inputs, redeemer_in_ix)
-        let RedeemDataT2T { pool_nft, min_expected_x, min_expected_y, .. } =
-          datum
+        let RedeemDataT2T {
+          pool_nft,
+          min_expected_x,
+          min_expected_y,
+          redeemer_pk,
+          redeemer_sc,
+          ex_fee,
+        } = datum
+
         let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
         let Output { value: self_value, .. } = self_input.output
 
@@ -54,11 +59,20 @@ validator {
 
         // Output user data:
         expect Some(user_output) = list.at(outputs, redeemer_out_ix)
-        let Output { value, address, .. } = user_output
+        let Output { value, address: user_output_address, .. } = user_output
 
-        let received_x = quantity_of(value, asset_x_policy, asset_x_name)
-        let received_y = quantity_of(value, asset_y_policy, asset_y_name)
+        let received_x_total = quantity_of(value, asset_x_policy, asset_x_name)
+        let received_y_total = quantity_of(value, asset_y_policy, asset_y_name)
         let lp_change = quantity_of(value, lp_token_policy, lp_token_name)
+
+        let (received_x, received_y) =
+          if asset_x_policy == #"" && asset_x_name == #"" {
+            (received_x_total - ex_fee, received_y_total)
+          } else if asset_y_policy == #"" && asset_y_name == #"" {
+            (received_x_total, received_y_total - ex_fee)
+          } else {
+            (received_x_total, received_y_total)
+          }
 
         // Validations:
         // 1. Redeemed from the valid pool:
@@ -67,22 +81,28 @@ validator {
         // 2. Valid expected tokens and their amount in user's output:
         let min_expected_amounts_received: Bool =
           received_x >= min_expected_x && received_y >= min_expected_y
-        // 3. Valid change:
+        // 3. Valid inputs:
+        let valid_inputs: Bool = list.length(inputs) == 2
+        // 4. Valid change:
         let supply_lp0 = lp_emission - lp_total0
         let lp_order_delta = lp_order - lp_change
         let valid_change: Bool =
           lp_order_delta * x_total0 >= supply_lp0 * received_x && lp_order_delta * y_total0 >= supply_lp0 * received_y
-        // 4. Valid successor:
+        // 5. Valid successor:
+        expect VerificationKeyCredential(successor_pay_cred) =
+          user_output_address.payment_credential
+        expect Some(Inline(VerificationKeyCredential(successor_stake_cred))) =
+          user_output_address.stake_credential
         let valid_successor: Bool =
-          when user_output.address.payment_credential is {
-            VerificationKeyCredential(successor_cred) ->
-              datum.redeemer == successor_cred
-            ScriptCredential(_) -> self_input.output.address == address
-          }
+          successor_pay_cred == redeemer_pk && successor_stake_cred == redeemer_sc
 
-        valid_pool && min_expected_amounts_received && valid_change && valid_successor
+        valid_pool && min_expected_amounts_received && valid_inputs && valid_change && valid_successor
       }
-      CancelOrder -> list.has(extra_signatories, redeemer)
+      CancelOrder -> {
+        let RedeemDataT2T { redeemer_pk, .. } = datum
+        let Transaction { extra_signatories, .. } = transaction
+        list.has(extra_signatories, redeemer_pk)
+      }
     }
   }
 }

@@ -1,6 +1,6 @@
 use aiken/list
 use aiken/transaction.{InlineDatum, Output, ScriptContext, Transaction}
-use aiken/transaction/credential.{ScriptCredential, VerificationKeyCredential}
+use aiken/transaction/credential.{Inline, VerificationKeyCredential}
 use aiken/transaction/value.{quantity_of}
 use splash/plutus.{Asset}
 use splash/stableswap/types.{
@@ -17,11 +17,16 @@ validator {
     ctx: ScriptContext,
   ) -> Bool {
     let ScriptContext { transaction, .. } = ctx
-    let Transaction { extra_signatories, .. } = transaction
-    let DepositData { redeemer, .. } = datum
-
     when action is {
       ApplyOrder { redeemer_in_ix, redeemer_out_ix, pool_in_ix } -> {
+        let DepositData {
+          redeemer_pk,
+          redeemer_sc,
+          pool_nft,
+          min_expected_lp_amount,
+          ex_fee,
+        } = datum
+
         let Transaction { inputs, outputs, .. } = transaction
 
         // Input pool data:
@@ -46,7 +51,6 @@ validator {
 
         // Input order data:
         expect Some(self_input) = list.at(inputs, redeemer_in_ix)
-        let DepositData { pool_nft, min_expected_lp_amount, .. } = datum
         let Output { value: self_value, .. } = self_input.output
         let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
         let x_order = quantity_of(self_value, asset_x_policy, asset_x_name)
@@ -54,11 +58,20 @@ validator {
 
         // Output user data:
         expect Some(user_output) = list.at(outputs, redeemer_out_ix)
-        let Output { value, address, .. } = user_output
+        let Output { value, address: user_output_address, .. } = user_output
         let received_lp_amount =
           quantity_of(value, lp_token_policy, lp_token_name)
         let received_x_change = quantity_of(value, asset_x_policy, asset_x_name)
         let received_y_change = quantity_of(value, asset_y_policy, asset_y_name)
+
+        let (x_order_effective, y_order_effective) =
+          if asset_x_policy == #"" && asset_x_name == #"" {
+            (x_order - received_x_change - ex_fee, y_order - received_y_change)
+          } else if asset_y_policy == #"" && asset_y_name == #"" {
+            (x_order - received_x_change, y_order - received_y_change - ex_fee)
+          } else {
+            (x_order - received_x_change, y_order - received_y_change)
+          }
 
         // Validations:
         // 1. Deposited into the valid pool:
@@ -67,25 +80,27 @@ validator {
         // 2. Valid expected token amount in user's output:
         let min_expected_lp_amount_received: Bool =
           received_lp_amount >= min_expected_lp_amount
-        // 3. Valid change:
+        // 3. Valid inputs:
+        let valid_inputs: Bool = list.length(inputs) == 2
+        // 4. Valid change:
         let supply_lp0 = lp_emission - lp_total0
         let valid_change: Bool =
-          received_lp_amount * x_total0 >= supply_lp0 * (
-            x_order - received_x_change
-          ) && received_lp_amount * y_total0 >= supply_lp0 * (
-            y_order - received_y_change
-          )
-        // 4. Valid successor:
+          received_lp_amount * x_total0 >= supply_lp0 * x_order_effective && received_lp_amount * y_total0 >= supply_lp0 * y_order_effective
+        // 5. Valid successor:
+        expect VerificationKeyCredential(successor_pay_cred) =
+          user_output_address.payment_credential
+        expect Some(Inline(VerificationKeyCredential(successor_stake_cred))) =
+          user_output_address.stake_credential
         let valid_successor: Bool =
-          when user_output.address.payment_credential is {
-            VerificationKeyCredential(successor_cred) ->
-              redeemer == successor_cred
-            ScriptCredential(_) -> self_input.output.address == address
-          }
+          successor_pay_cred == redeemer_pk && successor_stake_cred == redeemer_sc
 
-        valid_pool && min_expected_lp_amount_received && valid_change && valid_successor
+        valid_pool && min_expected_lp_amount_received && valid_inputs && valid_change && valid_successor
       }
-      CancelOrder -> list.has(extra_signatories, redeemer)
+      CancelOrder -> {
+        let DepositData { redeemer_pk, .. } = datum
+        let Transaction { extra_signatories, .. } = transaction
+        list.has(extra_signatories, redeemer_pk)
+      }
     }
   }
 }

@@ -92,30 +92,42 @@ pub type DepositData {
   // Identifier of the pool:
   pool_nft: Asset,
   // Redeemer PK:
-  redeemer: VerificationKeyHash,
+  redeemer_pk: VerificationKeyHash,
+  // Redeemer stake credentials:
+  redeemer_sc: VerificationKeyHash,
   // Minimum expected amount of liquidity tokens:
   min_expected_lp_amount: Int,
+  // Execution fee:
+  ex_fee: Int,
 }
 
 pub type RedeemDataT2T {
   // Identifier of the pool:
   pool_nft: Asset,
   // Redeemer PK:
-  redeemer: VerificationKeyHash,
+  redeemer_pk: VerificationKeyHash,
+  // Redeemer stake credentials:
+  redeemer_sc: VerificationKeyHash,
   // Minimum expected balances of tradable assets:
   min_expected_x: Int,
   min_expected_y: Int,
+  // Execution fee:
+  ex_fee: Int,
 }
 
 pub type RedeemDataT2T2T {
   // Identifier of the pool:
   pool_nft: Asset,
   // Redeemer PK:
-  redeemer: VerificationKeyHash,
+  redeemer_pk: VerificationKeyHash,
+  // Redeemer stake credentials:
+  redeemer_sc: VerificationKeyHash,
   // Minimum expected balances of tradable assets:
   min_expected_x: Int,
   min_expected_y: Int,
   min_expected_z: Int,
+  // Execution fee:
+  ex_fee: Int,
 }
 
 /// Order action types.
