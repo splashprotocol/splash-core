@@ -28,8 +28,16 @@ validator {
           ..
         } = pool_input.output
         expect pool_datum: PoolDataT2T2T = pool_datum_in
-        let PoolDataT2T2T { asset_x, asset_y, asset_z, lp_token, .. } =
-          pool_datum
+        let PoolDataT2T2T {
+          asset_x,
+          asset_y,
+          asset_z,
+          lp_token,
+          protocol_fees_x,
+          protocol_fees_y,
+          protocol_fees_z,
+          ..
+        } = pool_datum
 
         let Asset { policy: asset_x_policy, name: asset_x_name } = asset_x
         let Asset { policy: asset_y_policy, name: asset_y_name } = asset_y
@@ -37,11 +45,11 @@ validator {
         let Asset { policy: lp_token_policy, name: lp_token_name } = lp_token
 
         let x_total0 =
-          value.quantity_of(pool_value, asset_x_policy, asset_x_name)
+          value.quantity_of(pool_value, asset_x_policy, asset_x_name) - protocol_fees_x
         let y_total0 =
-          value.quantity_of(pool_value, asset_y_policy, asset_y_name)
+          value.quantity_of(pool_value, asset_y_policy, asset_y_name) - protocol_fees_y
         let z_total0 =
-          value.quantity_of(pool_value, asset_z_policy, asset_z_name)
+          value.quantity_of(pool_value, asset_z_policy, asset_z_name) - protocol_fees_z
         let lp_total0 =
           value.quantity_of(pool_value, lp_token_policy, lp_token_name)
 
@@ -55,6 +63,7 @@ validator {
           redeemer_pk,
           redeemer_sc,
           ex_fee,
+          min_utxo,
         } = datum
         let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
         let Output { value: self_value, .. } = self_input.output
@@ -68,15 +77,26 @@ validator {
         let received_x_total = quantity_of(value, asset_x_policy, asset_x_name)
         let received_y_total = quantity_of(value, asset_y_policy, asset_y_name)
         let received_z_total = quantity_of(value, asset_z_policy, asset_z_name)
-        let lp_change = quantity_of(value, lp_token_policy, lp_token_name)
 
         let (received_x, received_y, received_z) =
           if asset_x_policy == #"" && asset_x_name == #"" {
-            (received_x_total - ex_fee, received_y_total, received_z_total)
+            (
+              received_x_total - ex_fee - min_utxo,
+              received_y_total,
+              received_z_total,
+            )
           } else if asset_y_policy == #"" && asset_y_name == #"" {
-            (received_x_total, received_y_total - ex_fee, received_z_total)
+            (
+              received_x_total,
+              received_y_total - ex_fee - min_utxo,
+              received_z_total,
+            )
           } else if asset_z_policy == #"" && asset_z_name == #"" {
-            (received_x_total, received_y_total, received_z_total - ex_fee)
+            (
+              received_x_total,
+              received_y_total,
+              received_z_total - ex_fee - min_utxo,
+            )
           } else {
             (received_x_total, received_y_total, received_z_total)
           }
@@ -89,11 +109,10 @@ validator {
           received_x >= min_expected_x && received_y >= min_expected_y && received_z >= min_expected_z
         // 3. Valid inputs:
         let valid_inputs: Bool = list.length(inputs) == 2
-        // 4. Valid change:
+        // 4. Valid received amount:
         let supply_lp0 = lp_emission - lp_total0
-        let lp_order_delta = lp_order - lp_change
         let valid_change: Bool =
-          lp_order_delta * x_total0 >= supply_lp0 * received_x && lp_order_delta * y_total0 >= supply_lp0 * received_y && lp_order_delta * z_total0 >= supply_lp0 * received_z
+          lp_order * x_total0 >= supply_lp0 * received_x && lp_order * y_total0 >= supply_lp0 * received_y && lp_order * z_total0 >= supply_lp0 * received_z
         // 5. Valid successor:
         expect VerificationKeyCredential(successor_pay_cred) =
           user_output_address.payment_credential

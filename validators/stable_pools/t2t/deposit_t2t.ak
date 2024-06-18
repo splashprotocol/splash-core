@@ -37,15 +37,22 @@ validator {
           ..
         } = pool_input.output
         expect pool_datum: PoolDataT2T = pool_datum_in
-        let PoolDataT2T { lp_token, asset_x, asset_y, .. } = pool_datum
+        let PoolDataT2T {
+          lp_token,
+          asset_x,
+          asset_y,
+          protocol_fees_x,
+          protocol_fees_y,
+          ..
+        } = pool_datum
         let Asset { policy: asset_x_policy, name: asset_x_name } = asset_x
         let Asset { policy: asset_y_policy, name: asset_y_name } = asset_y
         let Asset { policy: lp_token_policy, name: lp_token_name } = lp_token
 
         let x_total0 =
-          value.quantity_of(pool_value, asset_x_policy, asset_x_name)
+          value.quantity_of(pool_value, asset_x_policy, asset_x_name) - protocol_fees_x
         let y_total0 =
-          value.quantity_of(pool_value, asset_y_policy, asset_y_name)
+          value.quantity_of(pool_value, asset_y_policy, asset_y_name) - protocol_fees_y
         let lp_total0 =
           value.quantity_of(pool_value, lp_token_policy, lp_token_name)
 
@@ -63,14 +70,15 @@ validator {
           quantity_of(value, lp_token_policy, lp_token_name)
         let received_x_change = quantity_of(value, asset_x_policy, asset_x_name)
         let received_y_change = quantity_of(value, asset_y_policy, asset_y_name)
-
+        let x_delta = x_order - received_x_change
+        let y_delta = y_order - received_y_change
         let (x_order_effective, y_order_effective) =
           if asset_x_policy == #"" && asset_x_name == #"" {
-            (x_order - received_x_change - ex_fee, y_order - received_y_change)
+            (x_delta - ex_fee, y_delta)
           } else if asset_y_policy == #"" && asset_y_name == #"" {
-            (x_order - received_x_change, y_order - received_y_change - ex_fee)
+            (x_delta, y_delta - ex_fee)
           } else {
-            (x_order - received_x_change, y_order - received_y_change)
+            (x_delta, y_delta)
           }
 
         // Validations:
