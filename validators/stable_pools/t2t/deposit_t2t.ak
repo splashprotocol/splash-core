@@ -25,6 +25,7 @@ validator {
           pool_nft,
           min_expected_lp_amount,
           ex_fee,
+          min_utxo,
         } = datum
 
         let Transaction { inputs, outputs, .. } = transaction
@@ -60,9 +61,17 @@ validator {
         expect Some(self_input) = list.at(inputs, redeemer_in_ix)
         let Output { value: self_value, .. } = self_input.output
         let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
-        let x_order = quantity_of(self_value, asset_x_policy, asset_x_name)
-        let y_order = quantity_of(self_value, asset_y_policy, asset_y_name)
+        let x_order_pure = quantity_of(self_value, asset_x_policy, asset_x_name)
+        let y_order_pure = quantity_of(self_value, asset_y_policy, asset_y_name)
 
+        let (x_order, y_order) =
+          if asset_x_policy == #"" && asset_x_name == #"" {
+            (x_order_pure - min_utxo - ex_fee, y_order_pure)
+          } else if asset_y_policy == #"" && asset_y_name == #"" {
+            (x_order_pure, y_order_pure - min_utxo - ex_fee)
+          } else {
+            (x_order_pure, y_order_pure)
+          }
         // Output user data:
         expect Some(user_output) = list.at(outputs, redeemer_out_ix)
         let Output { value, address: user_output_address, .. } = user_output
@@ -74,9 +83,9 @@ validator {
         let y_delta = y_order - received_y_change
         let (x_order_effective, y_order_effective) =
           if asset_x_policy == #"" && asset_x_name == #"" {
-            (x_delta - ex_fee, y_delta)
+            (x_delta + min_utxo, y_delta)
           } else if asset_y_policy == #"" && asset_y_name == #"" {
-            (x_delta, y_delta - ex_fee)
+            (x_delta, y_delta + min_utxo)
           } else {
             (x_delta, y_delta)
           }

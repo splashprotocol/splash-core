@@ -99,6 +99,8 @@ pub type DepositData {
   min_expected_lp_amount: Int,
   // Execution fee:
   ex_fee: Int,
+  // Min utxo value:
+  min_utxo: Int,
 }
 
 pub type RedeemDataT2T {
@@ -113,8 +115,6 @@ pub type RedeemDataT2T {
   min_expected_y: Int,
   // Execution fee:
   ex_fee: Int,
-  // Min utxo value:
-  min_utxo: Int,
 }
 
 pub type RedeemDataT2T2T {
@@ -130,8 +130,6 @@ pub type RedeemDataT2T2T {
   min_expected_z: Int,
   // Execution fee:
   ex_fee: Int,
-  // Min utxo value:
-  min_utxo: Int,
 }
 
 /// Order action types.

@@ -57,13 +57,12 @@ validator {
           redeemer_pk,
           redeemer_sc,
           ex_fee,
-          min_utxo,
         } = datum
 
         let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
         let Output { value: self_value, .. } = self_input.output
-
         let lp_order = quantity_of(self_value, lp_token_policy, lp_token_name)
+        let min_utxo = value.lovelace_of(self_value) - ex_fee
 
         // Output user data:
         expect Some(user_output) = list.at(outputs, redeemer_out_ix)
@@ -74,9 +73,9 @@ validator {
 
         let (received_x, received_y) =
           if asset_x_policy == #"" && asset_x_name == #"" {
-            (received_x_total - ex_fee - min_utxo, received_y_total)
+            (received_x_total - min_utxo, received_y_total)
           } else if asset_y_policy == #"" && asset_y_name == #"" {
-            (received_x_total, received_y_total - ex_fee - min_utxo)
+            (received_x_total, received_y_total - min_utxo)
           } else {
             (received_x_total, received_y_total)
           }
