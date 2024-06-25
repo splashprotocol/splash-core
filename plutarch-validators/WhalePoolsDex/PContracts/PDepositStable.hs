@@ -1,9 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module WhalePoolsDex.PContracts.PDeposit (
-    DepositConfig (..),
-    depositValidatorT,
+module WhalePoolsDex.PContracts.PDepositStable (
+    stableDepositValidatorT,
 ) where
 
 import qualified GHC.Generics as GHC
@@ -24,38 +23,11 @@ import PExtra.Monadic (tlet, tletField, tmatch)
 
 import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap, pmin, tletUnwrap)
 import WhalePoolsDex.PContracts.POrder     (OrderAction (Apply, Refund), OrderRedeemer)
-import WhalePoolsDex.PContracts.PFeeSwitch (extractPoolConfig)
-import Plutarch.Trace
+import WhalePoolsDex.PContracts.PStablePool (extractStablePoolConfig)
+import qualified WhalePoolsDex.PContracts.PDeposit as Deposit
 
-import qualified WhalePoolsDex.Contracts.Proxy.Deposit as D
-
-newtype DepositConfig (s :: S)
-    = DepositConfig
-        ( Term
-            s
-            ( PDataRecord
-                '[ "poolNft" ':= PAssetClass
-                 , "x" ':= PAssetClass
-                 , "y" ':= PAssetClass
-                 , "lq" ':= PAssetClass
-                 , "exFee" ':= PInteger -- execution fee specified by the user
-                 , "rewardPkh" ':= PPubKeyHash -- PublicKeyHash of the user
-                 , "stakePkh" ':= PMaybeData PPubKeyHash
-                 , "collateralAda" ':= PInteger -- we reserve a small amount of ADA to put it into user output later
-                 ]
-            )
-        )
-    deriving stock (GHC.Generic)
-    deriving
-        (PIsData, PDataFields, PlutusType)
-
-instance DerivePlutusType DepositConfig where type DPTStrat _ = PlutusTypeData
-
-instance PUnsafeLiftDecl DepositConfig where type PLifted DepositConfig = D.DepositConfig
-deriving via (DerivePConstantViaData D.DepositConfig DepositConfig) instance (PConstantDecl D.DepositConfig)
-
-depositValidatorT :: ClosedTerm (DepositConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
-depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
+stableDepositValidatorT :: ClosedTerm (Deposit.DepositConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
+stableDepositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
     ctx  <- pletFieldsC @'["txInfo", "purpose"] ctx'
     conf <- pletFieldsC @'["x", "y", "lq", "poolNft", "exFee", "rewardPkh", "stakePkh", "collateralAda"] conf'
     let 
@@ -95,7 +67,9 @@ depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                 nftAmount = assetClassValueOf # poolValue # requiredNft
              in nftAmount #== 1
     
-    poolInputDatum <- tlet $ extractPoolConfig # pool
+    ptraceC $ "poolInputDatum 1"
+    poolInputDatum <- tlet $ extractStablePoolConfig # pool
+    ptraceC $ "poolInputDatum 2"
     poolConf       <- pletFieldsC @'["treasuryX", "treasuryY"] poolInputDatum
     let
         treasuryX = getField @"treasuryX" poolConf
@@ -140,6 +114,17 @@ depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
         validReward = -- calculated minimal output of LQ tokens is satisfied
             let actualReward = assetClassValueOf # rewardValue # lq
              in minReward #<= actualReward
+
+    ptraceC $ "poolIdentity"
+    ptraceC $ pshow poolIdentity
+    ptraceC $ "selfIdentity"
+    ptraceC $ pshow selfIdentity
+    ptraceC $ "strictInputs"
+    ptraceC $ pshow strictInputs
+    ptraceC $ "validChange"
+    ptraceC $ pshow validChange
+    ptraceC $ "validReward"
+    ptraceC $ pshow validReward
 
     pure $
         pmatch action $ \case

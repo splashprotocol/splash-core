@@ -791,7 +791,7 @@ fn uniform_reserves_valid_lq_math_template(
   protocol_fee_num_before: Int,
   deposit: Bool,
 ) -> Bool {
-  let default_token_value = 1_000_000_000_000_000
+  let default_token_value = 1_000_000_000
   let default_decimal = 1
 
   let tradable_assets =

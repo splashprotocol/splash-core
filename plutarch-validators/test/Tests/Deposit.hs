@@ -408,3 +408,4 @@ incorrectTokenReward = withTests 1 $ property $ do
     result = eraseBoth $ evalWithArgs (wrapValidator PDeposit.depositValidatorT) [cfgData, orderRedeemToData, cxtToData]
 
   result === Left ()
+  

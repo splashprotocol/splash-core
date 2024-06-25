@@ -17,12 +17,20 @@ import Test.Tasty.HUnit
 
 import WhalePoolsDex.PValidators
 import PlutusLedgerApi.V2 as PV2
+import qualified Data.ByteString as BS
 import Plutarch.Api.V2
+import Codec.Serialise (serialise, deserialise)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Base16  as Hex
+import qualified Data.Text as T
+import qualified Data.Text.Encoding      as T
+import Debug.Trace
 
 main :: IO ()
-main = 
+main =
   defaultMain tests
-
+  
 tests = testGroup "Contracts"
   [ feeSwitch
   , feeSwitchBFee
