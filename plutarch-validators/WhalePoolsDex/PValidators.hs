@@ -6,6 +6,8 @@ module WhalePoolsDex.PValidators (
     redeemValidator,
     validatorAddress,
     wrapValidator,
+    stableDepositValidator,
+    stableRedeemValidator
     redeemBalanceValidator,
     depositBalanceValidator
     stableDepositValidator,
@@ -21,6 +23,9 @@ import qualified WhalePoolsDex.PContracts.PBalancePool as PBP
 import qualified WhalePoolsDex.PContracts.PPoolBFee    as PPB
 import qualified WhalePoolsDex.PContracts.PRedeem      as PR
 import qualified WhalePoolsDex.PContracts.PSwap        as PS
+
+import qualified WhalePoolsDex.PContracts.PDepositStable as PSD
+import qualified WhalePoolsDex.PContracts.PRedeemStable  as PSR
 import qualified WhalePoolsDex.PContracts.PDepositBalance as PBD
 import qualified WhalePoolsDex.PContracts.PRedeemBalance  as PBR
 
