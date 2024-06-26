@@ -88,3 +88,9 @@ genTxOut od lq lqQty adaQty pkh =
   let
     value = mkValues [mkValue lq lqQty, mkAdaValue adaQty] mempty
   in mkTxOut' od value pkh
+
+genTxOutWithCharge :: OutputDatum -> AssetClass -> Integer -> AssetClass -> Integer -> Integer -> PubKeyHash -> TxOut
+genTxOutWithCharge od lq lqQty token tokenCharge adaQty pkh =
+  let
+    value = mkValues [mkValue lq lqQty, mkValue token tokenCharge, mkAdaValue adaQty] mempty
+  in mkTxOut' od value pkh
