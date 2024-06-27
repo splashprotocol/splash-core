@@ -227,7 +227,11 @@ fn validate_amm_operation(
       let supply_lp1 = lp_emission - lp_amount1
       let delta_supply = supply_lp1 - supply_lp0
       let valid_lp_delta: Bool =
-        delta_supply == supply_lp0 * x_tradable_delta / x_tradable0 && delta_supply == supply_lp0 * y_tradable_delta / y_tradable0
+        delta_supply < supply_lp0 * ( x_tradable_delta + 1 ) / x_tradable0 && delta_supply > supply_lp0 * (
+          x_tradable_delta - 1
+        ) / x_tradable0 && delta_supply < supply_lp0 * ( y_tradable_delta + 1 ) / y_tradable0 && delta_supply > supply_lp0 * (
+          y_tradable_delta - 1
+        ) / y_tradable0
 
       // 2.1.2. Protocol fees are preserved:
       let protocol_fees_preserved: Bool =
@@ -1695,4 +1699,78 @@ test empty_swap_test() {
     )
   let redeemer = PoolRedeemer(0, 0, AMMAction([inv_before]))
   ctx == ctx && redeemer == redeemer
+}
+
+test random_deposit_test() {
+  let n = 2
+  let lp_fee_num_before = 10012
+  let protocol_fee_num_before = 325
+
+  let tradable_assets =
+    generate_assets(@"some_pool_token", @"some_pool_token_name", n)
+
+  // Input data:
+  let total_balances_before =
+    [4307367591, 137655439]
+  let tradable_decimals_before =
+    [1, 1]
+  let collected_protocol_fees_before =
+    [1135, 182300]
+  let a_before = 1000
+  let an2n = a_before * math.pow(n, 2 * n)
+  let lp_balance_before = 9223372032451949427
+
+  let (input_pool_data, input_value) =
+    t2t_pool_state(
+      total_balances_before,
+      lp_balance_before,
+      @"pool_nft_policy",
+      @"pool_nft_name",
+      tradable_assets,
+      tradable_decimals_before,
+      @"pool_lp_policy",
+      @"pool_lp_name",
+      an2n,
+      lp_fee_num_before,
+      protocol_fee_num_before,
+      @"dao_stable_policy",
+      @"tr_policy",
+      collected_protocol_fees_before,
+    )
+  let total_balances_after =
+    [4048925605, 129407051]
+  let collected_protocol_fees_after = collected_protocol_fees_before
+
+  let (output_pool_data, output_value) =
+    t2t_pool_state(
+      total_balances_after,
+      9223372032716119009,
+      @"pool_nft_policy",
+      @"pool_nft_name",
+      tradable_assets,
+      tradable_decimals_before,
+      @"pool_lp_policy",
+      @"pool_lp_name",
+      an2n,
+      lp_fee_num_before,
+      protocol_fee_num_before,
+      @"dao_stable_policy",
+      @"tr_policy",
+      collected_protocol_fees_after,
+    )
+
+  let ctx =
+    make_t2t_pool_state_transition_context(
+      input_pool_data,
+      input_value,
+      output_pool_data,
+      output_value,
+    )
+  let redeemer = PoolRedeemer(0, 0, AMMAction([]))
+  validate_stable_pool_transition_t2t_exact(
+    bytearray.from_string(@"proxy_dao"),
+    input_pool_data,
+    redeemer,
+    ctx,
+  )
 }
