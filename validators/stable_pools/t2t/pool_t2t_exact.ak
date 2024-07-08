@@ -71,7 +71,8 @@ validator(dao_voting_witness: ScriptHash) {
       ..
     } = input_datum
 
-    let pool_in_tokens_policies = value.policies(input_value)
+    let pool_in_assets =
+      input_value |> value.flatten() |> list.map(fn(x) { (x.1st, x.2nd) })
 
     // ==================================== POOL OUTPUT ==================================== //
     expect Some(pool_out_output) = list.at(outputs, pool_out_ix)
@@ -86,7 +87,8 @@ validator(dao_voting_witness: ScriptHash) {
       ..
     } = pool_out_output
     expect output_datum: PoolDataT2T = pool_out_datum
-    let pool_out_tokens_policies = value.policies(output_value)
+    let pool_out_assets =
+      output_value |> value.flatten() |> list.map(fn(x) { (x.1st, x.2nd) })
 
     let PoolDataT2T {
       pool_nft: pool_nft_out,
@@ -113,9 +115,8 @@ validator(dao_voting_witness: ScriptHash) {
     // 4. Pool config params are preserved:
     let pool_config_preserved: Bool =
       pool_nft_in == pool_nft_out && asset_x_in == asset_x_out && asset_y_in == asset_y_out && multiplier_x_in == multiplier_x_out && multiplier_y_in == multiplier_y_out && lp_token_in == lp_token_out && lp_fee_is_editable_in == lp_fee_is_editable_out && ampl_coeff_is_editable_in == ampl_coeff_is_editable_out && dao_stabe_proxy_witness_in == dao_stabe_proxy_witness_out
-    // 5. No extra tokens in the pool's value:
-    let no_more_tokens_in_pool_out: Bool =
-      pool_in_tokens_policies == pool_out_tokens_policies
+    // 5. No extra assets in the pool's value:
+    let no_more_tokens_in_pool_out: Bool = pool_in_assets == pool_out_assets
     // 6. Action is valid:
     let valid_action: Bool =
       when action is {
