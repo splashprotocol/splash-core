@@ -29,6 +29,7 @@ import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
 import PExtra.Pair
 import PExtra.Integer
 import Plutarch.Trace
+import PExtra.Ada
 
 import qualified WhalePoolsDex.Contracts.BalancePool as BP
 import           WhalePoolsDex.PContracts.PPool      hiding (PoolConfig(..), PoolAction(..))
@@ -72,6 +73,8 @@ newtype BalancePoolState (s :: S)
                 '[ "reservesX"   ':= PInteger
                  , "reservesY"   ':= PInteger
                  , "liquidity"   ':= PInteger
+                  -- in T2T pool contains ADA qty, in N2T case contains `0`
+                 , "adaQtyT2T"   ':= PInteger
                  ]
             )
         )
@@ -340,11 +343,17 @@ readPoolState = phoistAcyclic $
             y = assetClassValueOf # value # poolY
             negLq = assetClassValueOf # value # poolLq
             lq = pdata $ maxLqCap - negLq
+            adaQtyT2T =
+                pif
+                    ((poolX #== pAdaAssetClass) #|| (poolY #== pAdaAssetClass))
+                    (pconstant 0)
+                    (assetClassValueOf # value # pAdaAssetClass)
         tcon $
             BalancePoolState $
                 pdcons @"reservesX" @PInteger # pdata (x - poolXTreasury)
                     #$ pdcons @"reservesY" @PInteger # pdata (y - poolYTreasury)
                     #$ pdcons @"liquidity" @PInteger # lq
+                    #$ pdcons @"adaQtyT2T" @PInteger # pdata adaQtyT2T
                         # pdnil
 
 balancePoolValidatorT :: ClosedTerm (BalancePoolConfig :--> BalancePoolRedeemer :--> PScriptContext :--> PBool)
@@ -392,6 +401,9 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
 
     selfAddr <- tletUnwrap $ getField @"address" self
     succAddr <- tletUnwrap $ getField @"address" successor
+
+    adaT2T0 <- tletField @"adaQtyT2T" s0
+    adaT2T1 <- tletField @"adaQtyT2T" s1
     let 
         scriptPreserved = succAddr #== selfAddr 
         selfValueLength = pValueLength # selfValue
@@ -401,10 +413,12 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
 
         newConfig    = parseDatum # succD
 
+        dAdaT2T = adaT2T1 - adaT2T0
+
     pure $
         selfIdentity #&& (pmatch action $ \case
             Swap    -> unTermCont $ do
-                pure $ noMoreTokens #&& scriptPreserved #&& (validSwap # s0 # s1 # conf # newConfig)
-            DAOAction -> validDAOAction # conf # txinfo'
-            _ ->         noMoreTokens #&& scriptPreserved #&& (validDepositRedeemAllTokens # s0 # s1 # conf # newConfig)
+                pure $ noMoreTokens #&& scriptPreserved #&& (validSwap # s0 # s1 # conf # newConfig) #&& dAdaT2T #== 0
+            DAOAction -> (validDAOAction # conf # txinfo') #&& dAdaT2T #== 0
+            _ ->         noMoreTokens #&& scriptPreserved #&& (validDepositRedeemAllTokens # s0 # s1 # conf # newConfig) #&& dAdaT2T #== 0
         )

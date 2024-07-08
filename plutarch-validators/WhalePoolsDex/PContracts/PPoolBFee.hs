@@ -26,6 +26,7 @@ import Plutarch.Api.V1.AssocMap     as Map
 import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromData, assetClass, pValueLength)
 import PExtra.List                  (pelemAt)
 import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
+import PExtra.Ada
 
 import qualified WhalePoolsDex.Contracts.PoolBFee  as P
 import           WhalePoolsDex.PContracts.PPool    hiding (PoolConfig(..))
@@ -170,11 +171,17 @@ readPoolState = phoistAcyclic $
             y = assetClassValueOf # value # poolY
             negLq = assetClassValueOf # value # poolLq
             lq = pdata $ maxLqCap - negLq
+            adaQtyT2T =
+                pif
+                    ((poolX #== pAdaAssetClass) #|| (poolY #== pAdaAssetClass))
+                    (pconstant 0)
+                    (assetClassValueOf # value # pAdaAssetClass)
         tcon $
             PoolState $
                 pdcons @"reservesX" @PInteger # pdata (x - poolXTreasury)
                     #$ pdcons @"reservesY" @PInteger # pdata (y - poolYTreasury)
                     #$ pdcons @"liquidity" @PInteger # lq
+                    #$ pdcons @"adaQtyT2T" @PInteger # pdata adaQtyT2T
                         # pdnil
 
 poolBFeeValidatorT :: ClosedTerm (PoolConfig :--> PoolRedeemer :--> PScriptContext :--> PBool)
@@ -222,9 +229,14 @@ poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                 ry0 <- tletField @"reservesY" s0
                 ry1 <- tletField @"reservesY" s1
                 lq1 <- tletField @"liquidity" s1
+
+                adaT2T0 <- tletField @"adaQtyT2T" s0
+                adaT2T1 <- tletField @"adaQtyT2T" s1
                 let dx  = rx1 - rx0
                     dy  = ry1 - ry0
                     dlq = lq1 - lq0 -- pool keeps only the negative part of LQ tokens
+
+                    dAdaT2T = adaT2T1 - adaT2T0
 
                 selfDatum <- tletUnwrap $ getField @"datum" self
                 succDatum <- tletUnwrap $ getField @"datum" successor
@@ -265,14 +277,14 @@ poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                                         (zero #< dx)
                                         (-dy * (rx0 * feeDen' + dxf) #<= ry0 * dxf)
                                         (-dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
-                            pure $ noMoreTokens #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
-                        DAOAction -> validDAOAction # conf # txinfo'
+                            pure $ noMoreTokens #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury #&& dAdaT2T #== 0 -- liquidity left intact and swap is performed properly
+                        DAOAction -> (validDAOAction # conf # txinfo') #&& dAdaT2T #== 0
                         _ -> unTermCont $ do
                             POutputDatum selfD' <- pmatchC selfDatum
                             selfD               <- tletField @"outputDatum" selfD'
                             let
                               confPreserved      = selfD #== succD -- whole config preserved
                               validDepositRedeem = dlq * rx0 #<= dx * lq0 #&& dlq * ry0 #<= dy * lq0
-                            pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly
+                            pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem #&& dAdaT2T #== 0 -- either deposit or redeem is performed properly
                 pure valid
             )
