@@ -265,6 +265,7 @@ fn validate_amm_operation(
         passive_protocol_fees_delta,
         base_total_delta,
         quote_total_delta,
+        valid_sgns,
       ) =
         if y_total_delta > 0 && x_total_delta < 0 && z_total_delta == 0 {
           (
@@ -283,6 +284,7 @@ fn validate_amm_operation(
             protocol_fees_z_delta,
             y_total_delta,
             x_total_delta,
+            True,
           )
         } else if x_total_delta > 0 && y_total_delta < 0 && z_total_delta == 0 {
           (
@@ -301,6 +303,7 @@ fn validate_amm_operation(
             protocol_fees_z_delta,
             x_total_delta,
             y_total_delta,
+            True,
           )
         } else if z_total_delta > 0 && x_total_delta < 0 && y_total_delta == 0 {
           (
@@ -319,6 +322,7 @@ fn validate_amm_operation(
             protocol_fees_y_delta,
             z_total_delta,
             x_total_delta,
+            True,
           )
         } else if x_total_delta > 0 && z_total_delta < 0 && y_total_delta == 0 {
           (
@@ -337,6 +341,7 @@ fn validate_amm_operation(
             protocol_fees_y_delta,
             x_total_delta,
             z_total_delta,
+            True,
           )
         } else if y_total_delta > 0 && z_total_delta < 0 && x_total_delta == 0 {
           (
@@ -355,9 +360,9 @@ fn validate_amm_operation(
             protocol_fees_x_delta,
             y_total_delta,
             z_total_delta,
+            True,
           )
         } else {
-          //  (z_total_delta > 0) && (y_total_delta < 0) && (x_total_delta == 0)
           (
             multiplier_z,
             multiplier_y,
@@ -374,6 +379,7 @@ fn validate_amm_operation(
             protocol_fees_x_delta,
             z_total_delta,
             y_total_delta,
+            z_total_delta > 0 && y_total_delta < 0 && x_total_delta == 0,
           )
         }
 
@@ -408,7 +414,7 @@ fn validate_amm_operation(
           tradable_quote_after_no_last_lp_fees,
           tradable_passive_after,
         )
-      valid_quote_protocol_fees && non_quote_protocol_fees_preserved && valid_invariant_for_swap
+      valid_sgns && valid_quote_protocol_fees && non_quote_protocol_fees_preserved && valid_invariant_for_swap
     }
   pool_mutable_params_preserved && valid_amm_action
 }
