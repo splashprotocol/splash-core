@@ -73,8 +73,8 @@ newtype BalancePoolState (s :: S)
                 '[ "reservesX"   ':= PInteger
                  , "reservesY"   ':= PInteger
                  , "liquidity"   ':= PInteger
-                  -- in T2T pool contains ADA qty, in N2T case contains `0`
-                 , "adaQtyT2T"   ':= PInteger
+                  -- in T2T pool contains Lovelace qty, in N2T case contains `0`
+                 , "lovelaceToken2Token" ':= PInteger
                  ]
             )
         )
@@ -343,7 +343,7 @@ readPoolState = phoistAcyclic $
             y = assetClassValueOf # value # poolY
             negLq = assetClassValueOf # value # poolLq
             lq = pdata $ maxLqCap - negLq
-            adaQtyT2T =
+            lovelaceToken2Token =
                 pif
                     ((poolX #== pAdaAssetClass) #|| (poolY #== pAdaAssetClass))
                     (pconstant 0)
@@ -353,7 +353,7 @@ readPoolState = phoistAcyclic $
                 pdcons @"reservesX" @PInteger # pdata (x - poolXTreasury)
                     #$ pdcons @"reservesY" @PInteger # pdata (y - poolYTreasury)
                     #$ pdcons @"liquidity" @PInteger # lq
-                    #$ pdcons @"adaQtyT2T" @PInteger # pdata adaQtyT2T
+                    #$ pdcons @"lovelaceToken2Token" @PInteger # pdata lovelaceToken2Token
                         # pdnil
 
 balancePoolValidatorT :: ClosedTerm (BalancePoolConfig :--> BalancePoolRedeemer :--> PScriptContext :--> PBool)
@@ -402,8 +402,8 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
     selfAddr <- tletUnwrap $ getField @"address" self
     succAddr <- tletUnwrap $ getField @"address" successor
 
-    adaT2T0 <- tletField @"adaQtyT2T" s0
-    adaT2T1 <- tletField @"adaQtyT2T" s1
+    lovelaceToken2Token0 <- tletField @"lovelaceToken2Token" s0
+    lovelaceToken2Token1 <- tletField @"lovelaceToken2Token" s1
     let 
         scriptPreserved = succAddr #== selfAddr 
         selfValueLength = pValueLength # selfValue
@@ -413,12 +413,12 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
 
         newConfig    = parseDatum # succD
 
-        dAdaT2T = adaT2T1 - adaT2T0
+        correctLovelaceToken2TokenValue = lovelaceToken2Token1 #== lovelaceToken2Token0
 
     pure $
-        selfIdentity #&& (pmatch action $ \case
+        correctLovelaceToken2TokenValue #&& selfIdentity #&& (pmatch action $ \case
             Swap    -> unTermCont $ do
-                pure $ noMoreTokens #&& scriptPreserved #&& (validSwap # s0 # s1 # conf # newConfig) #&& dAdaT2T #== 0
-            DAOAction -> (validDAOAction # conf # txinfo') #&& dAdaT2T #== 0
-            _ ->         noMoreTokens #&& scriptPreserved #&& (validDepositRedeemAllTokens # s0 # s1 # conf # newConfig) #&& dAdaT2T #== 0
+                pure $ noMoreTokens #&& scriptPreserved #&& (validSwap # s0 # s1 # conf # newConfig)
+            DAOAction -> validDAOAction # conf # txinfo'
+            _ ->         noMoreTokens #&& scriptPreserved #&& (validDepositRedeemAllTokens # s0 # s1 # conf # newConfig)
         )

@@ -133,8 +133,8 @@ newtype PoolState (s :: S)
                 '[ "reservesX"   ':= PInteger
                  , "reservesY"   ':= PInteger
                  , "liquidity"   ':= PInteger
-                 -- in T2T pool contains ADA qty, in N2T case contains `0`
-                 , "adaQtyT2T"   ':= PInteger
+                 -- in T2T pool contains Lovelace qty, in N2T case contains `0`
+                 , "lovelaceToken2Token" ':= PInteger
                  ]
             )
         )
@@ -180,7 +180,7 @@ readPoolState = phoistAcyclic $
             y = assetClassValueOf # value # poolY
             negLq = assetClassValueOf # value # poolLq
             lq = pdata $ maxLqCap - negLq
-            adaQtyT2T =
+            lovelaceToken2Token =
                 pif
                     ((poolX #== pAdaAssetClass) #|| (poolY #== pAdaAssetClass))
                     (pconstant 0)
@@ -190,7 +190,7 @@ readPoolState = phoistAcyclic $
                 pdcons @"reservesX" @PInteger # pdata (x - poolXTreasury)
                     #$ pdcons @"reservesY" @PInteger # pdata (y - poolYTreasury)
                     #$ pdcons @"liquidity" @PInteger # lq
-                    #$ pdcons @"adaQtyT2T" @PInteger # pdata adaQtyT2T
+                    #$ pdcons @"lovelaceToken2Token" @PInteger # pdata lovelaceToken2Token
                         # pdnil
 
 correctSwapConfig :: Term s (PoolConfig :--> PoolConfig :--> PInteger :--> PInteger :--> PBool)
@@ -326,13 +326,13 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                 ry1 <- tletField @"reservesY" s1
                 lq1 <- tletField @"liquidity" s1
 
-                adaT2T0 <- tletField @"adaQtyT2T" s0
-                adaT2T1 <- tletField @"adaQtyT2T" s1
+                lovelaceToken2Token0 <- tletField @"lovelaceToken2Token" s0
+                lovelaceToken2Token1 <- tletField @"lovelaceToken2Token" s1
                 let dx  = rx1 - rx0
                     dy  = ry1 - ry0
                     dlq = lq1 - lq0 -- pool keeps only the negative part of LQ tokens
 
-                    dAdaT2T = adaT2T1 - adaT2T0
+                    correctLovelaceToken2TokenValue = lovelaceToken2Token1 #== lovelaceToken2Token0
 
                 selfDatum <- tletUnwrap $ getField @"datum" self
                 succDatum <- tletUnwrap $ getField @"datum" successor
@@ -373,14 +373,14 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                                         (zero #< dx)
                                         (-dy * (rx0 * feeDen' + dxf) #<= ry0 * dxf)
                                         (-dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
-                            pure $ noMoreTokens #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury #&& dAdaT2T #== 0 -- liquidity left intact and swap is performed properly
-                        DAOAction -> (validDAOAction # conf # txinfo') #&& dAdaT2T #== 0
+                            pure $ noMoreTokens #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
+                        DAOAction -> validDAOAction # conf # txinfo'
                         _ -> unTermCont $ do
                             POutputDatum selfD' <- pmatchC selfDatum
                             selfD               <- tletField @"outputDatum" selfD'
                             let
                               confPreserved      = selfD #== succD -- whole config preserved
                               validDepositRedeem = dlq * rx0 #<= dx * lq0 #&& dlq * ry0 #<= dy * lq0
-                            pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem #&& dAdaT2T #== 0 -- either deposit or redeem is performed properly                
-                pure valid
+                            pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly                
+                pure $ correctLovelaceToken2TokenValue #&& valid
             )
