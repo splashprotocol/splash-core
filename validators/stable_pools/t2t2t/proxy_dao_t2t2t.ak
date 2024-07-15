@@ -232,8 +232,6 @@ fn validate_stable_pool_t2t_proxy_dao_action(
       let Asset { policy: asset_x_policy, name: asset_x_name } = asset_x
       let Asset { policy: asset_y_policy, name: asset_y_name } = asset_y
       let Asset { policy: asset_z_policy, name: asset_z_name } = asset_z
-
-      // Withdrawn protocol fees:
       let x_total0 =
         value.quantity_of(input_value, asset_x_policy, asset_x_name)
       let y_total0 =
