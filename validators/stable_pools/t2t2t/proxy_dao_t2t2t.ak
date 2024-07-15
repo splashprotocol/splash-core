@@ -27,7 +27,11 @@ const protocol_fee_num_max = 99_999
 const fee_denom = 100_000
 
 // DAO stable pool t2t2t validator:
-validator(pool_nft: Asset) {
+validator(
+  pool_nft: Asset,
+  ampl_coeff_is_editable: Bool,
+  lp_fee_is_editable: Bool,
+) {
   fn stable_pool_t2t2t_proxy_dao(action: DAOAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
     expect Spend(dao_spent_utxo_reference) = purpose
@@ -99,6 +103,8 @@ validator(pool_nft: Asset) {
         pool_out_stake_cred,
         output_datum,
         dao_action_ix,
+        ampl_coeff_is_editable,
+        lp_fee_is_editable,
       )
 
     valid_dao_input && proxy_dao_credentials_preserved && valid_pool && no_more_tokens_in_proxy_dao_out && valid_dao_action
@@ -113,14 +119,14 @@ fn validate_stable_pool_t2t_proxy_dao_action(
   output_stake_cred: StakeCredential,
   output_datum: PoolDataT2T2T,
   dao_action_ix: Int,
+  ampl_coeff_is_editable: Bool,
+  lp_fee_is_editable: Bool,
 ) -> Bool {
   // ==================================== INPUT DATA ==================================== //
   // Pool's mutable params | Input:
   let PoolDataT2T2T {
     an2n: an2n0,
     lp_fee_num: lp_fee_num0,
-    ampl_coeff_is_editable,
-    lp_fee_is_editable,
     protocol_fee_num: protocol_fee_num0,
     treasury_address: treasury_addr0,
     protocol_fees_x: protocol_fees_x0,

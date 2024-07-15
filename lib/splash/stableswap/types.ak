@@ -7,7 +7,7 @@ pub type PoolDataT2T {
   // Identifier of the pool | Immutable:
   pool_nft: Asset,
   // StableSwap invariant amplification coefficient multiplied by 'n ^ (2n)',
-  // where 'n' is the number of tradable assets | Mutable if 'ampl_coeff_is_editable' is True:
+  // where 'n' is the number of tradable assets | Mutable if 'ampl_coeff_is_editable' in the proxy-DAO is True:
   an2n: Int,
   // Identifiers of the tradable assets | Immutable:
   asset_x: Asset,
@@ -18,11 +18,7 @@ pub type PoolDataT2T {
   multiplier_y: Int,
   // Identifier of the liquidity token, representing user's share in the pool | Immutable:
   lp_token: Asset,
-  // Flag if amplification coefficient is editable | Immutable:
-  ampl_coeff_is_editable: Bool,
-  // Flag if liquidity provider fee is editable | Immutable:
-  lp_fee_is_editable: Bool,
-  // Numerator of the liquidity provider fee | Mutable if 'lp_fee_is_editable' is True:
+  // Numerator of the liquidity provider fee | Mutable if 'lp_fee_is_editable' in the proxy-DAO is True:
   lp_fee_num: Int,
   // Numerator of the protocol fee share | Mutable:
   protocol_fee_num: Int,
@@ -40,7 +36,7 @@ pub type PoolDataT2T2T {
   // Identifier of the pool | Immutable:
   pool_nft: Asset,
   // StableSwap invariant amplification coefficient multiplied by 'n ^ (2n)',
-  // where 'n' is the number of tradable assets | Mutable if 'ampl_coeff_is_editable' is True:
+  // where 'n' is the number of tradable assets | Mutable if 'ampl_coeff_is_editable' in the proxy-DAO is True:
   an2n: Int,
   // Identifiers of the tradable assets | Immutable:
   asset_x: Asset,
@@ -53,11 +49,7 @@ pub type PoolDataT2T2T {
   multiplier_z: Int,
   // Identifier of the liquidity token, representing user's share in the pool | Immutable:
   lp_token: Asset,
-  // Flag if amplification coefficient is editable | Immutable:
-  ampl_coeff_is_editable: Bool,
-  // Flag if liquidity provider fee is editable | Immutable:
-  lp_fee_is_editable: Bool,
-  // Numerator of the liquidity provider fee | Mutable if 'lp_fee_is_editable' is True:
+  // Numerator of the liquidity provider fee | Mutable if 'lp_fee_is_editable' in the proxy-DAO is True:
   lp_fee_num: Int,
   // Numerator of the protocol fee share | Mutable:
   protocol_fee_num: Int,
@@ -73,9 +65,8 @@ pub type PoolDataT2T2T {
 
 /// Pool action types.
 pub type PoolAction {
-  AMMAction { context_values_list: List<Int> }
-  // "context_values_list" for swap actions contains:
-  // - 0: Value of the StableSwap invariant for the output state;
+  // Invariant for swap action contains value of the StableSwap invariant for the output state:
+  AMMAction { invariant: Option<Int> }
   PDAOAction
 }
 

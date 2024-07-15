@@ -33,7 +33,11 @@ const protocol_fee_num_max = 99_999
 const fee_denom = 100_000
 
 // DAO stable pool t2t validator:
-validator(pool_nft: Asset) {
+validator(
+  pool_nft: Asset,
+  ampl_coeff_is_editable: Bool,
+  lp_fee_is_editable: Bool,
+) {
   fn stable_pool_t2t_proxy_dao(action: DAOAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
     expect Spend(dao_spent_utxo_reference) = purpose
@@ -106,6 +110,8 @@ validator(pool_nft: Asset) {
         pool_out_stake_cred,
         output_datum,
         dao_action_ix,
+        ampl_coeff_is_editable,
+        lp_fee_is_editable,
       )
 
     valid_dao_input && proxy_dao_credentials_preserved && valid_pool && no_more_tokens_in_proxy_dao_out && valid_dao_action
@@ -120,14 +126,14 @@ fn validate_stable_pool_t2t_proxy_dao_action(
   output_stake_cred: StakeCredential,
   output_datum: PoolDataT2T,
   dao_action_ix: Int,
+  ampl_coeff_is_editable: Bool,
+  lp_fee_is_editable: Bool,
 ) -> Bool {
   // ==================================== INPUT DATA ==================================== //
   // Pool adjustable params| Input:
   let PoolDataT2T {
     an2n: an2n0,
     lp_fee_num: lp_fee_num0,
-    ampl_coeff_is_editable,
-    lp_fee_is_editable,
     protocol_fee_num: protocol_fee_num0,
     treasury_address: treasury_addr0,
     protocol_fees_x: protocol_fees_x0,
@@ -304,8 +310,6 @@ fn t2t_pool_state(
         name: bytearray.from_string(lp_name_string),
       },
       an2n,
-      ampl_coeff_is_editable: True,
-      lp_fee_is_editable: True,
       lp_fee_num,
       protocol_fee_num,
       dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
@@ -371,8 +375,6 @@ fn n2t_pool_state(
         name: bytearray.from_string(lp_name_string),
       },
       an2n,
-      ampl_coeff_is_editable: True,
-      lp_fee_is_editable: True,
       lp_fee_num,
       protocol_fee_num,
       dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
@@ -615,7 +617,7 @@ test test_dao_params_update() {
       dao_action_ix_list,
       fn(a_ix) {
         let redeemer = DAOAction(0, 0, 1, 1, a_ix)
-        stable_pool_t2t_proxy_dao(pool_nft, redeemer, ctx)
+        stable_pool_t2t_proxy_dao(pool_nft, True, True, redeemer, ctx)
       },
     )
 
@@ -624,7 +626,7 @@ test test_dao_params_update() {
       dao_action_ix_list,
       fn(a_ix) {
         let redeemer = DAOAction(0, 0, 1, 1, a_ix)
-        stable_pool_t2t_proxy_dao(pool_nft_wrong, redeemer, ctx)
+        stable_pool_t2t_proxy_dao(pool_nft_wrong, True, True, redeemer, ctx)
       },
     )
   let n_cases = list.length(dao_action_ix_list)
@@ -712,5 +714,5 @@ test test_update_stake_cred() {
       output_pool_value_n2t,
     )
   let redeemer = DAOAction(0, 0, 1, 1, 5)
-  stable_pool_t2t_proxy_dao(pool_nft, redeemer, ctx)
+  stable_pool_t2t_proxy_dao(pool_nft, True, True, redeemer, ctx)
 }

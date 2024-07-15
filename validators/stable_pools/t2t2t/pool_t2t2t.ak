@@ -61,8 +61,6 @@ validator(dao_voting_witness: ScriptHash) {
       multiplier_y: multiplier_y_in,
       multiplier_z: multiplier_z_in,
       lp_token: lp_token_in,
-      ampl_coeff_is_editable: ampl_coeff_is_editable_in,
-      lp_fee_is_editable: lp_fee_is_editable_in,
       dao_stabe_proxy_witness: dao_stabe_proxy_witness_in,
       ..
     } = input_datum
@@ -95,8 +93,6 @@ validator(dao_voting_witness: ScriptHash) {
       multiplier_y: multiplier_y_out,
       multiplier_z: multiplier_z_out,
       lp_token: lp_token_out,
-      ampl_coeff_is_editable: ampl_coeff_is_editable_out,
-      lp_fee_is_editable: lp_fee_is_editable_out,
       dao_stabe_proxy_witness: dao_stabe_proxy_witness_out,
       ..
     } = output_datum
@@ -112,19 +108,19 @@ validator(dao_voting_witness: ScriptHash) {
       value.quantity_of(output_value, pool_nft_policy, pool_nft_name) == 1
     // 4. Pool config params are preserved:
     let pool_config_preserved: Bool =
-      pool_nft_in == pool_nft_out && asset_x_in == asset_x_out && asset_y_in == asset_y_out && asset_z_in == asset_z_out && multiplier_x_in == multiplier_x_out && multiplier_y_in == multiplier_y_out && multiplier_z_in == multiplier_z_out && lp_token_in == lp_token_out && lp_fee_is_editable_in == lp_fee_is_editable_out && ampl_coeff_is_editable_in == ampl_coeff_is_editable_out && dao_stabe_proxy_witness_in == dao_stabe_proxy_witness_out
+      pool_nft_in == pool_nft_out && asset_x_in == asset_x_out && asset_y_in == asset_y_out && asset_z_in == asset_z_out && multiplier_x_in == multiplier_x_out && multiplier_y_in == multiplier_y_out && multiplier_z_in == multiplier_z_out && lp_token_in == lp_token_out && dao_stabe_proxy_witness_in == dao_stabe_proxy_witness_out
     // 5. No extra tokens in the pool's value:
     let no_more_tokens_in_pool_out: Bool = pool_in_assets == pool_out_assets
     // 6. Action is valid:
     let valid_action: Bool =
       when action is {
-        AMMAction(context_values_list) ->
+        AMMAction(inv) ->
           validate_amm_operation(
             input_value,
             input_datum,
             output_value,
             output_datum,
-            context_values_list,
+            inv,
           ) && stake_cred_in == stake_cred_out
 
         PDAOAction -> {
@@ -150,7 +146,7 @@ fn validate_amm_operation(
   input_datum: PoolDataT2T2T,
   output_value: Value,
   output_datum: PoolDataT2T2T,
-  context_values_list: List<Int>,
+  invariant: Option<Int>,
 ) -> Bool {
   // ==================================== INPUT DATA ==================================== //
   // Extract values for calculations | Input:
@@ -397,7 +393,7 @@ fn validate_amm_operation(
         tradable_quote_after - tradable_quote_asset_delta * lp_fee_num / (
           lp_fee_num - denom
         ) - 1
-      expect Some(stableswap_witness) = list.head(context_values_list)
+      expect Some(stableswap_witness) = invariant
       let valid_invariant_for_swap: Bool =
         check_invariant_t2t2t(
           n,
@@ -517,8 +513,6 @@ fn t2t2t_pool_state(
         name: bytearray.from_string(lp_name_string),
       },
       an2n,
-      ampl_coeff_is_editable: True,
-      lp_fee_is_editable: True,
       lp_fee_num,
       protocol_fee_num,
       dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
@@ -686,16 +680,14 @@ fn uniform_reserves_valid_swap_math_template(
       output_pool_data,
       output_value,
     )
-  let context_list =
-    [inv_before]
-  let redeemer = PoolRedeemer(0, 0, AMMAction(context_list))
+  let redeemer = PoolRedeemer(0, 0, AMMAction(Some(inv_before)))
   // Validation:
   validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    context_list,
+    Some(inv_before),
   ) && validate_stable_pool_transition_t2t2t(
     bytearray.from_string(@"proxy_dao"),
     input_pool_data,
@@ -855,10 +847,6 @@ fn uniform_reserves_invalid_swap_math_template(
     )
   // Wrong invariants:
   let inv_before_wrong = inv_before + quote_lp_fees - quote_protocol_fees - 1
-  let context_list_wrong =
-    [inv_before_wrong]
-  let context_list =
-    [inv_before]
 
   // Validations:
   validate_amm_operation(
@@ -866,25 +854,25 @@ fn uniform_reserves_invalid_swap_math_template(
     input_pool_data,
     output_value_wrong_balance,
     output_pool_data,
-    context_list,
+    Some(inv_before),
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_protocol_fees,
-    context_list,
+    Some(inv_before),
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    context_list_wrong,
+    Some(inv_before_wrong),
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_protocol_fees,
-    context_list,
+    Some(inv_before),
   )
 }
 
@@ -992,13 +980,13 @@ fn uniform_reserves_valid_lq_math_template(
     input_pool_data,
     output_value,
     output_pool_data,
-    [],
+    None,
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_extra_lp,
     output_pool_data,
-    [],
+    None,
   )
 }
 
@@ -1134,19 +1122,19 @@ fn uniform_reserves_invalid_lq_math_template(
     input_pool_data,
     output_value_wrong_balance,
     output_pool_data,
-    [],
+    None,
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_protocol_fees,
-    [],
+    None,
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_lp,
     output_pool_data,
-    [],
+    None,
   )
 }
 
@@ -1634,10 +1622,6 @@ test test_swap_to_max_decimals_fixtures() {
 
   // 3. Wrong invariant:
   let inv_before_wrong = inv_before - 1
-  let context_list =
-    [inv_before]
-  let context_list_wrong =
-    [inv_before_wrong]
 
   // Validations:
   validate_amm_operation(
@@ -1645,25 +1629,25 @@ test test_swap_to_max_decimals_fixtures() {
     input_pool_data,
     output_value,
     output_pool_data,
-    context_list,
+    Some(inv_before),
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_balances,
     output_pool_data,
-    context_list,
+    Some(inv_before),
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_fees,
-    context_list,
+    Some(inv_before),
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    context_list_wrong,
+    Some(inv_before_wrong),
   )
 }
 
@@ -1770,35 +1754,32 @@ test test_swap_to_min_decimals_fixtures() {
 
   // 3. Wrong invariant:
   let inv_before_wrong = inv_before - 1
-  let context_list =
-    [inv_before]
-  let context_list_wrong =
-    [inv_before_wrong]
+
   // Validations:
   validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    context_list,
+    Some(inv_before),
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_balances,
     output_pool_data,
-    context_list,
+    Some(inv_before),
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_fees,
-    context_list,
+    Some(inv_before),
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    context_list_wrong,
+    Some(inv_before_wrong),
   )
 }
 
@@ -1899,7 +1880,7 @@ test single_swap_test() {
       output_pool_data,
       output_value,
     )
-  let redeemer = PoolRedeemer(0, 0, AMMAction([inv_before]))
+  let redeemer = PoolRedeemer(0, 0, AMMAction(Some(inv_before)))
   validate_stable_pool_transition_t2t2t(
     bytearray.from_string(@"proxy_dao"),
     input_pool_data,
@@ -2003,6 +1984,6 @@ test empty_swap_test() {
       output_pool_data,
       output_value,
     )
-  let redeemer = PoolRedeemer(0, 0, AMMAction([inv_before]))
+  let redeemer = PoolRedeemer(0, 0, AMMAction(Some(inv_before)))
   ctx == ctx && redeemer == redeemer
 }
