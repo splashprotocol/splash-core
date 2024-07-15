@@ -1,4 +1,5 @@
 use aiken/list
+use aiken/math
 use aiken/transaction.{
   InlineDatum, Input, Output, ScriptContext, Spend, Transaction,
 }
@@ -219,16 +220,46 @@ fn validate_stable_pool_t2t_proxy_dao_action(
     } else if
     dao_action_ix == 4{
     
-      // Update 'ampl_coeff' value of the pool.
-      // NB: 'ampl_coeff' can be updated only for balanced pool,
-      // where invariant value doesn't depend on 'an2n', the 'invatiant_preserved' flag guarantees this.
+      let PoolDataT2T2T {
+        asset_x,
+        asset_y,
+        asset_z,
+        multiplier_x,
+        multiplier_y,
+        multiplier_z,
+        ..
+      } = input_datum
+      let Asset { policy: asset_x_policy, name: asset_x_name } = asset_x
+      let Asset { policy: asset_y_policy, name: asset_y_name } = asset_y
+      let Asset { policy: asset_z_policy, name: asset_z_name } = asset_z
+
+      // Withdrawn protocol fees:
+      let x_total0 =
+        value.quantity_of(input_value, asset_x_policy, asset_x_name)
+      let y_total0 =
+        value.quantity_of(input_value, asset_y_policy, asset_y_name)
+      let z_total0 =
+        value.quantity_of(input_value, asset_z_policy, asset_z_name)
+      let x_tradable0 = x_total0 - protocol_fees_x0
+      let y_tradable0 = y_total0 - protocol_fees_y0
+      let z_tradable0 = z_total0 - protocol_fees_z0
+
+      let max_mult_xy = math.max(multiplier_x, multiplier_y)
+      let max_mult_xyz = math.max(max_mult_xy, multiplier_z)
+
+      // Update 'an2n' value of the pool.
+      // NB: 'an2n' can be updated only for balanced pool,
+      // where invariant value doesn't depend on 'a', the 'invatiant_preserved' flag guarantees this.
       let ampl_coeff1 = an2n1 / n2n
 
       let ampl_coeff_inside_bounds: Bool =
         ampl_coeff1 >= ampl_coeff_min && ampl_coeff1 <= ampl_coeff_max
       let params_preserved_for_ampl_coeff_update: Bool =
         protocol_fees_x0 == protocol_fees_x1 && protocol_fees_y0 == protocol_fees_y1 && protocol_fees_z0 == protocol_fees_z1 && input_value == output_value && input_stake_cred == output_stake_cred && lp_fee_num1 == lp_fee_num0 && protocol_fee_num1 == protocol_fee_num0 && treasury_addr1 == treasury_addr0
-      ampl_coeff_is_editable && ampl_coeff_inside_bounds && params_preserved_for_ampl_coeff_update
+      let x_reserves_balanced = x_tradable0 * multiplier_x / max_mult_xyz
+      let invatiant_preserved: Bool =
+        x_reserves_balanced == y_tradable0 * multiplier_y / max_mult_xyz && x_reserves_balanced == z_tradable0 * multiplier_z / max_mult_xyz
+      ampl_coeff_is_editable && ampl_coeff_inside_bounds && params_preserved_for_ampl_coeff_update && invatiant_preserved
     } else if
     dao_action_ix == 5{
     
