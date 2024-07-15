@@ -140,12 +140,6 @@ pub type OrderAction {
 
 // ==================================== DAO ==================================== //
 
-/// DAO contract config (congig is immutable).
-pub type DAOData {
-  // Identifier of the pool:
-  pool_nft: Asset,
-}
-
 /// DAO action types:
 pub type DAOAction {
   pool_in_ix: Int,

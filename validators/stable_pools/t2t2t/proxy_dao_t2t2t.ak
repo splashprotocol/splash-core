@@ -5,7 +5,7 @@ use aiken/transaction.{
 use aiken/transaction/credential.{StakeCredential}
 use aiken/transaction/value.{Value}
 use splash/plutus.{Asset}
-use splash/stableswap/types.{DAOAction, DAOData, PoolDataT2T2T}
+use splash/stableswap/types.{DAOAction, PoolDataT2T2T}
 
 // Constant 'n ^ (2 * n)', where 'n' is the number of tradable tokens in the pool:
 const n2n = 729
@@ -24,12 +24,8 @@ const protocol_fee_num_min = 1
 const protocol_fee_num_max = 99_999
 
 // DAO stable pool t2t2t validator:
-validator {
-  fn stable_pool_t2t2t_proxy_dao(
-    datum: DAOData,
-    action: DAOAction,
-    ctx: ScriptContext,
-  ) -> Bool {
+validator(pool_nft: Asset) {
+  fn stable_pool_t2t2t_proxy_dao(action: DAOAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
     expect Spend(dao_spent_utxo_reference) = purpose
     let Transaction { inputs, outputs, .. } = transaction
@@ -71,13 +67,8 @@ validator {
 
     // DAO output:
     expect Some(dao_out_output) = list.at(outputs, dao_out_ix)
-    expect Output {
-      value: dao_out_value,
-      address: dao_out_addr,
-      datum: InlineDatum(dao_out_datum),
-      ..
-    } = dao_out_output
-    expect proxy_dao_out_datum: DAOData = dao_out_datum
+    let Output { value: dao_out_value, address: dao_out_addr, .. } =
+      dao_out_output
 
     // ==================================== DAO SELF VALIDATIONS ==================================== //
     // 1. DAO input is valid:
@@ -87,8 +78,10 @@ validator {
     // 2. DAO credentials are preserved:
     let proxy_dao_credentials_preserved: Bool = dao_in_addr == dao_out_addr
 
-    // 3. DAO config params are preserved:
-    let proxy_dao_congif_preserved: Bool = datum == proxy_dao_out_datum
+    // 3. Valid pool:
+    let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
+    let valid_pool: Bool =
+      value.quantity_of(pool_in_value, pool_nft_policy, pool_nft_name) == 1
 
     // 4. No extra tokens in the DAO's value (Only ADA can be in the DAO's value):
     let no_more_tokens_in_proxy_dao_out: Bool = dao_in_value == dao_out_value
@@ -105,7 +98,7 @@ validator {
         dao_action_ix,
       )
 
-    valid_dao_input && proxy_dao_credentials_preserved && proxy_dao_congif_preserved && no_more_tokens_in_proxy_dao_out && valid_dao_action
+    valid_dao_input && proxy_dao_credentials_preserved && valid_pool && no_more_tokens_in_proxy_dao_out && valid_dao_action
   }
 }
 
