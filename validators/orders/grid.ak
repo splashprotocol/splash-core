@@ -22,6 +22,8 @@ type GridStateNative {
   side: Bool,
   /// Lovelace allowed to be utilized to cover TX fee.
   budget_per_transaction: Int,
+  min_marginal_output_lovelace: Int,
+  min_marginal_output_token: Int,
   /// Where the output from the order must go.
   redeemer_address: Address,
   /// PKH authorized to cancel order.
@@ -72,6 +74,8 @@ validator {
           price,
           side,
           budget_per_transaction,
+          min_marginal_output_lovelace,
+          min_marginal_output_token,
           redeemer_address,
           cancellation_pkh,
         } = state
@@ -96,6 +100,8 @@ validator {
           when side is {
             True -> {
               let is_sell = delta_token < 0
+              let sufficient_output =
+                delta_tradable_lovelace >= min_marginal_output_lovelace
               let valid_rate =
                 delta_tradable_lovelace * price.denom >= -delta_token * price.num
               let quote_sold_completely = token_1 == 0
@@ -117,16 +123,19 @@ validator {
                   max_lovelace_offer,
                   side: !quote_sold_completely,
                   budget_per_transaction,
+                  min_marginal_output_lovelace,
+                  min_marginal_output_token,
                   redeemer_address,
                   cancellation_pkh,
                 }
               let correct_state_trans =
                 successor_state == expected_successor_state
-              is_sell? && valid_rate? && correct_state_trans?
+              is_sell? && sufficient_output? && valid_rate? && correct_state_trans?
             }
             False -> {
               let neg_delta_tradable_lovelace = -delta_tradable_lovelace
               let is_buy = delta_tradable_lovelace < 0
+              let sufficient_output = delta_token >= min_marginal_output_token
               let valid_rate =
                 delta_token * price.num >= neg_delta_tradable_lovelace * price.denom
               let max_lovelace_sold =
@@ -150,12 +159,14 @@ validator {
                   lovelace_offer: lovelace_offer + delta_tradable_lovelace,
                   side: max_lovelace_sold,
                   budget_per_transaction,
+                  min_marginal_output_lovelace,
+                  min_marginal_output_token,
                   redeemer_address,
                   cancellation_pkh,
                 }
               let correct_state_trans =
                 successor_state == expected_successor_state
-              is_buy? && valid_rate? && correct_state_trans?
+              is_buy? && sufficient_output? && valid_rate? && correct_state_trans?
             }
           }
         nft_preserved? && valid_trade
@@ -185,6 +196,8 @@ fn base_state() -> GridStateNative {
     price: rational(1, 1),
     side: False,
     budget_per_transaction: 1000,
+    min_marginal_output_lovelace: 5000,
+    min_marginal_output_token: 5000,
     redeemer_address: from_verification_key("dude1"),
     cancellation_pkh: "abcd",
   }
