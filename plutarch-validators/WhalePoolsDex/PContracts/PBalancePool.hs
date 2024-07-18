@@ -29,6 +29,7 @@ import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
 import PExtra.Pair
 import PExtra.Integer
 import Plutarch.Trace
+import PExtra.Ada
 
 import qualified WhalePoolsDex.Contracts.BalancePool as BP
 import           WhalePoolsDex.PContracts.PPool      hiding (PoolConfig(..), PoolAction(..))
@@ -72,6 +73,8 @@ newtype BalancePoolState (s :: S)
                 '[ "reservesX"   ':= PInteger
                  , "reservesY"   ':= PInteger
                  , "liquidity"   ':= PInteger
+                  -- in T2T pool contains Lovelace qty, in N2T case contains `0`
+                 , "lovelaceToken2Token" ':= PInteger
                  ]
             )
         )
@@ -340,11 +343,17 @@ readPoolState = phoistAcyclic $
             y = assetClassValueOf # value # poolY
             negLq = assetClassValueOf # value # poolLq
             lq = pdata $ maxLqCap - negLq
+            lovelaceToken2Token =
+                pif
+                    ((poolX #== pAdaAssetClass) #|| (poolY #== pAdaAssetClass))
+                    (pconstant 0)
+                    (assetClassValueOf # value # pAdaAssetClass)
         tcon $
             BalancePoolState $
                 pdcons @"reservesX" @PInteger # pdata (x - poolXTreasury)
                     #$ pdcons @"reservesY" @PInteger # pdata (y - poolYTreasury)
                     #$ pdcons @"liquidity" @PInteger # lq
+                    #$ pdcons @"lovelaceToken2Token" @PInteger # pdata lovelaceToken2Token
                         # pdnil
 
 balancePoolValidatorT :: ClosedTerm (BalancePoolConfig :--> BalancePoolRedeemer :--> PScriptContext :--> PBool)
@@ -392,6 +401,9 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
 
     selfAddr <- tletUnwrap $ getField @"address" self
     succAddr <- tletUnwrap $ getField @"address" successor
+
+    lovelaceToken2Token0 <- tletField @"lovelaceToken2Token" s0
+    lovelaceToken2Token1 <- tletField @"lovelaceToken2Token" s1
     let 
         scriptPreserved = succAddr #== selfAddr 
         selfValueLength = pValueLength # selfValue
@@ -401,8 +413,10 @@ balancePoolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
 
         newConfig    = parseDatum # succD
 
+        correctLovelaceToken2TokenValue = lovelaceToken2Token1 #== lovelaceToken2Token0
+
     pure $
-        selfIdentity #&& (pmatch action $ \case
+        correctLovelaceToken2TokenValue #&& selfIdentity #&& (pmatch action $ \case
             Swap    -> unTermCont $ do
                 pure $ noMoreTokens #&& scriptPreserved #&& (validSwap # s0 # s1 # conf # newConfig)
             DAOAction -> validDAOAction # conf # txinfo'

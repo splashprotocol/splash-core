@@ -33,31 +33,28 @@ import qualified Data.Text.Encoding      as T
 import Debug.Trace
 
 main :: IO ()
-main =
-  defaultMain tests
-  
+main = defaultMain tests
+
 tests = testGroup "Contracts"
-  [ 
-  --   feeSwitch
-  -- , feeSwitchBFee
-  -- , 
-  balancePool
-  -- , checkPValueLength
-  -- , checkPool
-  -- , checkPoolRedeemer
-  -- , checkPoolBFee
-  -- , checkPoolBFeeRedeemer
-  -- , checkRedeem
-  -- , checkRedeemIdentity
-  -- , checkRedeemIsFair
-  -- , checkRedeemRedeemer
-  -- , checkDeposit 
-  -- , checkDepositChange
-  -- , checkDepositRedeemer
-  -- , checkDepositIdentity
-  -- , checkDepositLq
-  -- , checkDepositTokenReward
-  -- , checkSwap
-  -- , checkSwapRedeemer
-  -- , checkSwapIdentity
+  [ feeSwitch
+  , feeSwitchBFee
+  , balancePool
+  , checkPValueLength
+  , checkPool
+  , checkPoolRedeemer
+  , checkPoolBFee
+  , checkPoolBFeeRedeemer
+  , checkRedeem
+  , checkRedeemIdentity
+  , checkRedeemIsFair
+  , checkRedeemRedeemer
+  , checkDeposit 
+  , checkDepositChange
+  , checkDepositRedeemer
+  , checkDepositIdentity
+  , checkDepositLq
+  , checkDepositTokenReward
+  , checkSwap
+  , checkSwapRedeemer
+  , checkSwapIdentity
   ]
