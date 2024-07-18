@@ -113,7 +113,7 @@ genPool adminsPkhs threshold lpFeeIsEditable = do
 
   let
     daoContract =
-        CurrencySymbol $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft adminsPkhs threshold lpFeeIsEditable))
+        CurrencySymbol $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator adminsPkhs threshold lpFeeIsEditable))
 
     poolConfig = PoolConfig
       { poolNft = nft
@@ -136,7 +136,7 @@ genPool adminsPkhs threshold lpFeeIsEditable = do
 
 daoValidator :: Pool -> [PubKeyHash] -> Integer -> Bool -> ClosedTerm (PData :--> PScriptContext :--> POpaque)
 daoValidator Pool{..} admins threshold lpFeeIsEditable = 
-  wrapMintingValidator (daoMultisigPolicyValidatorT (pconstant (poolNft config)) (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable))
+  wrapMintingValidator (daoMultisigPolicyValidatorT (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable))
 
 incorrectPoolValue :: Pool -> Pool
 incorrectPoolValue prevPool =
@@ -436,8 +436,21 @@ createTxInfo prevPool@Pool{..} ActionResult{..} adminPkhs = do
     scMintAssetClass = AssetClass (daoCS, poolStakeChangeMintTokenName)
     mintValue = mkValue scMintAssetClass 1
 
+  feeAddr  <- genPkh
+  let
+    daoCS = List.head (daoPolicy config)
+
+    feeInputUTxO = TxOut
+            { txOutAddress = Address (PubKeyCredential feeAddr) Nothing
+            , txOutValue   = mkAdaValue 10000000 
+            , txOutDatum   = NoOutputDatum
+            , txOutReferenceScript = Nothing
+            }
+
+  feeInput <- toTxInInfo feeInputUTxO
+
   pure $ TxInfo
-    { txInfoInputs = [poolTxIn]
+    { txInfoInputs = [poolTxIn, feeInput]
     , txInfoReferenceInputs = []
     , txInfoOutputs = [toTxOut newPool] ++ additionalOutputs
     , txInfoFee = mempty

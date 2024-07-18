@@ -17,11 +17,12 @@ import Plutarch.Api.V1.Scripts (PValidatorHash)
 import Plutarch.Trace
 import Plutarch.Extra.TermCont
 
-daoMultisigPolicyValidatorT :: Term s PAssetClass -> Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple DAOAction PInteger) :--> PScriptContext :--> PBool)
-daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx' -> unTermCont $ do
+daoMultisigPolicyValidatorT :: Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple DAOAction PInteger PAssetClass) :--> PScriptContext :--> PBool)
+daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx' -> unTermCont $ do
   let  
     action     = pfromData $ pfield @"_0" # redeemer
     poolInIdx  = pfromData $ pfield @"_1" # redeemer
+    poolNft    = pfromData $ pfield @"_2" # redeemer
 
   ctx <- pletFieldsC @'["txInfo", "purpose"] ctx'
 

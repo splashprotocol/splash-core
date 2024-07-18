@@ -16,6 +16,7 @@ import Plutarch
 import Plutarch.Api.V2              (PScriptHash(..), PMaybeData (..), PTxOut, POutputDatum(..), PAddress(..), PPubKeyHash(..), PDatum(..), PValue(..), KeyGuarantees(..), AmountGuarantees(..), PCurrencySymbol(..), PStakingCredential(..))
 import Plutarch.Api.V2.Contexts     (PScriptContext, PScriptPurpose (PSpending), PTxInfo(..))
 import Plutarch.DataRepr
+import Plutarch.Builtin
 import Plutarch.Lift
 import Plutarch.Prelude
 import Plutarch.Extra.TermCont

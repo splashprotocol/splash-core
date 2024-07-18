@@ -94,9 +94,11 @@ library
     WhalePoolsDex.Contracts.Proxy.Redeem
     WhalePoolsDex.Contracts.Proxy.RedeemBalance
     WhalePoolsDex.Contracts.Proxy.FeeSwitch
+    WhalePoolsDex.Contracts.Proxy.RoyaltyWithdraw
     WhalePoolsDex.Contracts.Pool
     WhalePoolsDex.Contracts.PoolBFee
     WhalePoolsDex.Contracts.BalancePool
+    WhalePoolsDex.Contracts.RoyaltyPool
     WhalePoolsDex.PContracts.PApi
     WhalePoolsDex.PContracts.PAssets
     WhalePoolsDex.PContracts.PBalancePool
@@ -104,6 +106,10 @@ library
     WhalePoolsDex.PContracts.PDepositBalance
     WhalePoolsDex.PContracts.POrder
     WhalePoolsDex.PContracts.PPool
+    WhalePoolsDex.PContracts.PRoyaltyPool
+    WhalePoolsDex.PContracts.PRoyaltyWithdrawContract
+    WhalePoolsDex.PContracts.PRoyaltyDeposit
+    WhalePoolsDex.PContracts.PRoyaltyRedeem
     WhalePoolsDex.PContracts.PPoolBFee
     WhalePoolsDex.PContracts.PRedeem
     WhalePoolsDex.PContracts.PRedeemBalance
@@ -112,6 +118,7 @@ library
     WhalePoolsDex.PContracts.PStakingWithPkhLock
     WhalePoolsDex.PContracts.PFeeSwitchBalancePool
     WhalePoolsDex.PContracts.PFeeSwitch
+    WhalePoolsDex.PContracts.PRoyaltyFeeSwitch
     WhalePoolsDex.PStakingValidators
     WhalePoolsDex.PMintingValidators
     WhalePoolsDex.PValidators
@@ -148,6 +155,8 @@ test-suite cardano-dex-contracts-test
     Gen.FeeSwitchGen
     Gen.DepositGen
     Gen.BalancePoolGen
+    Gen.RoyaltyWithdrawGen
+    Gen.RoyaltyPoolGen
     Gen.PoolGen
     Gen.SwapGen
     Gen.RedeemGen
@@ -162,6 +171,7 @@ test-suite cardano-dex-contracts-test
     Tests.FeeSwitch
     Tests.BalancePool
     Tests.FeeSwitchBFee
+    Tests.RoyaltyWithdraw
     Tests.Api
     Eval
   build-depends:

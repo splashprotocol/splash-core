@@ -1,11 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module WhalePoolsDex.PContracts.PDeposit (
-    DepositConfig (..),
-    depositValidatorT,
-    validChange',
-    minAssetReward
+module WhalePoolsDex.PContracts.PRoyaltyDeposit (
+    royaltyDepositValidatorT,
 ) where
 
 import qualified GHC.Generics as GHC
@@ -26,37 +23,13 @@ import PExtra.Monadic (tlet, tletField, tmatch)
 
 import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap, pmin, tletUnwrap)
 import WhalePoolsDex.PContracts.POrder     (OrderAction (Apply, Refund), OrderRedeemer)
-import WhalePoolsDex.PContracts.PFeeSwitch (extractPoolConfig)
+import WhalePoolsDex.PContracts.PDeposit   (DepositConfig(..), validChange', minAssetReward)
+import WhalePoolsDex.PContracts.PRoyaltyFeeSwitch (extractPoolConfig)
 
 import qualified WhalePoolsDex.Contracts.Proxy.Deposit as D
 
-newtype DepositConfig (s :: S)
-    = DepositConfig
-        ( Term
-            s
-            ( PDataRecord
-                '[ "poolNft" ':= PAssetClass
-                 , "x" ':= PAssetClass
-                 , "y" ':= PAssetClass
-                 , "lq" ':= PAssetClass
-                 , "exFee" ':= PInteger -- execution fee specified by the user
-                 , "rewardPkh" ':= PPubKeyHash -- PublicKeyHash of the user
-                 , "stakePkh" ':= PMaybeData PPubKeyHash
-                 , "collateralAda" ':= PInteger -- we reserve a small amount of ADA to put it into user output later
-                 ]
-            )
-        )
-    deriving stock (GHC.Generic)
-    deriving
-        (PIsData, PDataFields, PlutusType)
-
-instance DerivePlutusType DepositConfig where type DPTStrat _ = PlutusTypeData
-
-instance PUnsafeLiftDecl DepositConfig where type PLifted DepositConfig = D.DepositConfig
-deriving via (DerivePConstantViaData D.DepositConfig DepositConfig) instance (PConstantDecl D.DepositConfig)
-
-depositValidatorT :: ClosedTerm (DepositConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
-depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
+royaltyDepositValidatorT :: ClosedTerm (DepositConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
+royaltyDepositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
     ctx  <- pletFieldsC @'["txInfo", "purpose"] ctx'
     conf <- pletFieldsC @'["x", "y", "lq", "poolNft", "exFee", "rewardPkh", "stakePkh", "collateralAda"] conf'
     redeemer <- pletFieldsC @'["poolInIx", "orderInIx", "rewardOutIx", "action"] redeemer'
@@ -100,10 +73,13 @@ depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                         in nftAmount #== 1
                 
                 poolInputDatum <- tlet $ extractPoolConfig # pool
-                poolConf       <- pletFieldsC @'["treasuryX", "treasuryY"] poolInputDatum
+                poolConf       <- pletFieldsC @'["treasuryX", "treasuryY", "royaltyX", "royaltyY"] poolInputDatum
                 let
                     treasuryX = getField @"treasuryX" poolConf
                     treasuryY = getField @"treasuryY" poolConf
+
+                    royaltyX = getField @"royaltyX" poolConf
+                    royaltyY = getField @"royaltyY" poolConf
 
                 selfIn'   <- tlet $ pelemAt # orderInIx # inputs
                 selfIn    <- pletFieldsC @'["outRef", "resolved"] selfIn'
@@ -126,8 +102,8 @@ depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                     let lqNegative = assetClassValueOf # poolValue # lq
                     in tlet $ maxLqCap - lqNegative
 
-                reservesX <- tlet $ (assetClassValueOf # poolValue # x) - treasuryX
-                reservesY <- tlet $ (assetClassValueOf # poolValue # y) - treasuryY
+                reservesX <- tlet $ (assetClassValueOf # poolValue # x) - treasuryX - royaltyX
+                reservesY <- tlet $ (assetClassValueOf # poolValue # y) - treasuryY - royaltyY
 
                 minRewardByX <- tlet $ minAssetReward # selfValue # x # reservesX # liquidity # exFee # collateralAda
                 minRewardByY <- tlet $ minAssetReward # selfValue # y # reservesY # liquidity # exFee # collateralAda
@@ -148,22 +124,3 @@ depositValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
             Refund ->
                 let sigs = pfromData $ getField @"signatories" txInfo
                  in containsSignature # sigs # rewardPkh -- user signed the refund
-
--- Checks whether an asset overflow is returned back to user
-validChange' :: Term s (PValue _ _ :--> PAssetClass :--> PInteger :--> PInteger :--> PInteger :--> PInteger :--> PBool)
-validChange' =
-    phoistAcyclic $
-        plam $ \rewardValue overflowAsset overflowAssetInput otherAssetInput overflowAssetReserves liquidity ->
-            let diff = overflowAssetInput - otherAssetInput
-                excess = pdiv # (diff * overflowAssetReserves) # liquidity
-                change = assetClassValueOf # rewardValue # overflowAsset
-             in excess #<= change
-
-minAssetReward :: Term s (PValue _ _ :--> PAssetClass :--> PInteger :--> PInteger :--> PInteger :--> PInteger :--> PInteger)
-minAssetReward =
-    phoistAcyclic $
-        plam $ \selfValue asset assetReserves liquidity exFee collateralAda ->
-            unTermCont $ do
-                assetInput <- tlet $ assetClassValueOf # selfValue # asset
-                let depositInput = pif (pIsAda # asset) (assetInput - exFee - collateralAda) assetInput
-                pure $ pdiv # (depositInput * liquidity) # assetReserves

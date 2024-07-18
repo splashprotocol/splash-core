@@ -1,25 +1,25 @@
-module WhalePoolsDex.PContracts.PFeeSwitch where
+module WhalePoolsDex.PContracts.PRoyaltyFeeSwitch where
 
 import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit)
+import WhalePoolsDex.PContracts.PRoyaltyPool
 import PExtra.API (assetClassValueOf, ptryFromData, PAssetClass(..))
 import PExtra.Monadic
 import Plutarch
 import Plutarch.Api.V2 
 import Plutarch.Api.V1 (PCredential(..))
-import Plutarch.Api.V1.Value        (pisAdaOnlyValue)
 import Plutarch.DataRepr
 import Plutarch.Prelude
 import Plutarch.Extra.TermCont
 import Plutarch.Builtin             (pasInt, pforgetData, PIsData(..))
 import Plutarch.Unsafe              (punsafeCoerce)
 import Plutarch.Internal.PlutusType (pcon', pmatch')
-import WhalePoolsDex.PContracts.PPool
-import Plutarch.Api.V1.Scripts (PValidatorHash)
+import Plutarch.Api.V1.Scripts      (PValidatorHash)
+import Plutarch.Api.V1.Value        (pisAdaOnlyValue)
 import Plutarch.Trace
 import Plutarch.Extra.TermCont
 import PExtra.PTriple
 
-extractPoolConfig :: Term s (PTxOut :--> PoolConfig)
+extractPoolConfig :: Term s (PTxOut :--> RoyaltyPoolConfig)
 extractPoolConfig = plam $ \txOut -> unTermCont $ do
   txOutDatum <- tletField @"datum" txOut
 
@@ -29,7 +29,7 @@ extractPoolConfig = plam $ \txOut -> unTermCont $ do
 
   PDatum poolDatum <- pmatchC rawDatum
 
-  tletUnwrap $ ptryFromData @(PoolConfig) $ poolDatum
+  tletUnwrap $ ptryFromData @(RoyaltyPoolConfig) $ poolDatum
 
 findOutput :: Term s (PValidatorHash :--> PBuiltinList PTxOut :--> PTxOut)
 findOutput =
@@ -82,33 +82,39 @@ instance PlutusType DAOAction where
                 )
             )
 
--- All SwitchFee actions shouldn't modify main poolConfig elements: poolNft, poolX, poolY, poolLq, lqBound, feeNum
-validateCommonFields :: PMemberFields PoolConfig '["poolNft", "poolX", "poolY", "poolLq", "lqBound"] s as => HRec as -> HRec as -> Term s PBool
+-- All SwitchFee actions shouldn't modify main poolConfig elements: poolNft, poolX, poolY, poolLq, royaltyFee, royaltyPubKeyHash256, royaltyNonce
+validateCommonFields :: PMemberFields RoyaltyPoolConfig '["poolNft", "poolX", "poolY", "poolLq", "royaltyFee", "royaltyPubKeyHash256", "royaltyNonce"] s as => HRec as -> HRec as -> Term s PBool
 validateCommonFields prevConfig newConfig =
   let
     prevPoolNft = getField @"poolNft" prevConfig
     prevPoolX   = getField @"poolX"   prevConfig
     prevPoolY   = getField @"poolY"   prevConfig
     prevPoolLq  = getField @"poolLq"  prevConfig
-    prevLqBound = getField @"lqBound"  prevConfig
+    prevPoolRoyaltyFee   = getField @"royaltyFee"     prevConfig
+    prevPoolRoyaltyAddr  = getField @"royaltyPubKeyHash256" prevConfig
+    prevPoolRoyaltyNonce = getField @"royaltyNonce"   prevConfig
 
     newPoolNft  = getField @"poolNft" newConfig
     newPoolX    = getField @"poolX"   newConfig
     newPoolY    = getField @"poolY"   newConfig
     newPoolLq   = getField @"poolLq"  newConfig
-    newLqBound  = getField @"lqBound" newConfig
+    newPoolRoyaltyFee   = getField @"royaltyFee"     newConfig
+    newPoolRoyaltyAddr  = getField @"royaltyPubKeyHash256" newConfig
+    newPoolRoyaltyNonce = getField @"royaltyNonce"   newConfig
 
     commonFieldsValid = 
       prevPoolNft    #== newPoolNft  #&&
       prevPoolX      #== newPoolX    #&&
       prevPoolY      #== newPoolY    #&&
       prevPoolLq     #== newPoolLq   #&&
-      prevLqBound    #== newLqBound
+      prevPoolRoyaltyFee    #== newPoolRoyaltyFee   #&&
+      prevPoolRoyaltyAddr   #== newPoolRoyaltyAddr   #&&
+      prevPoolRoyaltyNonce  #== newPoolRoyaltyNonce
 
   in commonFieldsValid
 
 -- Validates that treasuryX, treasuryY fields from poolConfig hadn't be modified
-treasuryIsTheSame :: PMemberFields PoolConfig '["treasuryX", "treasuryY"] s as => HRec as -> HRec as -> Term s PBool
+treasuryIsTheSame :: PMemberFields RoyaltyPoolConfig '["treasuryX", "treasuryY"] s as => HRec as -> HRec as -> Term s PBool
 treasuryIsTheSame prevConfig newConfig =
   let
     prevTreasuryX = getField @"treasuryX" prevConfig
@@ -124,7 +130,7 @@ treasuryIsTheSame prevConfig newConfig =
   in commonFieldsValid
 
 validateTreasuryWithdraw 
-  :: PMemberFields PoolConfig '["treasuryX", "treasuryY", "poolX", "poolY", "poolLq", "treasuryAddress"] s as 
+  :: PMemberFields RoyaltyPoolConfig '["treasuryX", "treasuryY", "poolX", "poolY", "poolLq", "treasuryAddress"] s as 
   => HRec as 
   -> HRec as
   -> Term s (PBuiltinList PTxOut :--> PValue _ _ :--> PValue _ _ :--> PAssetClass :--> PBool)
@@ -220,9 +226,8 @@ daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer
   poolInputAddr  <- tletField @"address" poolInputResolved
   poolOutputAddr <- tletField @"address" successor
 
-  prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] poolInputDatum
-  newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] poolOutputDatum
-  
+  prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress", "royaltyFee", "royaltyPubKeyHash256", "royaltyNonce"] poolInputDatum
+  newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress", "royaltyFee", "royaltyPubKeyHash256", "royaltyNonce"] poolOutputDatum
   let
     validSignaturesQty =
       pfoldl # plam (\acc pkh -> pif (containsSignature # signatories # pkh) (acc + 1) acc) # 0 # daoPkhs

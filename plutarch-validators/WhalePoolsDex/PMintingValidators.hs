@@ -5,7 +5,8 @@ module WhalePoolsDex.PMintingValidators (
     poolLqMiningValidator,
     daoMintPolicyValidator,
     wrapMintingValidator,
-    daoBalanceMintPolicyValidator
+    daoBalanceMintPolicyValidator,
+    royaltyFeeSwitchValidator
 ) where
 
 import Plutarch
@@ -21,6 +22,7 @@ import PlutusLedgerApi.V1.Value   (TokenName(..), AssetClass(..))
 import PlutusLedgerApi.V1.Crypto  (PubKeyHash)
 import PlutusLedgerApi.V1.Contexts
 import qualified WhalePoolsDex.PContracts.PFeeSwitchBalancePool as BDao
+import qualified WhalePoolsDex.PContracts.PRoyaltyFeeSwitch  as PRFS
 
 cfgForMintingValidator :: Config
 cfgForMintingValidator = Config NoTracing
@@ -57,3 +59,7 @@ daoBalanceMintPolicyValidator poolNft stakeAdminPkh threshold lpFeeIsEditable =
     mkMintingPolicy cfgForMintingValidator $ 
         wrapMintingValidator $
             BDao.daoMultisigPolicyValidatorT (pconstant poolNft) (pconstant stakeAdminPkh) (pconstant threshold) (pconstant lpFeeIsEditable)
+
+royaltyFeeSwitchValidator :: [PubKeyHash] -> Integer -> Bool -> MintingPolicy
+royaltyFeeSwitchValidator admins threshold lpFeeIsEditable = mkMintingPolicy cfgForMintingValidator $ wrapMintingValidator (PRFS.daoMultisigPolicyValidatorT (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable))
+

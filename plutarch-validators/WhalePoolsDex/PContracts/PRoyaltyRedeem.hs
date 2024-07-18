@@ -1,59 +1,26 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module WhalePoolsDex.PContracts.PRedeem (
-    RedeemConfig (..),
-    redeemValidatorT,
-    calcMinReturn,
-    calcOutput
+module WhalePoolsDex.PContracts.PRoyaltyRedeem (
+    royaltyRedeemValidatorT,
 ) where
-
-import qualified GHC.Generics  as GHC
 
 import Plutarch
 import Plutarch.Api.V2
 import Plutarch.Api.V1.Value
 import Plutarch.DataRepr
-import Plutarch.Lift
 import Plutarch.Prelude
 import Plutarch.Extra.TermCont
 
 import PExtra.API
-import PExtra.Ada     (pIsAda)
 import PExtra.Monadic (tlet, tmatch)
-import PExtra.PTriple (PTuple3, ptuple3)
 
-import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap, zeroAsData)
+import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap)
 import WhalePoolsDex.PContracts.POrder     (OrderAction (Apply, Refund), OrderRedeemer)
-import WhalePoolsDex.PContracts.PFeeSwitch (extractPoolConfig)
+import WhalePoolsDex.PContracts.PRedeem    (RedeemConfig(..), calcMinReturn, calcOutput)
+import WhalePoolsDex.PContracts.PRoyaltyFeeSwitch (extractPoolConfig)
 
-import qualified WhalePoolsDex.Contracts.Proxy.Redeem as R
-
-newtype RedeemConfig (s :: S)
-    = RedeemConfig
-        ( Term
-            s
-            ( PDataRecord
-                '[ "poolNft" ':= PAssetClass
-                 , "x" ':= PAssetClass
-                 , "y" ':= PAssetClass
-                 , "lq" ':= PAssetClass
-                 , "exFee" ':= PInteger
-                 , "rewardPkh" ':= PPubKeyHash
-                 , "stakePkh" ':= PMaybeData PPubKeyHash
-                 ]
-            )
-        )
-    deriving stock (GHC.Generic)
-    deriving
-        (PIsData, PDataFields, PlutusType)
-
-instance DerivePlutusType RedeemConfig where type DPTStrat _ = PlutusTypeData
-
-instance PUnsafeLiftDecl RedeemConfig where type PLifted RedeemConfig = R.RedeemConfig
-deriving via (DerivePConstantViaData R.RedeemConfig RedeemConfig) instance (PConstantDecl R.RedeemConfig)
-
-redeemValidatorT :: ClosedTerm (RedeemConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
-redeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
+royaltyRedeemValidatorT :: ClosedTerm (RedeemConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
+royaltyRedeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
     ctx      <- pletFieldsC @'["txInfo", "purpose"] ctx'
     conf     <- pletFieldsC @'["x", "y", "lq", "poolNft", "exFee", "rewardPkh", "stakePkh"] conf'
     redeemer <- pletFieldsC @'["poolInIx", "orderInIx", "rewardOutIx", "action"] redeemer'
@@ -96,10 +63,13 @@ redeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                         in nftAmount #== 1
 
                 poolInputDatum <- tlet $ extractPoolConfig # pool
-                poolConf       <- pletFieldsC @'["treasuryX", "treasuryY"] poolInputDatum
+                poolConf       <- pletFieldsC @'["treasuryX", "treasuryY", "royaltyX", "royaltyY"] poolInputDatum
                 let
                     treasuryX = getField @"treasuryX" poolConf
                     treasuryY = getField @"treasuryY" poolConf
+
+                    royaltyX = getField @"royaltyX" poolConf
+                    royaltyY = getField @"royaltyY" poolConf
 
                 selfIn' <- tlet $ pelemAt # orderInIx # inputs
                 selfIn  <- pletFieldsC @'["outRef", "resolved"] selfIn'
@@ -131,8 +101,8 @@ redeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                 let 
                     outAda = plovelaceValueOf # rewardValue
                     
-                    minReturnX = calcMinReturn # liquidity # inLq # poolValue # x # treasuryX
-                    minReturnY = calcMinReturn # liquidity # inLq # poolValue # y # treasuryY
+                    minReturnX = calcMinReturn # liquidity # inLq # poolValue # x # (treasuryX + royaltyX)
+                    minReturnY = calcMinReturn # liquidity # inLq # poolValue # y # (treasuryY + royaltyY)
 
                     outX  = pfromData $ pfield @"_0" # outs
                     outY  = pfromData $ pfield @"_1" # outs
@@ -145,23 +115,3 @@ redeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
             Refund ->
                 let sigs = pfromData $ getField @"signatories" txInfo
                  in containsSignature # sigs # rewardPkh -- user signed the refund
-
-calcMinReturn :: Term s (PInteger :--> PInteger :--> PValue _ _:--> PAssetClass :--> PInteger :--> PInteger)
-calcMinReturn =
-    phoistAcyclic $
-        plam $ \liquidity inLq poolValue ac poolFees ->
-            let reserves = (assetClassValueOf # poolValue # ac) - poolFees
-             in pdiv # (inLq * reserves) # liquidity
-
-calcOutput :: Term s (PValue _ _:--> PAssetClass :--> PAssetClass :--> PInteger :--> PTuple3 PInteger PInteger PInteger)
-calcOutput = plam $ \rewardValue poolX poolY collateralAda -> unTermCont $ do
-    rx <- tlet $ assetClassValueOf # rewardValue # poolX
-    ry <- tlet $ assetClassValueOf # rewardValue # poolY
-
-    outX <- tlet $ rx - collateralAda
-    outY <- tlet $ ry - collateralAda
-
-    let ifX = ptuple3 # pdata outX # pdata ry # pdata outX
-        ifY = ptuple3 # pdata rx # pdata outY # pdata outY
-        ifElse = ptuple3 # pdata rx # pdata ry # zeroAsData
-    pure $ pif (pIsAda # poolX) ifX (pif (pIsAda # poolY) ifY ifElse)

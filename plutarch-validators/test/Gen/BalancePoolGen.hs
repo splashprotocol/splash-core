@@ -93,7 +93,7 @@ daoMintingPurpose BalancePool{..} = Rewarding $ List.head (daoPolicy config)
 
 daoValidator :: BalancePool -> [PubKeyHash] -> Integer -> Bool -> ClosedTerm (PData :--> PScriptContext :--> POpaque)
 daoValidator BalancePool{..} admins threshold lpFeeIsEditable = 
-  wrapMintingValidator (daoMultisigPolicyValidatorT (pconstant (poolNft config)) (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable))
+  wrapMintingValidator (daoMultisigPolicyValidatorT (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable))
 
 createTxInfo :: (MonadGen m) => BalancePool -> BalancePoolActionResult -> [PubKeyHash] -> m TxInfo
 createTxInfo prevPool@BalancePool{..} BalancePoolActionResult{..} adminPkhs = do
@@ -169,7 +169,7 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
     lqQty  = 0x7fffffffffffffff - invariant
 
     daoContract =
-        StakingHash . ScriptCredential . ValidatorHash . getScriptHash . scriptHash $ (unMintingPolicyScript (daoMintPolicyValidator nft adminsPkhs threshold lpFeeIsEditable))
+        StakingHash . ScriptCredential . ValidatorHash . getScriptHash . scriptHash $ (unMintingPolicyScript (daoMintPolicyValidator adminsPkhs threshold lpFeeIsEditable))
 
     leftSide = (BigDecimal invariant 0) / ((BigDecimal xQty 0) ** (fromRational $ (fromIntegral xWeight) / 5))
 
@@ -201,19 +201,6 @@ calculateY baseAssetBalance baseAssetWeight baseTreasury quoteAssetBalance quote
       prevY = BigDecimal (quoteAssetBalance - quoteTreasury) 0
 
       invariantFloat = (prevX ** (fromIntegral baseAssetWeight)) * (prevY ** (fromIntegral quoteAssetWeight))
--- 84224881596217145943141940500000000000000000000
-  traceM $ "prevX"
-  traceM $ T.pack . show $ prevX
-  traceM $ "baseAssetWeight"
-  traceM $ T.pack . show $ baseAssetWeight
-  traceM $ "prevY"
-  traceM $ T.pack . show $ prevY
-  traceM $ "quoteAssetWeight"
-  traceM $ T.pack . show $ quoteAssetWeight
-  traceM $ "invariantFloat"
-  traceM $ T.pack . show $ invariantFloat
-
-  let
       yPartLength = toInteger $ RIO.length . show $ quoteAssetBalance
       additionalPart = (BigDecimal (fromIntegral baseIn) 0) * (fromRational $ (fromIntegral (lpFee - treasuryFee)) / fromIntegral feeDen)
       xValueFloat = BigDecimal (baseAssetBalance - baseTreasury) 0
@@ -237,19 +224,6 @@ calculateX baseAssetBalance baseAssetWeight baseTreasury quoteAssetBalance quote
       prevY = BigDecimal (quoteAssetBalance - quoteTreasury) 0
 
       invariantFloat = (prevX ** (fromIntegral baseAssetWeight)) * (prevY ** (fromIntegral quoteAssetWeight))
--- 84224881596217145943141940500000000000000000000
-  traceM $ "prevX"
-  traceM $ T.pack . show $ prevX
-  traceM $ "baseAssetWeight"
-  traceM $ T.pack . show $ baseAssetWeight
-  traceM $ "prevY"
-  traceM $ T.pack . show $ prevY
-  traceM $ "quoteAssetWeight"
-  traceM $ T.pack . show $ quoteAssetWeight
-  traceM $ "invariantFloat"
-  traceM $ T.pack . show $ invariantFloat
-
-  let
       xPartLength = toInteger $ RIO.length . show $ baseAssetBalance
       additionalPart = (BigDecimal (fromIntegral quoteIn) 0) * (fromRational $ (fromIntegral (lpFee - treasuryFee)) / fromIntegral feeDen)
       yValueFloat = BigDecimal (quoteAssetBalance - quoteTreasury) 0
@@ -277,10 +251,6 @@ internalCheckX :: Monad m => Integer -> Integer -> Integer -> Integer -> Integer
 internalCheckX baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeight prevInvariant baseToSwap startAcc = do
   let
     newInvariant = getDecimalNum $ (((BigDecimal (baseAssetBalance - baseToSwap) 0)) ** (fromRational $ (fromIntegral baseAssetWeight))) * (((BigDecimal quoteAssetBalance) 0) ** (fromRational $ (fromIntegral quoteAssetWeight)))
-  traceM "newInvariant in check"
-  traceM $ T.pack . show $ newInvariant
-  traceM "prevInvariant"
-  traceM $ T.pack . show $ prevInvariant
   if (newInvariant >= prevInvariant)
     then pure $ (baseToSwap, startAcc)
     else internalCheck baseAssetBalance baseAssetWeight quoteAssetBalance quoteAssetWeight prevInvariant (baseToSwap - 1) (startAcc + 1)
@@ -420,7 +390,6 @@ correctSwap =
         -- going to withdraw all pool x and y value
         tFee = treasuryFee config
 
-      traceM $ T.pack $ "xToSwap: " ++ show xToSwap
       let
         newPoolConfig = config 
           { treasuryX = (treasuryX config)
@@ -431,7 +400,6 @@ correctSwap =
           { config = newPoolConfig
           , value  = value <> (assetClassValue (poolX config) (negate xToSwap)) <> (assetClassValue (poolY config) (yToSwap))
           }
-      traceM $ T.pack $ "newValue: " ++ show (value <> (assetClassValue (poolX config) (xToSwap)) <> (assetClassValue (poolY config) (negate yToSwap)))
       pure $ BalancePoolActionResult newPool []
   in BalancePoolTestAction "Correct swap" testAction
 

@@ -165,7 +165,7 @@ actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withSh
   let
     purpose  = daoMintingPurpose prevPool
     context  = toData $ mkContext txInInfo purpose
-    redeemer = toData $ DAORedeemer action 0
+    redeemer = toData $ DAORedeemer action 0 (Pool.poolNft . config $ prevPool)
 
   let 
     correctResult = 
@@ -192,7 +192,7 @@ lpFeeEditableProperty = withShrinks 1 $ withTests 1 $ property $ do
   let
     purpose  = daoMintingPurpose prevPool
     context  = toData $ mkContext txInInfo purpose
-    redeemer = toData $ DAORedeemer ChangePoolFee 0
+    redeemer = toData $ DAORedeemer ChangePoolFee 0 (Pool.poolNft . config $ prevPool)
 
     result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold False) [redeemer, context]
   
@@ -218,7 +218,7 @@ incorrectPoolInputProperty = withShrinks 1 $ withTests 1 $ property $ do
   let
     purpose  = daoMintingPurpose prevPool
     context  = toData $ mkContext txInInfo purpose
-    redeemer = toData $ DAORedeemer WithdrawTreasury 1
+    redeemer = toData $ DAORedeemer WithdrawTreasury 1 (Pool.poolNft config)
 
     result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold False) [redeemer, context]
   
