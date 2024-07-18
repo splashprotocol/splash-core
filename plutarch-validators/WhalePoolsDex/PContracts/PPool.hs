@@ -30,6 +30,7 @@ import Plutarch.Extra.Maybe         as Maybe
 import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromData, assetClass, pValueLength)
 import PExtra.List                  (pelemAt)
 import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
+import PExtra.Ada
 
 import qualified WhalePoolsDex.Contracts.Pool     as P
 import           WhalePoolsDex.PContracts.PApi    (burnLqInitial, feeDen, maxLqCap, tletUnwrap, zero, containsSignature)
@@ -132,6 +133,8 @@ newtype PoolState (s :: S)
                 '[ "reservesX"   ':= PInteger
                  , "reservesY"   ':= PInteger
                  , "liquidity"   ':= PInteger
+                 -- in T2T pool contains Lovelace qty, in N2T case contains `0`
+                 , "lovelaceToken2Token" ':= PInteger
                  ]
             )
         )
@@ -177,11 +180,17 @@ readPoolState = phoistAcyclic $
             y = assetClassValueOf # value # poolY
             negLq = assetClassValueOf # value # poolLq
             lq = pdata $ maxLqCap - negLq
+            lovelaceToken2Token =
+                pif
+                    ((poolX #== pAdaAssetClass) #|| (poolY #== pAdaAssetClass))
+                    (pconstant 0)
+                    (assetClassValueOf # value # pAdaAssetClass)
         tcon $
             PoolState $
                 pdcons @"reservesX" @PInteger # pdata (x - poolXTreasury)
                     #$ pdcons @"reservesY" @PInteger # pdata (y - poolYTreasury)
                     #$ pdcons @"liquidity" @PInteger # lq
+                    #$ pdcons @"lovelaceToken2Token" @PInteger # pdata lovelaceToken2Token
                         # pdnil
 
 correctSwapConfig :: Term s (PoolConfig :--> PoolConfig :--> PInteger :--> PInteger :--> PBool)
@@ -316,9 +325,14 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                 ry0 <- tletField @"reservesY" s0
                 ry1 <- tletField @"reservesY" s1
                 lq1 <- tletField @"liquidity" s1
+
+                lovelaceToken2Token0 <- tletField @"lovelaceToken2Token" s0
+                lovelaceToken2Token1 <- tletField @"lovelaceToken2Token" s1
                 let dx  = rx1 - rx0
                     dy  = ry1 - ry0
                     dlq = lq1 - lq0 -- pool keeps only the negative part of LQ tokens
+
+                    correctLovelaceToken2TokenValue = lovelaceToken2Token1 #== lovelaceToken2Token0
 
                 selfDatum <- tletUnwrap $ getField @"datum" self
                 succDatum <- tletUnwrap $ getField @"datum" successor
@@ -368,5 +382,5 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                               confPreserved      = selfD #== succD -- whole config preserved
                               validDepositRedeem = dlq * rx0 #<= dx * lq0 #&& dlq * ry0 #<= dy * lq0
                             pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly                
-                pure valid
+                pure $ correctLovelaceToken2TokenValue #&& valid
             )
