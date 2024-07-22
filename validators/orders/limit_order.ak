@@ -231,7 +231,8 @@ fn validation_step(
           }
         // Execution step is worth it.
         let min_marginal_output = conf.min_marginal_output
-        let valid_marginal_output = output_added >= min_marginal_output
+        let valid_marginal_output =
+          output_added >= min_marginal_output || is_terminated
         // Script and Stake cred preserved.
         let address_preserved = self_address == successor_address
         let expected_successor_conf =
