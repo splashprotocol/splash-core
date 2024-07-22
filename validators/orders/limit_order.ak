@@ -342,8 +342,8 @@ test reproduce_preprod_execution_one_to_one() {
         #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
       )
         |> with_delegation_key(
-             #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
-           ),
+            #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
+          ),
       cancellation_pkh: #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
       permitted_executors: [],
     )
@@ -360,10 +360,10 @@ test reproduce_preprod_execution_one_to_one() {
       script: #"3e428b6289aba5280f1df5c1b9e0f55c28925f659e954858817630b6",
       value: from_lovelace(2_500_000)
         |> add(
-             #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
-             #"74657374746f6b656e",
-             100_000,
-           ),
+            #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
+            #"74657374746f6b656e",
+            100_000,
+          ),
       tradable_input: 100_000,
       input: (
         #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
@@ -378,8 +378,8 @@ test reproduce_preprod_execution_one_to_one() {
         #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
       )
         |> with_delegation_key(
-             #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
-           ),
+            #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
+          ),
       cancellation_pkh: #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
       permitted_executors: [],
     )
@@ -397,14 +397,14 @@ test reproduce_preprod_execution_one_to_one() {
         #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
       )
         |> with_delegation_key(
-             #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
-           ),
+            #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
+          ),
       value: from_lovelace(2_000_000)
         |> add(
-             #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
-             #"74657374746f6b656e",
-             100_000,
-           ),
+            #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
+            #"74657374746f6b656e",
+            100_000,
+          ),
     )
   let bid_out =
     reproduce_eol_order(
@@ -412,8 +412,8 @@ test reproduce_preprod_execution_one_to_one() {
         #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
       )
         |> with_delegation_key(
-             #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
-           ),
+            #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
+          ),
       value: from_lovelace(102_000_000),
     )
   let witness =
@@ -872,15 +872,15 @@ fn test_mixed_full_swap(
       purpose: Spend(order_input_ref),
       transaction: transaction.placeholder()
         |> fn(transaction) {
-             Transaction {
-               ..transaction,
-               inputs: [third_input, order_input],
-               outputs: [third_output, order_output],
-               extra_signatories: [executor],
-               withdrawals: dict.new()
-                 |> dict.insert(wit, 0, dummy_compare),
-             }
-           },
+            Transaction {
+              ..transaction,
+              inputs: [third_input, order_input],
+              outputs: [third_output, order_output],
+              extra_signatories: [executor],
+              withdrawals: dict.new()
+                |> dict.insert(wit, 0, dummy_compare),
+            }
+          },
     }
   let wdrl_ctx =
     ScriptContext { purpose: WithdrawFrom(wit), transaction: ctx.transaction }
@@ -937,15 +937,15 @@ fn test_batched_full_swap(
       purpose: Spend(order_input_ref),
       transaction: transaction.placeholder()
         |> fn(transaction) {
-             Transaction {
-               ..transaction,
-               inputs: list.repeat(order_input, size),
-               outputs: list.repeat(order_output, size),
-               extra_signatories: [executor],
-               withdrawals: dict.new()
-                 |> dict.insert(wit, 0, dummy_compare),
-             }
-           },
+            Transaction {
+              ..transaction,
+              inputs: list.repeat(order_input, size),
+              outputs: list.repeat(order_output, size),
+              extra_signatories: [executor],
+              withdrawals: dict.new()
+                |> dict.insert(wit, 0, dummy_compare),
+            }
+          },
     }
   let wdrl_ctx =
     ScriptContext { purpose: WithdrawFrom(wit), transaction: ctx.transaction }
