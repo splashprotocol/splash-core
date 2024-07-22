@@ -17,8 +17,11 @@ type GridStateNative {
   buy_shift_factor: Rational,
   sell_shift_factor: Rational,
   max_lovelace_offer: Int,
+  /// Remaining lovelace for sale (Mutable)
   lovelace_offer: Int,
+  /// Current price (Output/Input) (Mutable)
   price: Rational,
+  /// True = Bid, False = Ask (Mutable)
   side: Bool,
   /// Lovelace allowed to be utilized to cover TX fee.
   budget_per_transaction: Int,
@@ -98,7 +101,7 @@ validator {
         expect InlineDatum(successor_state) = successor.datum
         let valid_trade =
           when side is {
-            True -> {
+            False -> {
               let is_sell = delta_token < 0
               let sufficient_output =
                 delta_tradable_lovelace >= min_marginal_output_lovelace
@@ -111,8 +114,8 @@ validator {
                   token,
                   price: if quote_sold_completely {
                     rational(
-                      price.num * buy_shift_factor.num,
-                      price.denom * buy_shift_factor.denom,
+                      price.num * sell_shift_factor.num,
+                      price.denom * sell_shift_factor.denom,
                     )
                   } else {
                     price
@@ -121,7 +124,7 @@ validator {
                   sell_shift_factor,
                   lovelace_offer: max_lovelace_offer,
                   max_lovelace_offer,
-                  side: !quote_sold_completely,
+                  side: quote_sold_completely,
                   budget_per_transaction,
                   min_marginal_output_lovelace,
                   min_marginal_output_token,
@@ -132,7 +135,7 @@ validator {
                 successor_state == expected_successor_state
               is_sell? && sufficient_output? && valid_rate? && correct_state_trans?
             }
-            False -> {
+            True -> {
               let neg_delta_tradable_lovelace = -delta_tradable_lovelace
               let is_buy = delta_tradable_lovelace < 0
               let sufficient_output = delta_token >= min_marginal_output_token
@@ -140,15 +143,14 @@ validator {
                 delta_token * price.num >= neg_delta_tradable_lovelace * price.denom
               let max_lovelace_sold =
                 neg_delta_tradable_lovelace >= state.lovelace_offer
-              let price_shift_factor = state.sell_shift_factor
               let expected_successor_state: Data =
                 GridStateNative {
                   beacon: state.beacon,
                   token,
                   price: if max_lovelace_sold {
                     rational(
-                      price.num * price_shift_factor.num,
-                      price.denom * price_shift_factor.denom,
+                      price.num * buy_shift_factor.num,
+                      price.denom * buy_shift_factor.denom,
                     )
                   } else {
                     price
@@ -157,7 +159,7 @@ validator {
                   sell_shift_factor,
                   max_lovelace_offer,
                   lovelace_offer: lovelace_offer + delta_tradable_lovelace,
-                  side: max_lovelace_sold,
+                  side: !max_lovelace_sold,
                   budget_per_transaction,
                   min_marginal_output_lovelace,
                   min_marginal_output_token,
@@ -247,7 +249,7 @@ test legit_trade() {
   let beacon = "abc"
   let bs = base_state()
   let tradable_lov = 10_000_000_000
-  let p = rational(1, 1)
+  let p = rational(43, 100)
   let budget = 500_000
   let num_steps_reserved = 10
   let buy_shift_factor = rational(1000, 1002)
@@ -261,7 +263,7 @@ test legit_trade() {
       max_lovelace_offer: tradable_lov,
       lovelace_offer: tradable_lov,
       price: p,
-      side: False,
+      side: True,
       budget_per_transaction: budget,
     }
   let value0 =
@@ -276,13 +278,13 @@ test legit_trade() {
       max_lovelace_offer: tradable_lov,
       lovelace_offer: 0,
       price: rational(
-        s0.price.num * sell_shift_factor.num,
-        s0.price.denom * sell_shift_factor.denom,
+        s0.price.num * buy_shift_factor.num,
+        s0.price.denom * buy_shift_factor.denom,
       ),
-      side: True,
+      side: False,
       budget_per_transaction: budget,
     }
-  let execution1 = tradable_lov * s0.price.num / s0.price.denom
+  let execution1 = ( tradable_lov + 1 ) * s0.price.denom / s0.price.num
   let value1 =
     from_lovelace(budget * ( num_steps_reserved - 1 ))
       |> add(beacon, "", 1)
@@ -296,13 +298,13 @@ test legit_trade() {
       max_lovelace_offer: tradable_lov,
       lovelace_offer: tradable_lov,
       price: rational(
-        s1.price.num * buy_shift_factor.num,
-        s1.price.denom * buy_shift_factor.denom,
+        s1.price.num * sell_shift_factor.num,
+        s1.price.denom * sell_shift_factor.denom,
       ),
-      side: False,
+      side: True,
       budget_per_transaction: budget,
     }
-  let execution2 = execution1 * s1.price.denom / s1.price.num
+  let execution2 = ( execution1 + 1 ) * s1.price.num / s1.price.denom
   let value2 =
     from_lovelace(execution2 + budget * ( num_steps_reserved - 2 ))
       |> add(beacon, "", 1)
@@ -318,7 +320,7 @@ test legit_partial_trade() {
   let beacon = "abc"
   let bs = base_state()
   let tradable_lov = 10_000_000_000
-  let p = rational(1, 1)
+  let p = rational(1, 2)
   let budget = 500_000
   let num_steps_reserved = 10
   let buy_shift_factor = rational(1000, 1002)
@@ -332,7 +334,7 @@ test legit_partial_trade() {
       max_lovelace_offer: tradable_lov,
       lovelace_offer: tradable_lov,
       price: p,
-      side: False,
+      side: True,
       budget_per_transaction: budget,
     }
   let value0 =
@@ -348,10 +350,10 @@ test legit_partial_trade() {
       max_lovelace_offer: tradable_lov,
       lovelace_offer: tradable_lov - amount_trade1,
       price: s0.price,
-      side: False,
+      side: True,
       budget_per_transaction: budget,
     }
-  let execution1 = amount_trade1 * s0.price.num / s0.price.denom
+  let execution1 = amount_trade1 * s0.price.denom / s0.price.num
   let value1 =
     from_lovelace(amount_trade1 + budget * ( num_steps_reserved - 1 ))
       |> add(beacon, "", 1)
@@ -365,13 +367,13 @@ test legit_partial_trade() {
       max_lovelace_offer: tradable_lov,
       lovelace_offer: 0,
       price: rational(
-        s1.price.num * sell_shift_factor.num,
-        s1.price.denom * sell_shift_factor.denom,
+        s1.price.num * buy_shift_factor.num,
+        s1.price.denom * buy_shift_factor.denom,
       ),
-      side: True,
+      side: False,
       budget_per_transaction: budget,
     }
-  let execution2 = execution1 * s1.price.num / s1.price.denom
+  let execution2 = execution1 * s1.price.denom / s1.price.num
   let value2 =
     from_lovelace(budget * ( num_steps_reserved - 2 ))
       |> add(beacon, "", 1)
@@ -388,7 +390,7 @@ test bad_rate() {
   let beacon = "abc"
   let bs = base_state()
   let tradable_lov = 10_000_000_000
-  let p = rational(1, 1)
+  let p = rational(1, 2)
   let budget = 500_000
   let num_steps_reserved = 10
   let buy_shift_factor = rational(1000, 1002)
@@ -402,7 +404,7 @@ test bad_rate() {
       max_lovelace_offer: tradable_lov,
       lovelace_offer: tradable_lov,
       price: p,
-      side: False,
+      side: True,
       budget_per_transaction: budget,
     }
   let value0 =
@@ -417,13 +419,13 @@ test bad_rate() {
       max_lovelace_offer: tradable_lov,
       lovelace_offer: 0,
       price: rational(
-        s0.price.num * sell_shift_factor.num,
-        s0.price.denom * sell_shift_factor.denom,
+        s0.price.num * buy_shift_factor.num,
+        s0.price.denom * buy_shift_factor.denom,
       ),
-      side: True,
+      side: False,
       budget_per_transaction: budget,
     }
-  let execution1 = tradable_lov * s0.price.num / s0.price.denom
+  let execution1 = tradable_lov * s0.price.denom / s0.price.num
   let value1 =
     from_lovelace(budget * ( num_steps_reserved - 1 ))
       |> add(beacon, "", 1)
