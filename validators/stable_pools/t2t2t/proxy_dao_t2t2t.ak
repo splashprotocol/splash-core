@@ -1,7 +1,7 @@
 use aiken/list
 use aiken/math
 use aiken/transaction.{
-  InlineDatum, Input, Output, ScriptContext, Spend, Transaction,
+  InlineDatum, Input, Output, ScriptContext, Transaction, WithdrawFrom,
 }
 use aiken/transaction/credential.{StakeCredential}
 use aiken/transaction/value.{Value}
@@ -34,15 +34,9 @@ validator(
 ) {
   fn stable_pool_t2t2t_proxy_dao(action: DAOAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
-    expect Spend(dao_spent_utxo_reference) = purpose
+    expect WithdrawFrom(_) = purpose
     let Transaction { inputs, outputs, .. } = transaction
-    let DAOAction {
-      pool_in_ix,
-      pool_out_ix,
-      dao_in_ix,
-      dao_out_ix,
-      dao_action_ix,
-    } = action
+    let DAOAction { pool_in_ix, pool_out_ix, dao_action_ix } = action
     // ==================================== INPUTS ==================================== //
     // Pool input:
     expect Some(pool_input) = list.at(inputs, pool_in_ix)
@@ -54,10 +48,6 @@ validator(
     } = pool_input.output
     expect Some(pool_in_stake_cred) = pool_in_address.stake_credential
     expect input_datum: PoolDataT2T2T = pool_in_datum
-    // DAO input:
-    expect Some(dao_input) = list.at(inputs, dao_in_ix)
-    let Output { value: dao_in_value, address: dao_in_addr, .. } =
-      dao_input.output
 
     // ==================================== OUTPUTS ==================================== //
     // Pool output:
@@ -72,28 +62,13 @@ validator(
 
     expect output_datum: PoolDataT2T2T = pool_out_datum
 
-    // DAO output:
-    expect Some(dao_out_output) = list.at(outputs, dao_out_ix)
-    let Output { value: dao_out_value, address: dao_out_addr, .. } =
-      dao_out_output
-
     // ==================================== DAO SELF VALIDATIONS ==================================== //
-    // 1. DAO input is valid:
-    let valid_dao_input: Bool =
-      dao_spent_utxo_reference == dao_input.output_reference
-
-    // 2. DAO credentials are preserved:
-    let proxy_dao_credentials_preserved: Bool = dao_in_addr == dao_out_addr
-
-    // 3. Valid pool:
+    // 1. Valid pool:
     let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
     let valid_pool: Bool =
       value.quantity_of(pool_in_value, pool_nft_policy, pool_nft_name) == 1
 
-    // 4. No extra tokens in the DAO's value (Only ADA can be in the DAO's value):
-    let no_more_tokens_in_proxy_dao_out: Bool = dao_in_value == dao_out_value
-
-    // 5. DAO action is valid:
+    // 2. DAO action is valid:
     let valid_dao_action: Bool =
       validate_stable_pool_t2t_proxy_dao_action(
         pool_in_value,
@@ -107,7 +82,7 @@ validator(
         lp_fee_is_editable,
       )
 
-    valid_dao_input && proxy_dao_credentials_preserved && valid_pool && no_more_tokens_in_proxy_dao_out && valid_dao_action
+    valid_pool && valid_dao_action
   }
 }
 

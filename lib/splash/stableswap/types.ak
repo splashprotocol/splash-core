@@ -82,8 +82,6 @@ pub type PoolRedeemer {
 pub type DAOAction {
   pool_in_ix: Int,
   pool_out_ix: Int,
-  dao_in_ix: Int,
-  dao_out_ix: Int,
   // Value of the 'dao_action_ix' is one from the set:
   // - 0: Update 'lp_fee_num';
   // - 1: Update 'protocol_fee_num';

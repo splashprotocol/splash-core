@@ -3,11 +3,11 @@ use aiken/int
 use aiken/list
 use aiken/math
 use aiken/transaction.{
-  InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
-  Transaction, TransactionId,
+  InlineDatum, Input, Output, OutputReference, ScriptContext, Transaction,
+  TransactionId, WithdrawFrom,
 }
 use aiken/transaction/credential.{
-  StakeCredential, from_script, with_delegation_script,
+  Inline, StakeCredential, from_script, with_delegation_script,
 }
 use aiken/transaction/value.{Value}
 use splash/gen.{generate_assets}
@@ -40,15 +40,9 @@ validator(
 ) {
   fn stable_pool_t2t_proxy_dao(action: DAOAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
-    expect Spend(dao_spent_utxo_reference) = purpose
+    expect WithdrawFrom(_) = purpose
     let Transaction { inputs, outputs, .. } = transaction
-    let DAOAction {
-      pool_in_ix,
-      pool_out_ix,
-      dao_in_ix,
-      dao_out_ix,
-      dao_action_ix,
-    } = action
+    let DAOAction { pool_in_ix, pool_out_ix, dao_action_ix } = action
     // ==================================== INPUTS ==================================== //
     // Pool input:
     expect Some(pool_input) = list.at(inputs, pool_in_ix)
@@ -60,11 +54,6 @@ validator(
     } = pool_input.output
     expect Some(pool_in_stake_cred) = pool_in_address.stake_credential
     expect input_datum: PoolDataT2T = pool_in_datum
-
-    // DAO input:
-    expect Some(dao_input) = list.at(inputs, dao_in_ix)
-    let Output { value: dao_in_value, address: dao_in_addr, .. } =
-      dao_input.output
 
     // ==================================== OUTPUTS ==================================== //
     // Pool output:
@@ -79,28 +68,13 @@ validator(
 
     expect output_datum: PoolDataT2T = pool_out_datum
 
-    // DAO output:
-    expect Some(dao_out_output) = list.at(outputs, dao_out_ix)
-    let Output { value: dao_out_value, address: dao_out_addr, .. } =
-      dao_out_output
-
     // ==================================== DAO SELF VALIDATIONS ==================================== //
-    // 1. DAO input is valid:
-    let valid_dao_input: Bool =
-      dao_spent_utxo_reference == dao_input.output_reference
-
-    // 2. DAO credentials are preserved:
-    let proxy_dao_credentials_preserved: Bool = dao_in_addr == dao_out_addr
-
-    // 3. Valid pool:
+    // 1. Valid pool:
     let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
     let valid_pool: Bool =
       value.quantity_of(pool_in_value, pool_nft_policy, pool_nft_name) == 1
 
-    // 4. No extra tokens in the DAO's value (Only ADA can be in the DAO's value):
-    let no_more_tokens_in_proxy_dao_out: Bool = dao_in_value == dao_out_value
-
-    // 5. DAO action is valid:
+    // 2. DAO action is valid:
     let valid_dao_action: Bool =
       validate_stable_pool_t2t_proxy_dao_action(
         pool_in_value,
@@ -114,7 +88,7 @@ validator(
         lp_fee_is_editable,
       )
 
-    valid_dao_input && proxy_dao_credentials_preserved && valid_pool && no_more_tokens_in_proxy_dao_out && valid_dao_action
+    valid_pool && valid_dao_action
   }
 }
 
@@ -397,8 +371,6 @@ fn n2t_pool_state(
 
 /// Returns proxy-DAO state transition context:
 pub fn make_proxy_dao_tx_context(
-  input_proxy_dao_value: Value,
-  output_proxy_dao_value: Value,
   input_pool_data: PoolDataT2T,
   input_pool_value: Value,
   output_pool_data: PoolDataT2T,
@@ -413,10 +385,6 @@ pub fn make_proxy_dao_tx_context(
     Some(#"ee7659342d952e4569acc0592e703737530d1e79fe932673a0fa3e50")
   let proxy_dao_addr =
     from_script(#"f2c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50")
-  let proxy_dao_ref_script =
-    Some(#"f2c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50")
-  let placeholder_utxo =
-    OutputReference { transaction_id: TransactionId(""), output_index: 1 }
   let pool_out_utxo_ref =
     OutputReference { transaction_id: TransactionId(""), output_index: 0 }
   let pool_input_utxo =
@@ -438,33 +406,15 @@ pub fn make_proxy_dao_tx_context(
   let pool_input =
     Input { output_reference: pool_out_utxo_ref, output: pool_input_utxo }
 
-  let proxy_dao_input_utxo =
-    Output {
-      address: proxy_dao_addr,
-      value: input_proxy_dao_value,
-      reference_script: proxy_dao_ref_script,
-      datum: NoDatum,
-    }
-
-  let proxy_dao_output_utxo =
-    Output {
-      address: proxy_dao_addr,
-      value: output_proxy_dao_value,
-      reference_script: proxy_dao_ref_script,
-      datum: NoDatum,
-    }
-
-  let proxy_dao_input =
-    Input { output_reference: placeholder_utxo, output: proxy_dao_input_utxo }
-
+  let cred = Inline(proxy_dao_addr.payment_credential)
   ScriptContext {
-    purpose: Spend(placeholder_utxo),
+    purpose: WithdrawFrom(cred),
     transaction: transaction.placeholder()
       |> fn(transaction) {
            Transaction {
              ..transaction,
-             inputs: [pool_input, proxy_dao_input],
-             outputs: [pool_output_utxo, proxy_dao_output_utxo],
+             inputs: [pool_input],
+             outputs: [pool_output_utxo],
            }
          },
   }
@@ -472,8 +422,6 @@ pub fn make_proxy_dao_tx_context(
 
 /// Returns proxy-DAO state transition context for update pool staking cred. action:
 pub fn make_proxy_dao_tx_context_with_new_pool_stake_cred(
-  input_proxy_dao_value: Value,
-  output_proxy_dao_value: Value,
   input_pool_data: PoolDataT2T,
   input_pool_value: Value,
   output_pool_data: PoolDataT2T,
@@ -488,10 +436,6 @@ pub fn make_proxy_dao_tx_context_with_new_pool_stake_cred(
     Some(#"ee7659342d952e4569acc0592e703737530d1e79fe932673a0fa3e50")
   let proxy_dao_addr =
     from_script(#"f2c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50")
-  let proxy_dao_ref_script =
-    Some(#"f2c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50")
-  let placeholder_utxo =
-    OutputReference { transaction_id: TransactionId(""), output_index: 1 }
   let pool_out_utxo_ref =
     OutputReference { transaction_id: TransactionId(""), output_index: 0 }
   let pool_input_utxo =
@@ -513,33 +457,16 @@ pub fn make_proxy_dao_tx_context_with_new_pool_stake_cred(
   let pool_input =
     Input { output_reference: pool_out_utxo_ref, output: pool_input_utxo }
 
-  let proxy_dao_input_utxo =
-    Output {
-      address: proxy_dao_addr,
-      value: input_proxy_dao_value,
-      reference_script: proxy_dao_ref_script,
-      datum: NoDatum,
-    }
-
-  let proxy_dao_output_utxo =
-    Output {
-      address: proxy_dao_addr,
-      value: output_proxy_dao_value,
-      reference_script: proxy_dao_ref_script,
-      datum: NoDatum,
-    }
-
-  let proxy_dao_input =
-    Input { output_reference: placeholder_utxo, output: proxy_dao_input_utxo }
+  let cred = Inline(proxy_dao_addr.payment_credential)
 
   ScriptContext {
-    purpose: Spend(placeholder_utxo),
+    purpose: WithdrawFrom(cred),
     transaction: transaction.placeholder()
       |> fn(transaction) {
            Transaction {
              ..transaction,
-             inputs: [pool_input, proxy_dao_input],
-             outputs: [pool_output_utxo, proxy_dao_output_utxo],
+             inputs: [pool_input],
+             outputs: [pool_output_utxo],
            }
          },
   }
@@ -558,7 +485,6 @@ test test_dao_params_update() {
     generate_assets(@"some_pool_token", @"some_pool_token_name", n)
 
   // Input data:
-  let proxy_dao_value = value.from_lovelace(default_lovelace_value)
   let pool_nft =
     Asset {
       policy: bytearray.from_string(@"pool_nft_policy"),
@@ -601,8 +527,6 @@ test test_dao_params_update() {
 
   let ctx =
     make_proxy_dao_tx_context(
-      proxy_dao_value,
-      proxy_dao_value,
       input_pool_data,
       input_pool_value,
       input_pool_data,
@@ -616,7 +540,7 @@ test test_dao_params_update() {
     list.map(
       dao_action_ix_list,
       fn(a_ix) {
-        let redeemer = DAOAction(0, 0, 1, 1, a_ix)
+        let redeemer = DAOAction(0, 0, a_ix)
         stable_pool_t2t_proxy_dao(pool_nft, True, True, redeemer, ctx)
       },
     )
@@ -625,7 +549,7 @@ test test_dao_params_update() {
     list.map(
       dao_action_ix_list,
       fn(a_ix) {
-        let redeemer = DAOAction(0, 0, 1, 1, a_ix)
+        let redeemer = DAOAction(0, 0, a_ix)
         stable_pool_t2t_proxy_dao(pool_nft_wrong, True, True, redeemer, ctx)
       },
     )
@@ -646,7 +570,6 @@ test test_update_stake_cred() {
     generate_assets(@"some_pool_token", @"some_pool_token_name", n)
 
   // Input data:
-  let proxy_dao_value = value.from_lovelace(default_lovelace_value)
   let pool_nft =
     Asset {
       policy: bytearray.from_string(@"pool_nft_policy"),
@@ -706,13 +629,11 @@ test test_update_stake_cred() {
     )
   let ctx =
     make_proxy_dao_tx_context_with_new_pool_stake_cred(
-      proxy_dao_value,
-      proxy_dao_value,
       input_pool_data_n2t,
       input_pool_value_n2t,
       output_pool_data_n2t,
       output_pool_value_n2t,
     )
-  let redeemer = DAOAction(0, 0, 1, 1, 5)
+  let redeemer = DAOAction(0, 0, 5)
   stable_pool_t2t_proxy_dao(pool_nft, True, True, redeemer, ctx)
 }
