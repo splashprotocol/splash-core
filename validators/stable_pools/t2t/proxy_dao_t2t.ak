@@ -33,11 +33,7 @@ const protocol_fee_num_max = 99_999
 const fee_denom = 100_000
 
 // DAO stable pool t2t validator:
-validator(
-  pool_nft: Asset,
-  ampl_coeff_is_editable: Bool,
-  lp_fee_is_editable: Bool,
-) {
+validator(ampl_coeff_is_editable: Bool, lp_fee_is_editable: Bool) {
   fn stable_pool_t2t_proxy_dao(action: DAOAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
     expect WithdrawFrom(_) = purpose
@@ -70,9 +66,14 @@ validator(
 
     // ==================================== DAO SELF VALIDATIONS ==================================== //
     // 1. Valid pool:
-    let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
+    let Asset { policy: pool_nft_policy, name: pool_nft_name } =
+      input_datum.pool_nft
     let valid_pool: Bool =
-      value.quantity_of(pool_in_value, pool_nft_policy, pool_nft_name) == 1
+      value.quantity_of(pool_in_value, pool_nft_policy, pool_nft_name) == 1 && value.quantity_of(
+        pool_out_value,
+        pool_nft_policy,
+        pool_nft_name,
+      ) == 1
 
     // 2. DAO action is valid:
     let valid_dao_action: Bool =
@@ -485,17 +486,6 @@ test test_dao_params_update() {
     generate_assets(@"some_pool_token", @"some_pool_token_name", n)
 
   // Input data:
-  let pool_nft =
-    Asset {
-      policy: bytearray.from_string(@"pool_nft_policy"),
-      name: bytearray.from_string(@"pool_nft_name"),
-    }
-  let pool_nft_wrong =
-    Asset {
-      policy: bytearray.from_string(@"pool_nft_policy"),
-      name: bytearray.from_string(@"pool_nft_wrong_name"),
-    }
-
   let total_balances_before = list.repeat(default_token_value, n)
   let tradable_decimals_before = list.repeat(default_decimal, n)
   let collected_protocol_fees_before = list.repeat(0, n)
@@ -533,6 +523,32 @@ test test_dao_params_update() {
       input_pool_value,
     )
 
+  let (_, input_pool_value_false) =
+    t2t_pool_state(
+      total_balances_before,
+      lp_balance_before,
+      @"pool_nft_policy_wrong",
+      @"pool_nft_name",
+      tradable_assets,
+      tradable_decimals_before,
+      @"pool_lp_policy",
+      @"pool_lp_name",
+      an2n,
+      lp_fee_num_before,
+      protocol_fee_num_before,
+      @"dao_stable_policy",
+      @"tr_policy",
+      collected_protocol_fees_before,
+    )
+
+  let ctx_false =
+    make_proxy_dao_tx_context(
+      input_pool_data,
+      input_pool_value,
+      input_pool_data,
+      input_pool_value_false,
+    )
+
   let dao_action_ix_list =
     [0, 1, 2, 3, 4, 5]
 
@@ -541,7 +557,7 @@ test test_dao_params_update() {
       dao_action_ix_list,
       fn(a_ix) {
         let redeemer = DAOAction(0, 0, a_ix)
-        stable_pool_t2t_proxy_dao(pool_nft, True, True, redeemer, ctx)
+        stable_pool_t2t_proxy_dao(True, True, redeemer, ctx)
       },
     )
 
@@ -550,7 +566,7 @@ test test_dao_params_update() {
       dao_action_ix_list,
       fn(a_ix) {
         let redeemer = DAOAction(0, 0, a_ix)
-        stable_pool_t2t_proxy_dao(pool_nft_wrong, True, True, redeemer, ctx)
+        stable_pool_t2t_proxy_dao(True, True, redeemer, ctx_false)
       },
     )
   let n_cases = list.length(dao_action_ix_list)
@@ -570,11 +586,6 @@ test test_update_stake_cred() {
     generate_assets(@"some_pool_token", @"some_pool_token_name", n)
 
   // Input data:
-  let pool_nft =
-    Asset {
-      policy: bytearray.from_string(@"pool_nft_policy"),
-      name: bytearray.from_string(@"pool_nft_name"),
-    }
   let total_balances_before = list.repeat(default_token_value, n)
   let tradable_decimals_before = list.repeat(default_decimal, n)
   let collected_protocol_fees_before = list.repeat(0, n)
@@ -635,5 +646,5 @@ test test_update_stake_cred() {
       output_pool_value_n2t,
     )
   let redeemer = DAOAction(0, 0, 5)
-  stable_pool_t2t_proxy_dao(pool_nft, True, True, redeemer, ctx)
+  stable_pool_t2t_proxy_dao(True, True, redeemer, ctx)
 }

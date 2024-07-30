@@ -27,11 +27,7 @@ const protocol_fee_num_max = 99_999
 const fee_denom = 100_000
 
 // DAO stable pool t2t2t validator:
-validator(
-  pool_nft: Asset,
-  ampl_coeff_is_editable: Bool,
-  lp_fee_is_editable: Bool,
-) {
+validator(ampl_coeff_is_editable: Bool, lp_fee_is_editable: Bool) {
   fn stable_pool_t2t2t_proxy_dao(action: DAOAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
     expect WithdrawFrom(_) = purpose
@@ -64,10 +60,14 @@ validator(
 
     // ==================================== DAO SELF VALIDATIONS ==================================== //
     // 1. Valid pool:
-    let Asset { policy: pool_nft_policy, name: pool_nft_name } = pool_nft
+    let Asset { policy: pool_nft_policy, name: pool_nft_name } =
+      input_datum.pool_nft
     let valid_pool: Bool =
-      value.quantity_of(pool_in_value, pool_nft_policy, pool_nft_name) == 1
-
+      value.quantity_of(pool_in_value, pool_nft_policy, pool_nft_name) == 1 && value.quantity_of(
+        pool_out_value,
+        pool_nft_policy,
+        pool_nft_name,
+      ) == 1
     // 2. DAO action is valid:
     let valid_dao_action: Bool =
       validate_stable_pool_t2t_proxy_dao_action(
