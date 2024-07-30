@@ -46,11 +46,11 @@ poolLqMiningValidator oref tn emission =
         wrapMintingValidator $
             A.poolLqMintValidatorT (pconstant oref) (pconstant tn) (pconstant emission)
 
-daoMintPolicyValidator :: AssetClass -> [PubKeyHash] -> Integer -> Bool -> MintingPolicy
-daoMintPolicyValidator poolNft stakeAdminPkh threshold lpFeeIsEditable = 
+daoMintPolicyValidator :: [PubKeyHash] -> Integer -> Bool -> MintingPolicy
+daoMintPolicyValidator stakeAdminPkh threshold lpFeeIsEditable = 
     mkMintingPolicy cfgForMintingValidator $ 
         wrapMintingValidator $
-            daoMultisigPolicyValidatorT (pconstant poolNft) (pconstant stakeAdminPkh) (pconstant threshold) (pconstant lpFeeIsEditable)
+            daoMultisigPolicyValidatorT (pconstant stakeAdminPkh) (pconstant threshold) (pconstant lpFeeIsEditable)
 
 daoBalanceMintPolicyValidator :: AssetClass -> [PubKeyHash] -> Integer -> Bool -> MintingPolicy
 daoBalanceMintPolicyValidator poolNft stakeAdminPkh threshold lpFeeIsEditable = 
