@@ -228,7 +228,7 @@ fn validate_stable_pool_t2t_proxy_dao_action(
 
       // Update 'an2n' value of the pool.
       // NB: 'an2n' can be updated only for balanced pool,
-      // where invariant value doesn't depend on 'a', the 'invatiant_preserved' flag guarantees this.
+      // where invariant value doesn't depend on 'a', the 'invariant_preserved' flag guarantees this.
       let ampl_coeff1 = an2n1 / n2n
 
       let ampl_coeff_inside_bounds: Bool =
@@ -236,9 +236,9 @@ fn validate_stable_pool_t2t_proxy_dao_action(
       let params_preserved_for_ampl_coeff_update: Bool =
         protocol_fees_x0 == protocol_fees_x1 && protocol_fees_y0 == protocol_fees_y1 && protocol_fees_z0 == protocol_fees_z1 && input_value == output_value && input_stake_cred == output_stake_cred && lp_fee_num1 == lp_fee_num0 && protocol_fee_num1 == protocol_fee_num0 && treasury_addr1 == treasury_addr0
       let x_reserves_balanced = x_tradable0 * multiplier_x / max_mult_xyz
-      let invatiant_preserved: Bool =
+      let invariant_preserved: Bool =
         x_reserves_balanced == y_tradable0 * multiplier_y / max_mult_xyz && x_reserves_balanced == z_tradable0 * multiplier_z / max_mult_xyz
-      ampl_coeff_is_editable && ampl_coeff_inside_bounds && params_preserved_for_ampl_coeff_update && invatiant_preserved
+      ampl_coeff_is_editable && ampl_coeff_inside_bounds && params_preserved_for_ampl_coeff_update && invariant_preserved
     } else if
     dao_action_ix == 5{
     
