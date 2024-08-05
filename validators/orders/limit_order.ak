@@ -90,174 +90,178 @@ fn validation_step(
   signatories: List<VerificationKeyHash>,
 ) -> Bool {
   let self = input.output
-  expect InlineDatum(datum) = self.datum
-  let (_, fields) = builtin.un_constr_data(datum)
-  let tag = builtin.head_list(fields)
-  let this_tag: Data = this_tag
-  if tag == this_tag {
-    expect conf: LimitOrderConfig = datum
-    let successor = output
+  when self.datum is {
+    InlineDatum(datum) -> {
+      let (_, fields) = builtin.un_constr_data(datum)
+      let tag = builtin.head_list(fields)
+      let this_tag: Data = this_tag
+      if tag == this_tag {
+        expect conf: LimitOrderConfig = datum
+        let successor = output
 
-    let self_value = self.value
-    let successor_value = successor.value
+        let self_value = self.value
+        let successor_value = successor.value
 
-    let input = conf.input
-    let output = conf.output
-    let input_policy = input.policy
-    let input_tn = input.name
-    let output_policy = output.policy
-    let output_tn = output.name
+        let input = conf.input
+        let output = conf.output
+        let input_policy = input.policy
+        let input_tn = input.name
+        let output_policy = output.policy
+        let output_tn = output.name
 
-    let ada_is_input = input_policy == ada_policy_id
-    let ada_is_output = output_policy == ada_policy_id
+        let ada_is_input = input_policy == ada_policy_id
+        let ada_is_output = output_policy == ada_policy_id
 
-    expect [lovelace_pol_0, ..self_value_raw] =
-      self_value |> value.to_dict |> dict.to_list
-    let (_, lovelace_0) =
-      lovelace_pol_0.2nd |> dict.to_list |> builtin.head_list
-    expect [lovelace_pol_1, ..successor_value_raw] =
-      successor_value |> value.to_dict |> dict.to_list
-    let (_, lovelace_1) =
-      lovelace_pol_1.2nd |> dict.to_list |> builtin.head_list
+        expect [lovelace_pol_0, ..self_value_raw] =
+          self_value |> value.to_dict |> dict.to_list
+        let (_, lovelace_0) =
+          lovelace_pol_0.2nd |> dict.to_list |> builtin.head_list
+        expect [lovelace_pol_1, ..successor_value_raw] =
+          successor_value |> value.to_dict |> dict.to_list
+        let (_, lovelace_1) =
+          lovelace_pol_1.2nd |> dict.to_list |> builtin.head_list
 
-    let input_0 =
-      if ada_is_input {
-        lovelace_0
-      } else {
-        value_ext.quantity_of(
-          self_value_raw,
-          input_policy,
-          input_tn,
-          max_assets,
-        )
-      }
-    let output_0 =
-      if ada_is_output {
-        lovelace_0
-      } else {
-        value_ext.quantity_of(
-          self_value_raw,
-          output_policy,
-          output_tn,
-          max_assets,
-        )
-      }
-
-    let input_1 =
-      if ada_is_input {
-        lovelace_1
-      } else {
-        value_ext.quantity_of(
-          successor_value_raw,
-          input_policy,
-          input_tn,
-          max_assets,
-        )
-      }
-    let output_1 =
-      if ada_is_output {
-        lovelace_1
-      } else {
-        value_ext.quantity_of(
-          successor_value_raw,
-          output_policy,
-          output_tn,
-          max_assets,
-        )
-      }
-
-    let output_delta = output_1 - output_0
-    let input_removed = input_0 - input_1
-    let lovelace_delta = lovelace_1 - lovelace_0
-
-    let cost_per_ex_step = conf.cost_per_ex_step
-    let tradable_input_0 = conf.tradable_input
-    let fee_0 = conf.fee
-    let base_price = conf.base_price
-
-    let self_address = self.address
-    let successor_address = successor.address
-
-    let is_terminated = successor_address == conf.redeemer_address
-    let valid_execution =
-      if is_terminated {
-        let tradable_input_removed = tradable_input_0
-        let fee_removed = fee_0
-        let output_added =
-          if ada_is_output {
-            output_delta + fee_removed + cost_per_ex_step
-          } else {
-            output_delta
-          }
-        let valid_exchange_rate =
-          output_added * base_price.denom >= tradable_input_removed * base_price.num
-        let overall_integrity =
+        let input_0 =
           if ada_is_input {
-            input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
+            lovelace_0
           } else {
-            if ada_is_output {
-              input_removed <= tradable_input_removed
-            } else {
-              input_removed <= tradable_input_removed && -lovelace_delta <= fee_removed + cost_per_ex_step
+            value_ext.quantity_of(
+              self_value_raw,
+              input_policy,
+              input_tn,
+              max_assets,
+            )
+          }
+        let output_0 =
+          if ada_is_output {
+            lovelace_0
+          } else {
+            value_ext.quantity_of(
+              self_value_raw,
+              output_policy,
+              output_tn,
+              max_assets,
+            )
+          }
+
+        let input_1 =
+          if ada_is_input {
+            lovelace_1
+          } else {
+            value_ext.quantity_of(
+              successor_value_raw,
+              input_policy,
+              input_tn,
+              max_assets,
+            )
+          }
+        let output_1 =
+          if ada_is_output {
+            lovelace_1
+          } else {
+            value_ext.quantity_of(
+              successor_value_raw,
+              output_policy,
+              output_tn,
+              max_assets,
+            )
+          }
+
+        let output_delta = output_1 - output_0
+        let input_removed = input_0 - input_1
+        let lovelace_delta = lovelace_1 - lovelace_0
+
+        let cost_per_ex_step = conf.cost_per_ex_step
+        let tradable_input_0 = conf.tradable_input
+        let fee_0 = conf.fee
+        let base_price = conf.base_price
+
+        let self_address = self.address
+        let successor_address = successor.address
+
+        let is_terminated = successor_address == conf.redeemer_address
+        let valid_execution =
+          if is_terminated {
+            let tradable_input_removed = tradable_input_0
+            let fee_removed = fee_0
+            let output_added =
+              if ada_is_output {
+                output_delta + fee_removed + cost_per_ex_step
+              } else {
+                output_delta
+              }
+            let valid_exchange_rate =
+              output_added * base_price.denom >= tradable_input_removed * base_price.num
+            let overall_integrity =
+              if ada_is_input {
+                input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
+              } else {
+                if ada_is_output {
+                  input_removed <= tradable_input_removed
+                } else {
+                  input_removed <= tradable_input_removed && -lovelace_delta <= fee_removed + cost_per_ex_step
+                }
+              }
+            valid_exchange_rate? && overall_integrity?
+          } else {
+            expect InlineDatum(successor_datum) = successor.datum
+            expect successor_conf: LimitOrderConfig = successor_datum
+            let tradable_input_1 = successor_conf.tradable_input
+            let tradable_input_removed = tradable_input_0 - tradable_input_1
+            let fee_1 = successor_conf.fee
+            let fee_removed = fee_0 - fee_1
+            let output_added =
+              if ada_is_output {
+                output_delta + fee_removed + cost_per_ex_step
+              } else {
+                output_delta
+              }
+            let valid_exchange_rate =
+              output_added * base_price.denom >= tradable_input_removed * base_price.num
+            let valid_fee =
+              fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
+            let overall_integrity =
+              if ada_is_input {
+                input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
+              } else {
+                if ada_is_output {
+                  input_removed <= tradable_input_removed
+                } else {
+                  input_removed <= tradable_input_removed && -lovelace_delta <= fee_removed + cost_per_ex_step
+                }
+              }
+            // Execution step is worth it.
+            let min_marginal_output = conf.min_marginal_output
+            let valid_marginal_output =
+              output_added >= min_marginal_output || is_terminated
+            // Script and Stake cred preserved.
+            let address_preserved = self_address == successor_address
+            let expected_successor_conf =
+              LimitOrderConfig {
+                ..conf,
+                tradable_input: tradable_input_1,
+                fee: fee_1,
+              }
+            // Immutable field are unchanged.
+            let config_preserved = successor_conf == expected_successor_conf
+            valid_exchange_rate? && valid_fee? && overall_integrity? && valid_marginal_output? && address_preserved? && config_preserved?
+          }
+
+        let valid_authorization =
+          when conf.permitted_executors is {
+            [] -> True
+            non_empty_executors -> {
+              let executor_cred = builtin.head_list(signatories)
+              list.has(non_empty_executors, executor_cred)
             }
           }
-        valid_exchange_rate? && overall_integrity?
+
+        valid_execution? && valid_authorization?
       } else {
-        expect InlineDatum(successor_datum) = successor.datum
-        expect successor_conf: LimitOrderConfig = successor_datum
-        let tradable_input_1 = successor_conf.tradable_input
-        let tradable_input_removed = tradable_input_0 - tradable_input_1
-        let fee_1 = successor_conf.fee
-        let fee_removed = fee_0 - fee_1
-        let output_added =
-          if ada_is_output {
-            output_delta + fee_removed + cost_per_ex_step
-          } else {
-            output_delta
-          }
-        let valid_exchange_rate =
-          output_added * base_price.denom >= tradable_input_removed * base_price.num
-        let valid_fee =
-          fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
-        let overall_integrity =
-          if ada_is_input {
-            input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
-          } else {
-            if ada_is_output {
-              input_removed <= tradable_input_removed
-            } else {
-              input_removed <= tradable_input_removed && -lovelace_delta <= fee_removed + cost_per_ex_step
-            }
-          }
-        // Execution step is worth it.
-        let min_marginal_output = conf.min_marginal_output
-        let valid_marginal_output =
-          output_added >= min_marginal_output || is_terminated
-        // Script and Stake cred preserved.
-        let address_preserved = self_address == successor_address
-        let expected_successor_conf =
-          LimitOrderConfig {
-            ..conf,
-            tradable_input: tradable_input_1,
-            fee: fee_1,
-          }
-        // Immutable field are unchanged.
-        let config_preserved = successor_conf == expected_successor_conf
-        valid_exchange_rate? && valid_fee? && overall_integrity? && valid_marginal_output? && address_preserved? && config_preserved?
+        True
       }
-
-    let valid_authorization =
-      when conf.permitted_executors is {
-        [] -> True
-        non_empty_executors -> {
-          let executor_cred = builtin.head_list(signatories)
-          list.has(non_empty_executors, executor_cred)
-        }
-      }
-
-    valid_execution? && valid_authorization?
-  } else {
-    True
+    }
+    _ -> True
   }
 }
 
