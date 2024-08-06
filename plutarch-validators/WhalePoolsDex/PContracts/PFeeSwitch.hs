@@ -6,6 +6,7 @@ import PExtra.Monadic
 import Plutarch
 import Plutarch.Api.V2 
 import Plutarch.Api.V1 (PCredential(..))
+import Plutarch.Api.V1.Value        (pisAdaOnlyValue)
 import Plutarch.DataRepr
 import Plutarch.Prelude
 import Plutarch.Extra.TermCont
@@ -16,6 +17,7 @@ import WhalePoolsDex.PContracts.PPool
 import Plutarch.Api.V1.Scripts (PValidatorHash)
 import Plutarch.Trace
 import Plutarch.Extra.TermCont
+import PExtra.PTriple
 
 extractPoolConfig :: Term s (PTxOut :--> PoolConfig)
 extractPoolConfig = plam $ \txOut -> unTermCont $ do
@@ -177,11 +179,14 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
 
   pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1) #&& validFinalTreasuryXValue #&& validFinalTreasuryYValue
 
-daoMultisigPolicyValidatorT :: Term s PAssetClass -> Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple DAOAction PInteger) :--> PScriptContext :--> PBool)
-daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx' -> unTermCont $ do
+daoMultisigPolicyValidatorT :: Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple3 DAOAction PInteger PAssetClass) :--> PScriptContext :--> PBool)
+daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx' -> unTermCont $ do
   let  
     action     = pfromData $ pfield @"_0" # redeemer
     poolInIdx  = pfromData $ pfield @"_1" # redeemer
+    poolNft    = pfromData $ pfield @"_2" # redeemer
+    -- Utxo to cover tx fee. Tx should contains only 2 inputs: Pool + Fee Utxo
+    feeUtxoIdx = 1 - poolInIdx
 
   ctx <- pletFieldsC @'["txInfo", "purpose"] ctx'
 
@@ -201,6 +206,12 @@ daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \
 
   poolInputValue <- tletField @"value" poolInputResolved
   poolInputDatum <- tlet $ extractPoolConfig # poolInputResolved
+
+  feeInput <- tlet $ pelemAt # feeUtxoIdx # inputs
+  let
+    feeInputResolved = pfromData $ pfield @"resolved" # feeInput
+
+  feeInputValue <- tletField @"value" feeInputResolved
 
   successor       <- tlet $ findPoolOutput # poolNft # outputs
   poolOutputDatum <- tlet $ extractPoolConfig # successor
@@ -259,6 +270,12 @@ daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \
 
     -- Checks that pool values are the same
     poolValueIsTheSame = pdelay (poolInputValue #== poolOutputValue)
+
+    -- Checks that inputs qty is equals `2`
+    correctTxInputsQty = (plength # inputs) #== 2
+
+    -- Checks that fee utxo contains only ada
+    feeUtxoContainsOnlyAda = pisAdaOnlyValue # feeInputValue
 
     -- /|\ Predicates /|\ --
     --  |              |  --
@@ -378,4 +395,4 @@ daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \
         pforce poolValueAndAddressAreTheSame #&&
         pforce updatedPoolFeeNumIsCorrect
 
-  pure $ validCommonFields #&& validThreshold #&& validAction
+  pure $ correctTxInputsQty #&& feeUtxoContainsOnlyAda #&& validCommonFields #&& validThreshold #&& validAction
