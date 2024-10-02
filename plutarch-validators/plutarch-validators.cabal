@@ -96,16 +96,20 @@ library
     WhalePoolsDex.Contracts.Proxy.FeeSwitch
     WhalePoolsDex.Contracts.Pool
     WhalePoolsDex.Contracts.PoolBFee
+    WhalePoolsDex.Contracts.StablePool
     WhalePoolsDex.Contracts.BalancePool
     WhalePoolsDex.PContracts.PApi
     WhalePoolsDex.PContracts.PAssets
     WhalePoolsDex.PContracts.PBalancePool
     WhalePoolsDex.PContracts.PDeposit
+    WhalePoolsDex.PContracts.PDepositStable
     WhalePoolsDex.PContracts.PDepositBalance
     WhalePoolsDex.PContracts.POrder
     WhalePoolsDex.PContracts.PPool
+    WhalePoolsDex.PContracts.PStablePool
     WhalePoolsDex.PContracts.PPoolBFee
     WhalePoolsDex.PContracts.PRedeem
+    WhalePoolsDex.PContracts.PRedeemStable
     WhalePoolsDex.PContracts.PRedeemBalance
     WhalePoolsDex.PContracts.PSwap
     WhalePoolsDex.PContracts.PSimpleStaking

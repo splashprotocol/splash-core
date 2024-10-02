@@ -25,6 +25,7 @@ import PExtra.Monadic (tlet, tletField, tmatch)
 import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap, pmin, tletUnwrap)
 import WhalePoolsDex.PContracts.POrder     (OrderAction (Apply, Refund), OrderRedeemer)
 import WhalePoolsDex.PContracts.PFeeSwitch (extractPoolConfig)
+import Plutarch.Trace
 
 import qualified WhalePoolsDex.Contracts.Proxy.Deposit as D
 
