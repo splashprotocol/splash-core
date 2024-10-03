@@ -9,7 +9,7 @@ use aiken/transaction.{
 use aiken/transaction/credential.{Address, from_script}
 use aiken/transaction/value.{Value}
 use splash/gen.{generate_assets}
-use splash/plutus.{Asset, ScriptHash}
+use splash/plutus.{Asset}
 use splash/stableswap/types.{AMMAction, PDAOAction, PoolDataT2T2T, PoolRedeemer}
 use splash/witness.{contains_withdrawal}
 
@@ -25,7 +25,7 @@ const nn = 27
 
 /// Main pool validator for pool with 3 tradable assets (X/Y/Z):
 /// the validator ensures that the reserves are safu.
-validator(dao_voting_witness: ScriptHash) {
+validator {
   fn validate_stable_pool_transition_t2t2t(
     input_datum: PoolDataT2T2T,
     redeemer: PoolRedeemer,
@@ -123,18 +123,11 @@ validator(dao_voting_witness: ScriptHash) {
             inv,
           ) && stake_cred_in == stake_cred_out
 
-        PDAOAction -> {
-          let valid_dao_action: Bool =
-            contains_withdrawal(
-              transaction.withdrawals,
-              dao_stabe_proxy_witness_in,
-            )
-
-          let valid_voting: Bool =
-            contains_withdrawal(transaction.withdrawals, dao_voting_witness)
-
-          valid_dao_action && valid_voting
-        }
+        PDAOAction ->
+          contains_withdrawal(
+            transaction.withdrawals,
+            dao_stabe_proxy_witness_in,
+          )
       }
     // Checking whether all validity conditions are met:
     valid_pool_input && pool_script_preserved && pool_nft_preserved && pool_config_preserved && no_more_tokens_in_pool_out && valid_action
@@ -688,12 +681,7 @@ fn uniform_reserves_valid_swap_math_template(
     output_value,
     output_pool_data,
     Some(inv_before),
-  ) && validate_stable_pool_transition_t2t2t(
-    bytearray.from_string(@"proxy_dao"),
-    input_pool_data,
-    redeemer,
-    ctx,
-  )
+  ) && validate_stable_pool_transition_t2t2t(input_pool_data, redeemer, ctx)
 }
 
 fn uniform_reserves_invalid_swap_math_template(
@@ -1881,12 +1869,7 @@ test single_swap_test() {
       output_value,
     )
   let redeemer = PoolRedeemer(0, 0, AMMAction(Some(inv_before)))
-  validate_stable_pool_transition_t2t2t(
-    bytearray.from_string(@"proxy_dao"),
-    input_pool_data,
-    redeemer,
-    ctx,
-  )
+  validate_stable_pool_transition_t2t2t(input_pool_data, redeemer, ctx)
 }
 
 test empty_swap_test() {

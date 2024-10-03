@@ -5,7 +5,7 @@ use aiken/transaction.{
 }
 use aiken/transaction/credential.{StakeCredential}
 use aiken/transaction/value.{Value}
-use splash/plutus.{Asset}
+use splash/plutus.{Asset, VerificationKeyHash}
 use splash/stableswap/types.{DAOAction, PoolDataT2T2T}
 
 // Constant 'n ^ (2 * n)', where 'n' is the number of tradable tokens in the pool:
@@ -27,7 +27,12 @@ const protocol_fee_num_max = 99_999
 const fee_denom = 100_000
 
 // DAO stable pool t2t2t validator:
-validator(ampl_coeff_is_editable: Bool, lp_fee_is_editable: Bool) {
+validator(
+  ampl_coeff_is_editable: Bool,
+  lp_fee_is_editable: Bool,
+  dao_pkhs: List<VerificationKeyHash>,
+  dao_sig_thr: Int,
+) {
   fn stable_pool_t2t2t_proxy_dao(action: DAOAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
     expect WithdrawFrom(_) = purpose
@@ -80,7 +85,10 @@ validator(ampl_coeff_is_editable: Bool, lp_fee_is_editable: Bool) {
         dao_action_ix,
         ampl_coeff_is_editable,
         lp_fee_is_editable,
-      )
+      ) && list.count(
+        dao_pkhs,
+        fn(pk) { list.has(transaction.extra_signatories, pk) },
+      ) >= dao_sig_thr
 
     valid_pool && valid_dao_action
   }
