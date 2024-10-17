@@ -66,7 +66,7 @@ pub type PoolDataT2T2T {
 /// Pool action types.
 pub type PoolAction {
   // Invariant for swap action contains value of the StableSwap invariant for the output state:
-  AMMAction { invariant: Option<Int> }
+  AMMAction { invariant: List<Int> }
   PDAOAction
 }
 
