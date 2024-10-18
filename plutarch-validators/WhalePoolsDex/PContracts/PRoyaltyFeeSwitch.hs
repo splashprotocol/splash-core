@@ -1,7 +1,9 @@
 module WhalePoolsDex.PContracts.PRoyaltyFeeSwitch where
 
-import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit)
+import WhalePoolsDex.PContracts.PApi         (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit)
+import WhalePoolsDex.PContracts.PFeeSwitch   (findOutput)
 import WhalePoolsDex.PContracts.PRoyaltyPool
+
 import PExtra.API (assetClassValueOf, ptryFromData, PAssetClass(..))
 import PExtra.Monadic
 import Plutarch
@@ -30,21 +32,6 @@ extractPoolConfig = plam $ \txOut -> unTermCont $ do
   PDatum poolDatum <- pmatchC rawDatum
 
   tletUnwrap $ ptryFromData @(RoyaltyPoolConfig) $ poolDatum
-
-findOutput :: Term s (PValidatorHash :--> PBuiltinList PTxOut :--> PTxOut)
-findOutput =
-    phoistAcyclic $
-        plam $ \credToFind ->
-            precList
-                ( \self x xs -> unTermCont $ do
-                    addr <- tletField @"address" x
-                    pure $ pmatch (pfromData $ pfield @"credential" # addr) $ \case
-                      PScriptCredential sc -> unTermCont $ do
-                          let hashInOutput = pfromData $ pfield @"_0" # sc
-                          pure $ pif (hashInOutput #== credToFind) x (self # xs)
-                      _ -> unTermCont $ pure (self # xs)
-                )
-                (const $ ptraceError "User output not found")
 
 data DAOAction (s :: S) = WithdrawTreasury | ChangeStakePart | ChangeTreasuryFee | ChangeTreasuryAddress | ChangeAdminAddress | ChangePoolFee
 

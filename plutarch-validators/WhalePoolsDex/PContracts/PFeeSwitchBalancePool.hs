@@ -14,6 +14,7 @@ import Plutarch.Unsafe              (punsafeCoerce)
 import Plutarch.Internal.PlutusType (pcon', pmatch')
 
 import WhalePoolsDex.PContracts.PBalancePool 
+import WhalePoolsDex.PContracts.PFeeSwitch   (findOutput)
 import WhalePoolsDex.PContracts.PPool        (findPoolOutput)
 import Plutarch.Api.V1.Scripts               (PValidatorHash)
 import Plutarch.Trace
@@ -30,21 +31,6 @@ extractBalancePoolConfig = plam $ \txOut -> unTermCont $ do
   PDatum poolDatum <- pmatchC rawDatum
 
   tletUnwrap $ ptryFromData @(BalancePoolConfig) $ poolDatum
-
-findOutput :: Term s (PValidatorHash :--> PBuiltinList PTxOut :--> PTxOut)
-findOutput =
-    phoistAcyclic $
-        plam $ \credToFind ->
-            precList
-                ( \self x xs -> unTermCont $ do
-                    addr <- tletField @"address" x
-                    pure $ pmatch (pfromData $ pfield @"credential" # addr) $ \case
-                      PScriptCredential sc -> unTermCont $ do
-                          let hashInOutput = pfromData $ pfield @"_0" # sc
-                          pure $ pif (hashInOutput #== credToFind) x (self # xs)
-                      _ -> unTermCont $ pure (self # xs)
-                )
-                (const $ ptraceError "User output not found")
 
 data DAOAction (s :: S) = WithdrawTreasury | ChangeStakePart | ChangeTreasuryFee | ChangeTreasuryAddress | ChangeAdminAddress | ChangePoolFee
 

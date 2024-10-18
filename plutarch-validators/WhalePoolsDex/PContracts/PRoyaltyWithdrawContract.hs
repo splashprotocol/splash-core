@@ -32,6 +32,35 @@ import WhalePoolsDex.PContracts.PRoyaltyPool      (RoyaltyPoolConfig(..), findPo
 import WhalePoolsDex.PContracts.POrder
 import Plutarch.Api.V1.Scripts                    (PValidatorHash)
 
+{-|
+    -- `WithdrawData` is a data structure representing the details of a royalty withdrawal request.
+    --
+    -- +--------------------+--------------------------------+
+    -- | Field Name         | Description                    |
+    -- +--------------------+--------------------------------+
+    -- | `poolNft`          | The NFT identifying the target |
+    -- |                    | pool from which the royalties  |
+    -- |                    | are being withdrawn.           |
+    -- +--------------------+--------------------------------+
+    -- | `withdrawRoyaltyX` | The amount of TokenX to be     |
+    -- |                    | withdrawn from the royalty     |
+    -- |                    | pool.                          |
+    -- +--------------------+--------------------------------+
+    -- | `withdrawRoyaltyY` | The amount of TokenY to be     |
+    -- |                    | withdrawn from the royalty     |
+    -- |                    | pool.                          |
+    -- +--------------------+--------------------------------+
+    -- | `royaltyAddress`   | The public key hash of the     |
+    -- |                    | royalty recipient's address.   |
+    -- +--------------------+--------------------------------+
+    -- | `royaltyPubKey`    | The raw public key associated  |
+    -- |                    | with the royalty withdrawal.   |
+    -- +--------------------+--------------------------------+
+    -- | `exFee`            | The fee to be paid for the     |
+    -- |                    | transaction processing (batcher|
+    -- |                    | fee).                          |
+    -- +--------------------+--------------------------------+
+-}
 newtype WithdrawData (s :: S)
     = WithdrawData
         ( Term
@@ -72,6 +101,43 @@ instance DerivePlutusType RoyaltyWithdrawConfig where type DPTStrat _ = PlutusTy
 
 instance PTryFrom PData (PAsData RoyaltyWithdrawConfig)
 
+{-|
+    -- `DataToSign` is a data structure that encapsulates the fields required to be signed 
+    -- for validating a royalty withdrawal request. The table below provides descriptions 
+    -- for each field in the structure:
+    --
+    -- +----------------+---------------------------------------------------+
+    -- | Field Name     | Description                                       |
+    -- +----------------+---------------------------------------------------+
+    -- | `withdrawData` | An instance of `WithdrawData` containing details  |
+    -- |                | about the withdrawal request, such as the amount  |
+    -- |                | to be withdrawn and the recipient's information.  |
+    -- +----------------+---------------------------------------------------+
+    -- | `poolNonce`    | An integer representing the current nonce value   |
+    -- |                | from the royalty pool datum. It ensures the       |
+    -- |                | uniqueness of the transaction, helping to prevent |
+    -- |                | spam or replay attacks on the royalty withdrawal  |
+    -- |                | process.                                          |
+    -- +----------------+---------------------------------------------------+
+-}
+newtype DataToSign (s :: S)
+    = DataToSign
+        ( Term
+            s
+            ( PDataRecord
+                '[ "withdrawData" ':= WithdrawData      
+                 , "poolNonce"    ':= PInteger
+                 ]
+            )
+        )
+    deriving stock (GHC.Generic)
+    deriving
+        (PIsData, PDataFields, PlutusType)
+
+instance DerivePlutusType DataToSign where type DPTStrat _ = PlutusTypeData
+
+instance PTryFrom PData (PAsData DataToSign)
+
 newtype RoyaltyWithdrawRedeemer (s :: S)
     = RoyaltyWithdrawRedeemer
         ( Term
@@ -96,6 +162,34 @@ extractPoolConfigFromDatum outputDatum = unTermCont $ do
     inputParsedDatum <- tletField @"outputDatum" inputDatum'
     pure $ parseDatum # inputParsedDatum
 
+{-|
+    -- The purpose of the royalty withdrawal contract is to ensure the validity and integrity of the withdrawal process. 
+    -- The script defines two main actions:
+    --
+    -- 1. **Apply** - Initiates the withdrawal process and must satisfy the following conditions:
+    --    
+    --    * The withdrawal amounts for `TokenX` and `TokenY` must be less than or equal to the corresponding values specified 
+    --      in the pool datum, ensuring that the requested withdrawal does not exceed the available royalties.
+    --    
+    --    * The request signature must be correctly verified, using the private key associated with the `royaltyPubKeyHash256` 
+    --      present in the royalty pool datum. This ensures that the request is authorized by the rightful owner.
+    --    
+    --    * The difference in non-royalty-related ADA between the request input and the royalty output must be equal to the `exFee` field, 
+    --      verifying that the transaction fee is properly accounted for.
+    --    
+    --    * The pool datum must remain unchanged except for the fields `royaltyX`, `royaltyY`, and `royaltyNonce`. 
+    --      The `royaltyX` and `royaltyY` fields should be decreased by the amounts specified in the withdrawal request, 
+    --      and the `royaltyNonce` should be incremented to maintain data integrity. All other fields must remain the same.
+    --    
+    --    * The change in the pool's token balances must exactly match the `withdrawRoyaltyX` and `withdrawRoyaltyY` values, 
+    --      ensuring that the pool's new state accurately reflects the withdrawal.
+    --    
+    --    * The royalty UTXO (which contains the withdrawn royalty) must be sent to the `royaltyAddress`, 
+    --      specified as the public key hash of the recipient.
+    --
+    -- 2. **Refund** - Allows the user to cancel the withdrawal request. In this case, the only requirement 
+    --    is the user's signature, which must match the `royaltyAddress` to authorize the refund.
+-}
 royaltyWithdrawValidatorT :: ClosedTerm (RoyaltyWithdrawConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
 royaltyWithdrawValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
     ctx          <- pletFieldsC @'["txInfo", "purpose"] ctx'
@@ -112,7 +206,7 @@ royaltyWithdrawValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
         royaltyAddress   = getField @"royaltyAddress"   withdrawData
         royaltyPubKey    = getField @"royaltyPubKey"    withdrawData
         exFee            = getField @"exFee"            withdrawData
-        signature     = getField @"signature"    conf
+        signature        = getField @"signature"    conf
     
     txInfo  <- pletFieldsC @'["inputs", "outputs", "signatories"] $ getField @"txInfo" ctx
 
@@ -151,9 +245,11 @@ royaltyWithdrawValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                 inputDatum  <- tlet $ extractPoolConfigFromDatum parsedPoolInput
                 prevConfig  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "royaltyFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "treasuryAddress", "royaltyPubKeyHash256", "royaltyNonce"] inputDatum
                 let
-                    -- We should extract all fields from input pool datum, to verify immutability 
-                    -- of all fields except of royalty related and nonce. RoyaltyX/Y fields will be used
-                    -- in verification of withdraw process
+                    {-|
+                        -- To ensure the immutability of the pool datum, all fields should be extracted from the input pool datum, 
+                        -- except for the fields related to royalties and the nonce, which are allowed to change. 
+                        -- The `royaltyX` and `royaltyY` fields will be utilized to verify the correctness of the withdrawal process.
+                    -}
                     prevPoolNft = getField @"poolNft" prevConfig
                     prevPoolX   = getField @"poolX"  prevConfig
                     prevPoolY   = getField @"poolY"  prevConfig
@@ -189,8 +285,10 @@ royaltyWithdrawValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                 let
                     outputPoolValue = getField @"value" parsedPoolOutput
 
-                    -- In new pool datum we should onlye verify new value of royaltyX/royaltyY.
-                    -- Another fields should be the same
+                    {-|
+                        -- In the new pool datum, only the updated values of `royaltyX` and `royaltyY` should be verified. 
+                        -- All other fields must remain unchanged from the previous pool datum.
+                    -}
                     newRoyaltyX = getField @"royaltyX" newPoolConfig
                     newRoyaltyY = getField @"royaltyY" newPoolConfig
 
@@ -236,17 +334,20 @@ royaltyWithdrawValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                     -- Pool address is the same
                     correctFinalPoolAddress = prevPoolAddr #== newPoolAddr
 
-                    -- Pool value lengt (tokens qty) is the same
+                    -- Pool value length (tokens qty) is the same
                     correctTokensQtyInPool = prevPoolValueLength #== newPoolValueLength
 
                     -- Pool output should contains poolNft 
                     poolIdentity = (assetClassValueOf # outputPoolValue # prevPoolNft) #== 1
 
-                    -- Withdraw should be validated by next rules:
-                    -- * Withdraw should be lte actual royaltyX/Y values
-                    -- * New royalty value (in config) should be less than the previous value by withdrawX/Y values
-                    -- * New X/Y value should be less than the previous value by withdrawX/Y values
-                    -- * LQ qty should't be changed
+                    {-|
+                        -- The withdrawal must be validated according to the following rules:
+                        -- 
+                        -- * The withdrawal amount should be less than or equal to the current `royaltyX` and `royaltyY` values.
+                        -- * The new royalty values (in the configuration) should be reduced by the withdrawn `withdrawX` and `withdrawY` amounts.
+                        -- * The new `X` and `Y` values should also be reduced by the corresponding `withdrawX` and `withdrawY` amounts.
+                        -- * The quantity of liquidity (LQ) should remain unchanged.
+                    -}
                     royaltyWithdrawIsCorrect =
                         withdrawRoyaltyX #<= prevRoyaltyX #&&
                         withdrawRoyaltyY #<= prevRoyaltyY #&&
@@ -260,11 +361,18 @@ royaltyWithdrawValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
                     correctFinalWithdrawOutValue = (withdrawRoyaltyX #<= xValueInWithdrawOut) #&& (withdrawRoyaltyY #<= yValueInWithdrawOut)
 
                     -- Signature verification
-                    dataToSign = pserialiseData # (punsafeCoerce withdrawDataRaw)
+                dataToSign <- 
+                    tcon $ (DataToSign $
+                        pdcons @"withdrawData" @WithdrawData # pdata withdrawData'
+                            #$ pdcons @"poolNonce" @PInteger # pdata prevRoyaltyNonce
+                                # pdnil) 
+
+                let                    
+                    dataToSignRaw = pserialiseData # (punsafeCoerce dataToSign)
 
                     correctExFee = (inputAdaValue - nonWithdrawADAValueInOut) #== exFee
 
-                    signatureIsCorrect = pverifyEd25519Signature # royaltyPubKey # dataToSign # signature
+                    signatureIsCorrect = pverifyEd25519Signature # royaltyPubKey # dataToSignRaw # signature
 
                     correctPubKey = (pblake2b_256 # royaltyPubKey) #== prevroyaltyPubKeyHash256
 
