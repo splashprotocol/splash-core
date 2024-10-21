@@ -23,7 +23,7 @@ pub type PoolDataT2T {
   // Numerator of the protocol fee share | Mutable:
   protocol_fee_num: Int,
   // Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool | Immutable:
-  dao_stabe_proxy_witness: ScriptHash,
+  dao_stabe_proxy_witness: List<ScriptHash>,
   // Treasury address | Mutable:
   treasury_address: ScriptHash,
   // Collected (and currently available) protocol fees in the tradable assets native units | Mutable:
@@ -54,7 +54,7 @@ pub type PoolDataT2T2T {
   // Numerator of the protocol fee share | Mutable:
   protocol_fee_num: Int,
   // Information about the DAO script, which audits the correctness of the "DAO-actions" with stable pool | Mutable:
-  dao_stabe_proxy_witness: ScriptHash,
+  dao_stabe_proxy_witness: List<ScriptHash>,
   // Treasury address | Mutable:
   treasury_address: ScriptHash,
   // Collected (and currently available) protocol fees in the tradable assets native units | Mutable:
@@ -66,7 +66,7 @@ pub type PoolDataT2T2T {
 /// Pool action types.
 pub type PoolAction {
   // Invariant for swap action contains value of the StableSwap invariant for the output state:
-  AMMAction { invariant: Option<Int> }
+  AMMAction { invariant: List<Int> }
   PDAOAction
 }
 

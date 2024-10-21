@@ -9,7 +9,7 @@ use aiken/transaction.{
 use aiken/transaction/credential.{Address, from_script}
 use aiken/transaction/value.{Value}
 use splash/gen.{generate_assets}
-use splash/plutus.{Asset, ScriptHash}
+use splash/plutus.{Asset}
 use splash/stableswap/types.{AMMAction, PDAOAction, PoolDataT2T, PoolRedeemer}
 use splash/witness.{contains_withdrawal}
 
@@ -31,7 +31,7 @@ const max_swap_error = 2
 /// Main pool validator for pool with 2 tradable assets (X/Y).
 /// Special exact math validation implementation: the pool only allows actions that exactly match the math
 /// of the StableSwap equation, regular pools only check that reserves are safu.
-validator(dao_voting_witness: ScriptHash) {
+validator {
   fn validate_stable_pool_transition_t2t_exact(
     input_datum: PoolDataT2T,
     redeemer: PoolRedeemer,
@@ -126,16 +126,9 @@ validator(dao_voting_witness: ScriptHash) {
           ) && stake_cred_in == stake_cred_out
 
         PDAOAction -> {
-          let valid_dao_action: Bool =
-            contains_withdrawal(
-              transaction.withdrawals,
-              dao_stabe_proxy_witness_in,
-            )
-
-          let valid_voting: Bool =
-            contains_withdrawal(transaction.withdrawals, dao_voting_witness)
-
-          valid_dao_action && valid_voting
+          expect Some(dao_stabe_proxy_witness) =
+            list.head(dao_stabe_proxy_witness_in)
+          contains_withdrawal(transaction.withdrawals, dao_stabe_proxy_witness)
         }
       }
     // Checking whether all validity conditions are met:
@@ -148,7 +141,7 @@ fn validate_amm_operation(
   input_datum: PoolDataT2T,
   output_value: Value,
   output_datum: PoolDataT2T,
-  invariant: Option<Int>,
+  invariant: List<Int>,
 ) -> Bool {
   // ==================================== INPUT DATA ==================================== //
   // Extract values for calculations | Input:
@@ -295,8 +288,7 @@ fn validate_amm_operation(
         tradable_quote_after - tradable_quote_delta * lp_fee_num / (
           lp_fee_num - denom
         ) - 1
-      expect Some(stableswap_witness) = invariant
-
+      expect Some(stableswap_witness) = list.head(invariant)
       let valid_invariant_for_swap: Bool =
         check_invariant_t2t_exact(
           n,
@@ -417,7 +409,7 @@ fn t2t_pool_state(
       an2n,
       lp_fee_num,
       protocol_fee_num,
-      dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
+      dao_stabe_proxy_witness: [bytearray.from_string(dao_policy_string)],
       treasury_address: bytearray.from_string(treasury_address_string),
       protocol_fees_x,
       protocol_fees_y,
@@ -579,20 +571,15 @@ fn uniform_reserves_valid_swap_math_template(
       output_pool_data,
       output_value,
     )
-  let redeemer = PoolRedeemer(0, 0, AMMAction(Some(inv_before)))
+  let redeemer = PoolRedeemer(0, 0, AMMAction([inv_before]))
   // Validation:
   validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    Some(inv_before),
-  ) && validate_stable_pool_transition_t2t_exact(
-    bytearray.from_string(@"proxy_dao"),
-    input_pool_data,
-    redeemer,
-    ctx,
-  )
+    [inv_before],
+  ) && validate_stable_pool_transition_t2t_exact(input_pool_data, redeemer, ctx)
 }
 
 fn uniform_reserves_invalid_swap_math_template(
@@ -753,25 +740,25 @@ fn uniform_reserves_invalid_swap_math_template(
     input_pool_data,
     output_value_wrong_balance,
     output_pool_data,
-    Some(inv_before),
+    [inv_before],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_protocol_fees,
-    Some(inv_before),
+    [inv_before],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    Some(inv_before_wrong),
+    [inv_before_wrong],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_protocol_fees,
-    Some(inv_before),
+    [inv_before],
   )
 }
 
@@ -850,7 +837,7 @@ fn uniform_reserves_valid_lq_math_template(
     input_pool_data,
     output_value,
     output_pool_data,
-    None,
+    [],
   )
 }
 
@@ -987,19 +974,19 @@ fn uniform_reserves_invalid_lq_math_template(
     input_pool_data,
     output_value_wrong_balance,
     output_pool_data,
-    None,
+    [],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_protocol_fees,
-    None,
+    [],
   ) && validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_lp,
     output_pool_data,
-    None,
+    [],
   )
 }
 
@@ -1321,25 +1308,25 @@ test test_swap_to_max_decimals_fixtures() {
     input_pool_data,
     output_value,
     output_pool_data,
-    Some(inv_before),
+    [inv_before],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_balances,
     output_pool_data,
-    Some(inv_before),
+    [inv_before],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_fees,
-    Some(inv_before),
+    [inv_before],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    Some(inv_before_wrong),
+    [inv_before_wrong],
   )
 }
 
@@ -1453,25 +1440,25 @@ test test_swap_to_min_decimals_fixtures() {
     input_pool_data,
     output_value,
     output_pool_data,
-    Some(inv_before),
+    [inv_before],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value_wrong_balances,
     output_pool_data,
-    Some(inv_before),
+    [inv_before],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data_wrong_fees,
-    Some(inv_before),
+    [inv_before],
   ) && !validate_amm_operation(
     input_value,
     input_pool_data,
     output_value,
     output_pool_data,
-    Some(inv_before_wrong),
+    [inv_before_wrong],
   )
 }
 
@@ -1572,13 +1559,8 @@ test single_swap_test() {
       output_pool_data,
       output_value,
     )
-  let redeemer = PoolRedeemer(0, 0, AMMAction(Some(inv_before)))
-  validate_stable_pool_transition_t2t_exact(
-    bytearray.from_string(@"proxy_dao"),
-    input_pool_data,
-    redeemer,
-    ctx,
-  )
+  let redeemer = PoolRedeemer(0, 0, AMMAction([inv_before]))
+  validate_stable_pool_transition_t2t_exact(input_pool_data, redeemer, ctx)
 }
 
 test empty_swap_test() {
@@ -1677,7 +1659,7 @@ test empty_swap_test() {
       output_pool_data,
       output_value,
     )
-  let redeemer = PoolRedeemer(0, 0, AMMAction(Some(inv_before)))
+  let redeemer = PoolRedeemer(0, 0, AMMAction([inv_before]))
   ctx == ctx && redeemer == redeemer
 }
 
@@ -1746,13 +1728,8 @@ test random_redeem_test() {
       output_pool_data,
       output_value,
     )
-  let redeemer = PoolRedeemer(0, 0, AMMAction(None))
-  validate_stable_pool_transition_t2t_exact(
-    bytearray.from_string(@"proxy_dao"),
-    input_pool_data,
-    redeemer,
-    ctx,
-  )
+  let redeemer = PoolRedeemer(0, 0, AMMAction([]))
+  validate_stable_pool_transition_t2t_exact(input_pool_data, redeemer, ctx)
 }
 
 test random_deposit_test() {
@@ -1821,11 +1798,6 @@ test random_deposit_test() {
       output_pool_data,
       output_value,
     )
-  let redeemer = PoolRedeemer(0, 0, AMMAction(None))
-  validate_stable_pool_transition_t2t_exact(
-    bytearray.from_string(@"proxy_dao"),
-    input_pool_data,
-    redeemer,
-    ctx,
-  )
+  let redeemer = PoolRedeemer(0, 0, AMMAction([]))
+  validate_stable_pool_transition_t2t_exact(input_pool_data, redeemer, ctx)
 }
