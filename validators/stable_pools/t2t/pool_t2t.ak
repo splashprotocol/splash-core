@@ -121,11 +121,11 @@ validator {
             inv,
           ) && stake_cred_in == stake_cred_out
 
-        PDAOAction ->
-          contains_withdrawal(
-            transaction.withdrawals,
-            dao_stabe_proxy_witness_in,
-          )
+        PDAOAction -> {
+          expect Some(dao_stabe_proxy_witness) =
+            list.head(dao_stabe_proxy_witness_in)
+          contains_withdrawal(transaction.withdrawals, dao_stabe_proxy_witness)
+        }
       }
     // Checking whether all validity conditions are met:
     valid_pool_input && pool_script_preserved && pool_nft_preserved && pool_config_preserved && no_more_tokens_in_pool_out && valid_action
@@ -390,7 +390,7 @@ fn t2t_pool_state(
       an2n,
       lp_fee_num,
       protocol_fee_num,
-      dao_stabe_proxy_witness: bytearray.from_string(dao_policy_string),
+      dao_stabe_proxy_witness: [bytearray.from_string(dao_policy_string)],
       treasury_address: bytearray.from_string(treasury_address_string),
       protocol_fees_x,
       protocol_fees_y,
