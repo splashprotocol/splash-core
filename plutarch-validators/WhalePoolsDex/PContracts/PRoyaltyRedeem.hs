@@ -17,7 +17,7 @@ import PExtra.Monadic (tlet, tmatch)
 import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap)
 import WhalePoolsDex.PContracts.POrder     (OrderAction (Apply, Refund), OrderRedeemer)
 import WhalePoolsDex.PContracts.PRedeem    (RedeemConfig(..), calcMinReturn, calcOutput)
-import WhalePoolsDex.PContracts.PRoyaltyFeeSwitch (extractPoolConfig)
+import WhalePoolsDex.PContracts.PRoyaltyPool (extractPoolConfig)
 
 royaltyRedeemValidatorT :: ClosedTerm (RedeemConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
 royaltyRedeemValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do

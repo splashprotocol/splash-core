@@ -24,7 +24,7 @@ import PExtra.Monadic (tlet, tletField, tmatch)
 import WhalePoolsDex.PContracts.PApi       (containsSignature, getRewardValue', maxLqCap, pmin, tletUnwrap)
 import WhalePoolsDex.PContracts.POrder     (OrderAction (Apply, Refund), OrderRedeemer)
 import WhalePoolsDex.PContracts.PDeposit   (DepositConfig(..), validChange', minAssetReward)
-import WhalePoolsDex.PContracts.PRoyaltyFeeSwitch (extractPoolConfig)
+import WhalePoolsDex.PContracts.PRoyaltyPool (extractPoolConfig)
 
 import qualified WhalePoolsDex.Contracts.Proxy.Deposit as D
 

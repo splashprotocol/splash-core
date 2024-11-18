@@ -22,8 +22,9 @@ import Plutarch
 import Plutarch.Api.V2
 import Plutarch.Api.V1 (
    PAddress(..),
-   PCredential (PPubKeyCredential),
-   PCurrencySymbol
+   PCredential (PPubKeyCredential, PScriptCredential),
+   PCurrencySymbol,
+   PValidatorHash
  )
 import Plutarch.Prelude
 

@@ -11,7 +11,8 @@ module WhalePoolsDex.PValidators (
     royaltyPoolValidator,
     royaltyDepositValidator,
     royaltyRedeemValidator,
-    royaltyWithdrawValidator
+    royaltyWithdrawRequestValidator,
+    royaltyPoolDAOV1RequestValidator
 ) where
 
 import PlutusLedgerApi.V1.Scripts (Validator (getValidator))
@@ -29,6 +30,7 @@ import qualified WhalePoolsDex.PContracts.PRoyaltyPool    as PRP
 import qualified WhalePoolsDex.PContracts.PRoyaltyDeposit   as PRD
 import qualified WhalePoolsDex.PContracts.PRoyaltyRedeem    as PRR
 import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawContract as PRWC
+import qualified WhalePoolsDex.PContracts.PRoyaltyDAOV1Request as PRDAOV1Request
 
 import Plutarch
 import Plutarch.Api.V2 (mkValidator, validatorHash)
@@ -78,8 +80,8 @@ depositBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBD.deposi
 royaltyPoolValidator :: Validator
 royaltyPoolValidator = mkValidator cfgForValidator $ wrapValidator PRP.poolValidatorT
 
-royaltyWithdrawValidator :: Validator
-royaltyWithdrawValidator = mkValidator cfgForValidator $ wrapValidator PRWC.royaltyWithdrawValidatorT
+royaltyWithdrawRequestValidator :: Validator
+royaltyWithdrawRequestValidator = mkValidator cfgForValidator $ wrapValidator PRWC.royaltyWithdrawRequestValidatorT
 
 royaltyDepositValidator :: Validator
 royaltyDepositValidator = mkValidator cfgForValidator $ wrapValidator PRD.royaltyDepositValidatorT
@@ -89,3 +91,6 @@ royaltyRedeemValidator = mkValidator cfgForValidator $ wrapValidator PRR.royalty
 
 redeemBalanceValidator :: Validator
 redeemBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBR.redeemBalanceValidatorT
+
+royaltyPoolDAOV1RequestValidator :: Validator
+royaltyPoolDAOV1RequestValidator = mkValidator cfgForValidator $ wrapValidator PRDAOV1Request.daoV1RequestValidator

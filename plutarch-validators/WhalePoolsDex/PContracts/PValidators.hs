@@ -68,8 +68,8 @@ redeemBalanceValidator = mkValidator $ wrapValidator PBR.redeemValidatorT
 royaltyPoolValidator :: Validator
 royaltyPoolValidator = mkValidator $ wrapValidator PRP.poolValidatorT
 
-royaltyWithdrawValidator :: Validator
-royaltyWithdrawValidator = mkValidator $ wrapValidator PRWC.royaltyWithdrawValidatorT
+royaltyWithdrawRequestValidator :: Validator
+royaltyWithdrawRequestValidator = mkValidator $ wrapValidator PRWC.royaltyWithdrawRequestValidatorT
 
 validatorAddress :: Validator -> Address
 validatorAddress = scriptHashAddress . validatorHash

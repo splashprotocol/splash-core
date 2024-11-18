@@ -8,14 +8,15 @@ module WhalePoolsDex.PContracts.PRoyaltyPool (
     findPoolOutput,
     poolValidatorT,
     parseDatum,
-    readPoolState
+    readPoolState,
+    extractPoolConfig
 ) where
 
 import qualified GHC.Generics as GHC
 import           Generics.SOP (Generic, I (I))
 
 import Plutarch
-import Plutarch.Api.V2              (PScriptHash(..), PMaybeData (..), PTxOut, POutputDatum(..), PAddress(..), PPubKeyHash(..), PDatum(..), PValue(..), KeyGuarantees(..), AmountGuarantees(..), PCurrencySymbol(..), PStakingCredential(..), PTxInInfo(..))
+import Plutarch.Api.V2              (PScriptHash(..), PMaybeData (..), PTxOut, POutputDatum(..), PAddress(..), PPubKeyHash(..), PDatum(..), PValue(..), KeyGuarantees(..), AmountGuarantees(..), PCurrencySymbol(..), PStakingCredential(..), PTxInInfo(..), scriptHash)
 import Plutarch.Api.V1              (PCredential (PScriptCredential))
 import Plutarch.Api.V2.Contexts     (PScriptContext, PScriptPurpose (PSpending), PTxInfo(..))
 import Plutarch.DataRepr
@@ -30,23 +31,30 @@ import Plutarch.Api.V1.Scripts
 import Plutarch.Api.V1.AssocMap     as Map
 import Plutarch.Extra.Maybe         as Maybe
 import PlutusTx.Builtins.Internal
+import PlutusLedgerApi.V2 hiding    (getValue)
 
 import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromData, assetClass, pValueLength)
 import PExtra.List                  (pelemAt)
 import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
 import PExtra.Ada
+import PlutusLedgerApi.V1.Address
+import PlutusLedgerApi.V1.Credential
 
 import qualified WhalePoolsDex.Contracts.RoyaltyPool  as P
 import           WhalePoolsDex.PContracts.PApi        (burnLqInitial, feeDen, maxLqCap, tletUnwrap, zero, containsSignature)
 import           WhalePoolsDex.PConstants
 
 import Plutarch.Trace
+import Data.Text                    as T
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16  as Hex
+import qualified Data.Text.Encoding      as E
 
-royaltyScriptHash :: String
-royaltyScriptHash = "cdeb3781ac2b0d6504a4de66093026997601362e4c1574f9a7a976c0"
+royaltyWithdrawPoolScriptHash :: BuiltinByteString
+royaltyWithdrawPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "df06da8cb5e10529efb669eea0c7771d2af94352dadd3dda800af5d6"
 
-royaltyScriptHashP :: Term s PValidatorHash
-royaltyScriptHashP = pcon $ PValidatorHash $ phexByteStr royaltyScriptHash
+royaltyStakeCred :: Term s PStakingCredential
+royaltyStakeCred = pconstant (StakingHash . ScriptCredential . ValidatorHash $ royaltyWithdrawPoolScriptHash)
 
 newtype RoyaltyPoolConfig (s :: S)
     = RoyaltyPoolConfig
@@ -68,7 +76,7 @@ newtype RoyaltyPoolConfig (s :: S)
                  , "treasuryAddress"   ':= PValidatorHash
                  -- Current version of plutarch doesn't support Blake2b_244, so key is represented by Blake2b_256
                  , "royaltyPubKeyHash256" ':= PByteString
-                 , "royaltyNonce"         ':= PInteger
+                 , "nonce"                ':= PInteger
                  ]
             )
         )
@@ -166,6 +174,18 @@ newtype PoolDiff (s :: S)
 
 instance DerivePlutusType PoolDiff where type DPTStrat _ = PlutusTypeData
 
+extractPoolConfig :: Term s (PTxOut :--> RoyaltyPoolConfig)
+extractPoolConfig = plam $ \txOut -> unTermCont $ do
+  txOutDatum <- tletField @"datum" txOut
+
+  POutputDatum txOutOutputDatum <- pmatchC txOutDatum
+
+  rawDatum <- tletField @"outputDatum" txOutOutputDatum
+
+  PDatum poolDatum <- pmatchC rawDatum
+
+  tletUnwrap $ ptryFromData @(RoyaltyPoolConfig) $ poolDatum
+
 readPoolState :: Term s (RoyaltyPoolConfig :--> PTxOut :--> PoolState)
 readPoolState = phoistAcyclic $
     plam $ \conf' out -> unTermCont $ do
@@ -203,7 +223,7 @@ readPoolState = phoistAcyclic $
 
 correctSwapConfig :: Term s (RoyaltyPoolConfig :--> RoyaltyPoolConfig :--> PInteger :--> PInteger :--> PBool)
 correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
-  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "royaltyFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "treasuryAddress", "royaltyPubKeyHash256", "royaltyNonce"] prevDatum
+  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "royaltyFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "treasuryAddress", "royaltyPubKeyHash256", "nonce"] prevDatum
   newConfig  <- pletFieldsC @'["treasuryX", "treasuryY", "royaltyX", "royaltyY"] newDatum
   
   let
@@ -221,7 +241,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     prevDAOPolicy = getField @"DAOPolicy" prevConfig
     prevTreasuryAddress = getField @"treasuryAddress" prevConfig
     prevroyaltyPubKeyHash256 = getField @"royaltyPubKeyHash256" prevConfig
-    prevRoyaltyNonce = getField @"royaltyNonce" prevConfig
+    prevnonce = getField @"nonce" prevConfig
 
     newTreasuryX = getField @"treasuryX" newConfig
     newTreasuryY = getField @"treasuryY" newConfig
@@ -276,7 +296,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
                 #$ pdcons @"royaltyPubKeyHash256" @PByteString # pdata prevroyaltyPubKeyHash256
-                #$ pdcons @"royaltyNonce" @PInteger # pdata prevRoyaltyNonce
+                #$ pdcons @"nonce" @PInteger # pdata prevnonce
                     # pdnil)
 
   let validConfig = expectedConfig #== newDatum
@@ -305,23 +325,12 @@ validDAOAction = plam $ \cfg txInfo -> unTermCont $ do
       headWithdrawl = plookup # policySC # wdrl
   pure $ Maybe.pisJust # headWithdrawl
 
-validRoyaltyWithdrawAction :: Term s (PInteger :--> PBuiltinList PTxInInfo :--> PBool)
-validRoyaltyWithdrawAction = plam $ \poolIdx inputs -> unTermCont $ do
+validRoyaltyWithdrawAction :: ClosedTerm (PTxInfo :--> PBool)
+validRoyaltyWithdrawAction = plam $ \txInfo -> unTermCont $ do
+  wdrl     <- tletField @"wdrl" txInfo
   let
-      inputsQtyIsCorrect = (plength # inputs) #== 2
-      royaltyRequestInputId = 1 - poolIdx
-
-  royaltyRequestInput' <- tlet $ pelemAt # royaltyRequestInputId # inputs
-  royaltyRequestInput  <- tletField @"resolved" royaltyRequestInput'
-  royaltyRequestAddr   <- tletField @"address" royaltyRequestInput
-
-  cred <- tletField @"credential" royaltyRequestAddr
-  tletUnwrap $
-        pmatch cred $ \case
-            PScriptCredential pcred ->
-                let skh   = pfield @"_0" # pcred
-                    in pif (skh #== royaltyScriptHashP) (pdata inputsQtyIsCorrect) perror
-            _ -> perror
+      headWithdrawl = plookup # royaltyStakeCred # wdrl
+  pure $ Maybe.pisJust # headWithdrawl
 
 parseDatum :: ClosedTerm (PDatum :--> RoyaltyPoolConfig)
 parseDatum = plam $ \newDatum -> unTermCont $ do
@@ -419,7 +428,7 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                                     (-dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
                         pure $ noMoreTokens #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
                     DAOAction -> validDAOAction # conf # txinfo'
-                    WithdrawRoyalty -> validRoyaltyWithdrawAction # selfIx # inputs
+                    WithdrawRoyalty -> validRoyaltyWithdrawAction # txinfo'
                     _ -> unTermCont $ do
                         POutputDatum selfD' <- pmatchC selfDatum
                         selfD               <- tletField @"outputDatum" selfD'
