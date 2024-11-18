@@ -118,7 +118,9 @@ library
     WhalePoolsDex.PContracts.PStakingWithPkhLock
     WhalePoolsDex.PContracts.PFeeSwitchBalancePool
     WhalePoolsDex.PContracts.PFeeSwitch
-    WhalePoolsDex.PContracts.PRoyaltyFeeSwitch
+    WhalePoolsDex.PContracts.PRoyaltyDAOV1
+    WhalePoolsDex.PContracts.PRoyaltyDAOV1Request
+    WhalePoolsDex.PContracts.PRoyaltyWithdrawPool
     WhalePoolsDex.PStakingValidators
     WhalePoolsDex.PMintingValidators
     WhalePoolsDex.PValidators

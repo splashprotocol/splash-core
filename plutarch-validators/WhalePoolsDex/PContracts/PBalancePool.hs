@@ -35,7 +35,6 @@ import qualified WhalePoolsDex.Contracts.BalancePool as BP
 import           WhalePoolsDex.PContracts.PPool      hiding (PoolConfig(..), PoolAction(..))
 import           WhalePoolsDex.PContracts.PApi       (maxLqCap, feeDen, zero)
 
-
 newtype BalancePoolConfig (s :: S)
     = BalancePoolConfig
         ( Term

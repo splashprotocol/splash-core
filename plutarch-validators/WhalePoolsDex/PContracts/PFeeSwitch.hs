@@ -128,7 +128,7 @@ validateTreasuryWithdraw
   => HRec as 
   -> HRec as
   -> Term s (PBuiltinList PTxOut :--> PValue _ _ :--> PValue _ _ :--> PAssetClass :--> PBool)
-validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue newPoolValue poolNft -> unTermCont $ do
+validateTreasuryWithdraw prevConfig newConfig = plam $ \outputs prevPoolValue newPoolValue poolNft -> unTermCont $ do
   let
     poolX  = getField @"poolX"    prevConfig
     poolY  = getField @"poolY"    prevConfig
