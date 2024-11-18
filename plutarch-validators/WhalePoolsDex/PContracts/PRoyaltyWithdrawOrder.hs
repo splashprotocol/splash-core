@@ -1,10 +1,10 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module WhalePoolsDex.PContracts.PRoyaltyWithdrawContract (
+module WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder (
     RoyaltyWithdrawConfig (..),
     WithdrawData(..),
     WithdrawRoyaltyDataToSign(..),
-    royaltyWithdrawRequestValidatorT,
+    royaltyWithdrawOrderValidatorT,
     parseRoyaltyWithdrawDatum,
     extractPoolConfigFromDatum,
     extractRoyaltyWithdrawConfigFromDatum
@@ -68,9 +68,6 @@ import qualified Data.Text.Encoding      as E
     -- | `royaltyAddress`   | The public key hash of the     |
     -- |                    | royalty recipient's address.   |
     -- +--------------------+--------------------------------+
-    -- | `royaltyPubKey`    | The raw public key associated  |
-    -- |                    | with the royalty withdrawal.   |
-    -- +--------------------+--------------------------------+
     -- | `exFee`            | The fee to be paid for the     |
     -- |                    | transaction processing (batcher|
     -- |                    | fee).                          |
@@ -85,7 +82,6 @@ newtype WithdrawData (s :: S)
                  , "withdrawRoyaltyX" ':= PInteger
                  , "withdrawRoyaltyY" ':= PInteger
                  , "royaltyAddress"   ':= PPubKeyHash
-                 , "royaltyPubKey"    ':= PByteString
                  , "exFee"            ':= PInteger        
                  ]
             )
@@ -98,13 +94,22 @@ instance DerivePlutusType WithdrawData where type DPTStrat _ = PlutusTypeData
 
 instance PTryFrom PData WithdrawData
 
+--   `additionalBytes` is a byte array representing data that must be added 
+--   at the start of the raw `DataToSign` version. The necessity of 
+--   `additionalBytes` arises from the combination of CIP-30 and CIP-0008, 
+--   which introduce user-related data into `messageToSign`.
+--   To ensure the creation of a correct `messageToSign`, this data is 
+--   incorporated within the contract when constructing the final 
+--   `messageToSign`, combining `additionalBytes` with `OperationRelatedData`.
+
 newtype RoyaltyWithdrawConfig (s :: S)
     = RoyaltyWithdrawConfig
         ( Term
             s
             ( PDataRecord
-                '[ "withdrawData" ':= WithdrawData      
-                 , "signature"    ':= PByteString
+                '[ "withdrawData"    ':= WithdrawData      
+                 , "signature"       ':= PByteString
+                 , "additionalBytes" ':= PByteString
                  ]
             )
         )
@@ -189,8 +194,8 @@ extractRoyaltyWithdrawConfigFromDatum outputDatum = unTermCont $ do
     inputParsedDatum <- tletField @"outputDatum" inputDatum'
     pure $ parseRoyaltyWithdrawDatum # inputParsedDatum
 
-royaltyWithdrawRequestValidatorT :: ClosedTerm (RoyaltyWithdrawConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
-royaltyWithdrawRequestValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
+royaltyWithdrawOrderValidatorT :: ClosedTerm (RoyaltyWithdrawConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
+royaltyWithdrawOrderValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
     ctx          <- pletFieldsC @'["txInfo", "purpose"] ctx'
     conf         <- pletFieldsC @'["withdrawData", "signature"] conf'
     let

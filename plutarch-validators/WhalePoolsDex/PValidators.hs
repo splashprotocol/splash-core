@@ -11,8 +11,8 @@ module WhalePoolsDex.PValidators (
     royaltyPoolValidator,
     royaltyDepositValidator,
     royaltyRedeemValidator,
-    royaltyWithdrawRequestValidator,
-    royaltyPoolDAOV1RequestValidator
+    royaltyWithdrawOrderValidator,
+    royaltyPooldaoV1ActionOrderValidator
 ) where
 
 import PlutusLedgerApi.V1.Scripts (Validator (getValidator))
@@ -29,8 +29,8 @@ import qualified WhalePoolsDex.PContracts.PRedeemBalance  as PBR
 import qualified WhalePoolsDex.PContracts.PRoyaltyPool    as PRP
 import qualified WhalePoolsDex.PContracts.PRoyaltyDeposit   as PRD
 import qualified WhalePoolsDex.PContracts.PRoyaltyRedeem    as PRR
-import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawContract as PRWC
-import qualified WhalePoolsDex.PContracts.PRoyaltyDAOV1Request as PRDAOV1Request
+import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder as PRWC
+import qualified WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder as PRDAOV1Request
 
 import Plutarch
 import Plutarch.Api.V2 (mkValidator, validatorHash)
@@ -80,8 +80,8 @@ depositBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBD.deposi
 royaltyPoolValidator :: Validator
 royaltyPoolValidator = mkValidator cfgForValidator $ wrapValidator PRP.poolValidatorT
 
-royaltyWithdrawRequestValidator :: Validator
-royaltyWithdrawRequestValidator = mkValidator cfgForValidator $ wrapValidator PRWC.royaltyWithdrawRequestValidatorT
+royaltyWithdrawOrderValidator :: Validator
+royaltyWithdrawOrderValidator = mkValidator cfgForValidator $ wrapValidator PRWC.royaltyWithdrawOrderValidatorT
 
 royaltyDepositValidator :: Validator
 royaltyDepositValidator = mkValidator cfgForValidator $ wrapValidator PRD.royaltyDepositValidatorT
@@ -92,5 +92,5 @@ royaltyRedeemValidator = mkValidator cfgForValidator $ wrapValidator PRR.royalty
 redeemBalanceValidator :: Validator
 redeemBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBR.redeemBalanceValidatorT
 
-royaltyPoolDAOV1RequestValidator :: Validator
-royaltyPoolDAOV1RequestValidator = mkValidator cfgForValidator $ wrapValidator PRDAOV1Request.daoV1RequestValidator
+royaltyPooldaoV1ActionOrderValidator :: Validator
+royaltyPooldaoV1ActionOrderValidator = mkValidator cfgForValidator $ wrapValidator PRDAOV1Request.daoV1ActionOrderValidator

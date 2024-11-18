@@ -51,7 +51,7 @@ import qualified Data.ByteString.Base16  as Hex
 import qualified Data.Text.Encoding      as E
 
 royaltyWithdrawPoolScriptHash :: BuiltinByteString
-royaltyWithdrawPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "df06da8cb5e10529efb669eea0c7771d2af94352dadd3dda800af5d6"
+royaltyWithdrawPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "b7f10508f0bca230b30172c17ae98fc11846ff573b4b91b4ea41ffc6"
 
 royaltyStakeCred :: Term s PStakingCredential
 royaltyStakeCred = pconstant (StakingHash . ScriptCredential . ValidatorHash $ royaltyWithdrawPoolScriptHash)
@@ -74,9 +74,8 @@ newtype RoyaltyPoolConfig (s :: S)
                  , "royaltyY"          ':= PInteger
                  , "DAOPolicy"         ':= PBuiltinList (PAsData PStakingCredential)
                  , "treasuryAddress"   ':= PValidatorHash
-                 -- Current version of plutarch doesn't support Blake2b_244, so key is represented by Blake2b_256
-                 , "royaltyPubKeyHash256" ':= PByteString
-                 , "nonce"                ':= PInteger
+                 , "royaltyPubKey"     ':= PByteString
+                 , "nonce"             ':= PInteger
                  ]
             )
         )
@@ -202,7 +201,6 @@ readPoolState = phoistAcyclic $
             poolYRoyalty = getField @"royaltyY" conf
 
         value <- tletField @"value" out
-        
         let 
             x = assetClassValueOf # value # poolX
             y = assetClassValueOf # value # poolY
@@ -223,7 +221,7 @@ readPoolState = phoistAcyclic $
 
 correctSwapConfig :: Term s (RoyaltyPoolConfig :--> RoyaltyPoolConfig :--> PInteger :--> PInteger :--> PBool)
 correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
-  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "royaltyFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "treasuryAddress", "royaltyPubKeyHash256", "nonce"] prevDatum
+  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "royaltyFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "treasuryAddress", "royaltyPubKey", "nonce"] prevDatum
   newConfig  <- pletFieldsC @'["treasuryX", "treasuryY", "royaltyX", "royaltyY"] newDatum
   
   let
@@ -236,12 +234,12 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     prevRoyaltyFeeNum  = getField @"royaltyFee"  prevConfig
     prevTreasuryX = getField @"treasuryX" prevConfig
     prevTreasuryY = getField @"treasuryY" prevConfig
-    prevRoyaltyX = getField @"royaltyX" prevConfig
-    prevRoyaltyY = getField @"royaltyY" prevConfig
+    prevRoyaltyX  = getField @"royaltyX" prevConfig
+    prevRoyaltyY  = getField @"royaltyY" prevConfig
     prevDAOPolicy = getField @"DAOPolicy" prevConfig
     prevTreasuryAddress = getField @"treasuryAddress" prevConfig
-    prevroyaltyPubKeyHash256 = getField @"royaltyPubKeyHash256" prevConfig
-    prevnonce = getField @"nonce" prevConfig
+    prevroyaltyPubKey   = getField @"royaltyPubKey" prevConfig
+    prevnonce           = getField @"nonce" prevConfig
 
     newTreasuryX = getField @"treasuryX" newConfig
     newTreasuryY = getField @"treasuryY" newConfig
@@ -295,7 +293,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
                 #$ pdcons @"royaltyY" @PInteger # pdata newRoyaltyY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
-                #$ pdcons @"royaltyPubKeyHash256" @PByteString # pdata prevroyaltyPubKeyHash256
+                #$ pdcons @"royaltyPubKey" @PByteString # pdata prevroyaltyPubKey
                 #$ pdcons @"nonce" @PInteger # pdata prevnonce
                     # pdnil)
 
@@ -399,7 +397,7 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
             succesorValue <- tletUnwrap $ getField @"value" successor
 
             let 
-                selfValueLength = pValueLength # selfValue
+                selfValueLength     = pValueLength # selfValue
                 succesorValueLength = pValueLength # succesorValue
 
                 noMoreTokens = selfValueLength #== succesorValueLength

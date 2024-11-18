@@ -128,7 +128,7 @@ validateTreasuryWithdraw
   => HRec as 
   -> HRec as
   -> Term s (PBuiltinList PTxOut :--> PValue _ _ :--> PValue _ _ :--> PAssetClass :--> PBool)
-validateTreasuryWithdraw prevConfig newConfig = plam $ \outputs prevPoolValue newPoolValue poolNft -> unTermCont $ do
+validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue newPoolValue poolNft -> unTermCont $ do
   let
     poolX  = getField @"poolX"    prevConfig
     poolY  = getField @"poolY"    prevConfig
@@ -222,7 +222,6 @@ daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer
 
   prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] poolInputDatum
   newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] poolOutputDatum
-  
   let
     validSignaturesQty =
       pfoldl # plam (\acc pkh -> pif (containsSignature # signatories # pkh) (acc + 1) acc) # 0 # daoPkhs

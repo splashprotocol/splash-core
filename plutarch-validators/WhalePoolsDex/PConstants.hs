@@ -18,10 +18,16 @@ import qualified Data.Text.Encoding      as E
 import qualified Data.Text as T
 
 poolValidatorHashValue :: String
-poolValidatorHashValue = "b09d1ccde30a0c65316c8e5dada41ee4d86ca0d0bb5370542693dafa"
+poolValidatorHashValue = "cb684a69e78907a9796b21fc150a758af5f2805e5ed5d5a8ce9f76f1"
 
 poolValidatorHash :: Plutus.ValidatorHash
 poolValidatorHash = Plutus.ValidatorHash $ BuiltinByteString . mkByteString $ T.pack poolValidatorHashValue
+
+poolStakeValidatorHashValue :: String
+poolStakeValidatorHashValue = "b2f6abf60ccde92eae1a2f4fdf65f2eaf6208d872c6f0e597cc10b07"
+
+poolStakeValidatorHash :: Plutus.ValidatorHash
+poolStakeValidatorHash = Plutus.ValidatorHash $ BuiltinByteString . mkByteString $ T.pack poolStakeValidatorHashValue
 
 poolValidatorHashP :: Term s PValidatorHash
 poolValidatorHashP = pcon $ PValidatorHash $ phexByteStr poolValidatorHashValue

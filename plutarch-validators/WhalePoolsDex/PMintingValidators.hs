@@ -70,7 +70,7 @@ royaltyPoolDAOV1Validator admins threshold lpFeeIsEditable =
         wrapMintingValidator $ 
             PRDAOV1.daoMultisigPolicyValidatorT (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable)
 
-royaltyWithdrawPoolValidator ::MintingPolicy
+royaltyWithdrawPoolValidator :: MintingPolicy
 royaltyWithdrawPoolValidator = 
     mkMintingPolicy cfgForMintingValidator $ 
         wrapMintingValidator $ 
