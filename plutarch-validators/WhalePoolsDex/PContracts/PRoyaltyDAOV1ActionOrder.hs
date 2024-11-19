@@ -1,4 +1,4 @@
-module WhalePoolsDex.PContracts.PRoyaltyDAOV1Request where
+module WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder where
 
 import qualified GHC.Generics as GHC
 
@@ -129,8 +129,8 @@ The contract manages two primary actions, focusing on validation and handling: A
     - Ensures the transaction is signed by the private key corresponding to the public key hash requestorPkh.
 -}
 
-daoV1RequestValidator :: Term s (DAOV1RequestConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
-daoV1RequestValidator = plam $ \config redeemer' ctx' -> unTermCont $ do
+daoV1ActionOrderValidator :: Term s (DAOV1RequestConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
+daoV1ActionOrderValidator = plam $ \config redeemer' ctx' -> unTermCont $ do
   ctx      <- pletFieldsC @'["txInfo", "purpose"] ctx'
   config'  <- pletFieldsC @'["daoAction", "poolNft", "treasuryXWithdraw", "treasuryYWithdraw", "requestorPkh", "exFee"] config
   let

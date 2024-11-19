@@ -1,10 +1,10 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module WhalePoolsDex.PContracts.PRoyaltyWithdrawContract (
+module WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder (
     RoyaltyWithdrawConfig (..),
     WithdrawData(..),
     WithdrawRoyaltyDataToSign(..),
-    royaltyWithdrawRequestValidatorT,
+    royaltyWithdrawOrderValidatorT,
     parseRoyaltyWithdrawDatum,
     extractPoolConfigFromDatum,
     extractRoyaltyWithdrawConfigFromDatum
@@ -189,8 +189,8 @@ extractRoyaltyWithdrawConfigFromDatum outputDatum = unTermCont $ do
     inputParsedDatum <- tletField @"outputDatum" inputDatum'
     pure $ parseRoyaltyWithdrawDatum # inputParsedDatum
 
-royaltyWithdrawRequestValidatorT :: ClosedTerm (RoyaltyWithdrawConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
-royaltyWithdrawRequestValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
+royaltyWithdrawOrderValidatorT :: ClosedTerm (RoyaltyWithdrawConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
+royaltyWithdrawOrderValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
     ctx          <- pletFieldsC @'["txInfo", "purpose"] ctx'
     conf         <- pletFieldsC @'["withdrawData", "signature"] conf'
     let

@@ -107,7 +107,7 @@ library
     WhalePoolsDex.PContracts.POrder
     WhalePoolsDex.PContracts.PPool
     WhalePoolsDex.PContracts.PRoyaltyPool
-    WhalePoolsDex.PContracts.PRoyaltyWithdrawContract
+    WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder
     WhalePoolsDex.PContracts.PRoyaltyDeposit
     WhalePoolsDex.PContracts.PRoyaltyRedeem
     WhalePoolsDex.PContracts.PPoolBFee
@@ -119,7 +119,7 @@ library
     WhalePoolsDex.PContracts.PFeeSwitchBalancePool
     WhalePoolsDex.PContracts.PFeeSwitch
     WhalePoolsDex.PContracts.PRoyaltyDAOV1
-    WhalePoolsDex.PContracts.PRoyaltyDAOV1Request
+    WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder
     WhalePoolsDex.PContracts.PRoyaltyWithdrawPool
     WhalePoolsDex.PStakingValidators
     WhalePoolsDex.PMintingValidators

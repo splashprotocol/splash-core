@@ -23,7 +23,7 @@ import qualified WhalePoolsDex.PContracts.PSwap         as PS
 import qualified WhalePoolsDex.PContracts.PDepositBalance as PBD
 import qualified WhalePoolsDex.PContracts.PRedeemBalance  as PBR
 import qualified WhalePoolsDex.PContracts.PRoyaltyPool    as PRP
-import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawContract as PRWC
+import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder as PRWC
 
 import Plutarch
 import Plutarch.Api.V2 (mkValidator, validatorHash)
@@ -69,7 +69,7 @@ royaltyPoolValidator :: Validator
 royaltyPoolValidator = mkValidator $ wrapValidator PRP.poolValidatorT
 
 royaltyWithdrawRequestValidator :: Validator
-royaltyWithdrawRequestValidator = mkValidator $ wrapValidator PRWC.royaltyWithdrawRequestValidatorT
+royaltyWithdrawRequestValidator = mkValidator $ wrapValidator PRWC.royaltyWithdrawOrderValidatorT
 
 validatorAddress :: Validator -> Address
 validatorAddress = scriptHashAddress . validatorHash

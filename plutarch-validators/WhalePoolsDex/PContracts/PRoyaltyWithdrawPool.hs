@@ -17,7 +17,7 @@ import Plutarch.Unsafe (punsafeCoerce)
 import PExtra.API
 import PExtra.Monadic (tlet, tletField, tmatch, tcon)
 
-import WhalePoolsDex.PContracts.PRoyaltyWithdrawContract
+import WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder
 import WhalePoolsDex.PContracts.PRoyaltyPool  (RoyaltyPoolConfig(..), findPoolOutput)
 import Plutarch.Api.V1.Scripts
 import Plutarch.Api.V1.Address
