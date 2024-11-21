@@ -99,6 +99,7 @@ newtype DAOV1RequestConfig (s :: S)
                  , "treasuryYWithdraw"   ':= PInteger
                  , "requestorPkh"        ':= PPubKeyHash
                  , "signatures"          ':= PBuiltinList (PAsData PByteString)
+                 , "additionalBytes"     ':= PBuiltinList (PAsData PByteString)
                  , "exFee"               ':= PInteger
                  ]
             )

@@ -135,10 +135,11 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
             _ -> perror
 
     conf' <- tlet $ extractRoyaltyWithdrawConfigFromDatum parsedOrderInput
-    conf  <- pletFieldsC @'["withdrawData", "signature"] conf'
+    conf  <- pletFieldsC @'["withdrawData", "signature", "additionalBytes"] conf'
     let
         signature       = getField @"signature"    conf
         withdrawDataRaw = getField @"withdrawData" conf
+        additionalBytes = getField @"additionalBytes" conf
         withdrawData'   = pfromData withdrawDataRaw
         
     withdrawData <- pletFieldsC @'["poolNft", "withdrawRoyaltyX", "withdrawRoyaltyY", "royaltyAddress", "royaltyPubKey", "exFee"] withdrawData'
@@ -255,7 +256,7 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
                     # pdnil) 
 
     let                    
-        dataToSignRaw = pserialiseData # (punsafeCoerce dataToSign)
+        dataToSignRaw = (additionalBytes <> pserialiseData # (punsafeCoerce dataToSign))
 
         signatureIsCorrect = pverifyEd25519Signature # royaltyPubKey # dataToSignRaw # signature
 

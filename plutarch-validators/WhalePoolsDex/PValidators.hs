@@ -11,7 +11,7 @@ module WhalePoolsDex.PValidators (
     royaltyPoolValidator,
     royaltyDepositValidator,
     royaltyRedeemValidator,
-    royaltyWithdrawRequestValidator,
+    royaltyWithdrawOrderValidator,
     royaltyPooldaoV1ActionOrderValidator
 ) where
 
@@ -80,8 +80,8 @@ depositBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBD.deposi
 royaltyPoolValidator :: Validator
 royaltyPoolValidator = mkValidator cfgForValidator $ wrapValidator PRP.poolValidatorT
 
-royaltyWithdrawRequestValidator :: Validator
-royaltyWithdrawRequestValidator = mkValidator cfgForValidator $ wrapValidator PRWC.royaltyWithdrawOrderValidatorT
+royaltyWithdrawOrderValidator :: Validator
+royaltyWithdrawOrderValidator = mkValidator cfgForValidator $ wrapValidator PRWC.royaltyWithdrawOrderValidatorT
 
 royaltyDepositValidator :: Validator
 royaltyDepositValidator = mkValidator cfgForValidator $ wrapValidator PRD.royaltyDepositValidatorT

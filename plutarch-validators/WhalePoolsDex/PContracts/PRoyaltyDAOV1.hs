@@ -8,6 +8,7 @@ import WhalePoolsDex.PContracts.PRoyaltyPool
 import WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder
 
 import PExtra.Monadic
+import PExtra.Pair
 import Plutarch
 import Plutarch.Api.V2 
 import Plutarch.DataRepr
@@ -15,7 +16,7 @@ import Plutarch.Prelude
 import Plutarch.Extra.TermCont
 import Plutarch.Api.V1.Scripts      (PValidatorHash)
 import PExtra.API                   (assetClassValueOf, PAssetClass(..))
-import Plutarch.Builtin             (pserialiseData)
+import Plutarch.Builtin             (pserialiseData, ppairDataBuiltin)
 import Plutarch.Crypto              (pverifyEd25519Signature)
 import Plutarch.Num                 ((#+))
 import Plutarch.Unsafe              (punsafeCoerce)
@@ -77,6 +78,7 @@ newtype DAOV1Redeemer (s :: S)
                  , "poolInIdx"  ':= PInteger
                  , "poolNft"    ':= PAssetClass
                  , "signatures" ':= PBuiltinList (PAsData PByteString)
+                 , "additionalBytes" ':= PBuiltinList (PAsData PByteString)
                  ]
             )
         )
@@ -93,7 +95,8 @@ validateCommonFieldsAndSignatures
   -> HRec as 
   -> Term s 
     (    PBuiltinList PByteString 
-    :--> PBuiltinList (PAsData PByteString) 
+    :--> PBuiltinList (PAsData PByteString)
+    :--> PBuiltinList (PAsData PByteString)
     :--> PInteger
     :--> PInteger
     :--> PInteger
@@ -103,7 +106,7 @@ validateCommonFieldsAndSignatures
     :--> DAOAction
     :--> PBool
     )
-validateCommonFieldsAndSignatures prevConfig newConfig = plam $ \publicKeys signatures threshold poolFee treasuryFee adminAddress poolAddress treasuryAddress action -> unTermCont $ do
+validateCommonFieldsAndSignatures prevConfig newConfig = plam $ \publicKeys signatures additionalBytesList threshold poolFee treasuryFee adminAddress poolAddress treasuryAddress action -> unTermCont $ do
   let
     prevPoolNft = getField @"poolNft" prevConfig
     prevPoolX   = getField @"poolX"   prevConfig
@@ -140,7 +143,7 @@ validateCommonFieldsAndSignatures prevConfig newConfig = plam $ \publicKeys sign
       prevPoolRoyaltyAddr  #== newPoolRoyaltyAddr   #&&
       (prevPoolNonce #+ 1) #== newPoolNonce
 
-  dataToSign <-
+  requestData <-
     tcon $ (DAOV1RequestDataToSign $
         pdcons @"daoAction" @DAOAction # pdata action
             #$ pdcons @"poolNft" @PAssetClass # pdata newPoolNft
@@ -155,11 +158,20 @@ validateCommonFieldsAndSignatures prevConfig newConfig = plam $ \publicKeys sign
                 # pdnil)
   
   let
-    dataToSignRaw = pserialiseData # (punsafeCoerce dataToSign)
-    signaturesVerificationsResult = pzipWith # plam (\signature publicKey -> pverifyEd25519Signature # publicKey # dataToSignRaw # (pfromData signature)) # signatures # publicKeys
+    dataToSignRaw = pserialiseData # (punsafeCoerce requestData)
+
+    dataToSignList = pmap # plam (\additionalBytes -> (pfromData additionalBytes) <> dataToSignRaw) # additionalBytesList
+
+    signaturesAndPublicKeys = pzipWith # plam (\siganture publicKey -> ppairDataBuiltin # siganture # (pdata publicKey)) # signatures # publicKeys
+
+    verificationResults =
+      pzipWith # 
+        plam (\signatureAndPublicKey dataToSign -> pverifyEd25519Signature # (pfromData (psndBuiltin # signatureAndPublicKey)) # dataToSign # (pfromData (pfstBuiltin # signatureAndPublicKey))) #
+        signaturesAndPublicKeys #
+        dataToSignList
 
     validSignaturesQty =
-      pfoldl # plam (\acc sigantureIsCorrect -> pif sigantureIsCorrect (acc + 1) acc) # 0 # signaturesVerificationsResult
+      pfoldl # plam (\acc sigantureIsCorrect -> pif sigantureIsCorrect (acc + 1) acc) # 0 # verificationResults
 
     validThreshold = threshold #<= validSignaturesQty
 
@@ -239,12 +251,13 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
 
 daoMultisigPolicyValidatorT :: Term s (PBuiltinList PByteString) -> Term s PInteger -> Term s PBool -> Term s (DAOV1Redeemer :--> PScriptContext :--> PBool)
 daoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam $ \redeemer' ctx' -> unTermCont $ do
-  redeemer <- pletFieldsC @'["action", "poolInIdx", "poolNft", "signatures"] redeemer'
+  redeemer <- pletFieldsC @'["action", "poolInIdx", "poolNft", "signatures", "additionalBytes"] redeemer'
   let  
     action     = getField @"action" redeemer
     poolInIdx  = getField @"poolInIdx" redeemer
     poolNft    = getField @"poolNft" redeemer
     signatures = getField @"signatures" redeemer
+    additionalBytesList = getField @"additionalBytes" redeemer
     -- Utxo to cover tx fee. Tx should contains only 2 inputs: Pool + Fee Utxo
     feeUtxoIdx = 1 - poolInIdx
 
@@ -303,7 +316,7 @@ daoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam $ \redeemer'
     updatedPoolFeeNumIsCorrect = pdelay (newPoolFeeNum #<= poolFeeNumUpperLimit #&& poolFeeNumLowerLimit #<= newPoolFeeNum)
     -- poolFee treasuryFee adminAddress poolAddress treasuryAddress
     -- Checks that main pool properties: tokenX, tokenY, tokenLq, tokenNft, feeNum aren't modified
-    validCommonFieldsAndSignatureThreshold = validateCommonFieldsAndSignatures prevConf newConf # daoPhs # signatures # threshold # newPoolFeeNum # newTreasuryFee # newDAOPolicy # poolOutputAddr # newTreasuryAddress # action
+    validCommonFieldsAndSignatureThreshold = validateCommonFieldsAndSignatures prevConf newConf # daoPhs # signatures # additionalBytesList # threshold # newPoolFeeNum # newTreasuryFee # newDAOPolicy # poolOutputAddr # newTreasuryAddress # action
 
     -- Checks that pool value and address aren't modified
     poolValueAndAddressAreTheSame = pdelay (poolInputValue #== poolOutputValue #&& poolInputAddr #== poolOutputAddr)

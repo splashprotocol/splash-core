@@ -98,13 +98,22 @@ instance DerivePlutusType WithdrawData where type DPTStrat _ = PlutusTypeData
 
 instance PTryFrom PData WithdrawData
 
+--   `additionalBytes` is a byte array representing data that must be added 
+--   at the start of the raw `DataToSign` version. The necessity of 
+--   `additionalBytes` arises from the combination of CIP-30 and CIP-0008, 
+--   which introduce user-related data into `messageToSign`.
+--   To ensure the creation of a correct `messageToSign`, this data is 
+--   incorporated within the contract when constructing the final 
+--   `messageToSign`, combining `additionalBytes` with `OperationRelatedData`.
+
 newtype RoyaltyWithdrawConfig (s :: S)
     = RoyaltyWithdrawConfig
         ( Term
             s
             ( PDataRecord
-                '[ "withdrawData" ':= WithdrawData      
-                 , "signature"    ':= PByteString
+                '[ "withdrawData"    ':= WithdrawData      
+                 , "signature"       ':= PByteString
+                 , "additionalBytes" ':= PByteString
                  ]
             )
         )

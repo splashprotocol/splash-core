@@ -8,7 +8,8 @@ module WhalePoolsDex.PValidators (
     depositBalanceValidator,
     redeemBalanceValidator,
     poolBalanceValidator,
-    royaltyPoolValidator
+    royaltyPoolValidator,
+    royaltyWithdrawOrderValidator
 ) where
 
 import PlutusLedgerApi.V1.Scripts (Validator (getValidator))
@@ -68,8 +69,8 @@ redeemBalanceValidator = mkValidator $ wrapValidator PBR.redeemValidatorT
 royaltyPoolValidator :: Validator
 royaltyPoolValidator = mkValidator $ wrapValidator PRP.poolValidatorT
 
-royaltyWithdrawRequestValidator :: Validator
-royaltyWithdrawRequestValidator = mkValidator $ wrapValidator PRWC.royaltyWithdrawOrderValidatorT
+royaltyWithdrawOrderValidator :: Validator
+royaltyWithdrawOrderValidator = mkValidator $ wrapValidator PRWC.royaltyWithdrawOrderValidatorT
 
 validatorAddress :: Validator -> Address
 validatorAddress = scriptHashAddress . validatorHash
