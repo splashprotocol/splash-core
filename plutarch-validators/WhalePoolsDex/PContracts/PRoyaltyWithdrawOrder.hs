@@ -68,9 +68,6 @@ import qualified Data.Text.Encoding      as E
     -- | `royaltyAddress`   | The public key hash of the     |
     -- |                    | royalty recipient's address.   |
     -- +--------------------+--------------------------------+
-    -- | `royaltyPubKey`    | The raw public key associated  |
-    -- |                    | with the royalty withdrawal.   |
-    -- +--------------------+--------------------------------+
     -- | `exFee`            | The fee to be paid for the     |
     -- |                    | transaction processing (batcher|
     -- |                    | fee).                          |
@@ -85,7 +82,6 @@ newtype WithdrawData (s :: S)
                  , "withdrawRoyaltyX" ':= PInteger
                  , "withdrawRoyaltyY" ':= PInteger
                  , "royaltyAddress"   ':= PPubKeyHash
-                 , "royaltyPubKey"    ':= PByteString
                  , "exFee"            ':= PInteger        
                  ]
             )

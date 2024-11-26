@@ -13,9 +13,9 @@ import Plutarch.Extra.TermCont
 import Plutarch.Crypto (pverifyEd25519Signature, pblake2b_256)
 import Plutarch.Unsafe (punsafeCoerce)
 
-
 import PExtra.API
 import PExtra.Monadic (tlet, tletField, tmatch, tcon)
+import PExtra.Ada
 
 import WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder
 import WhalePoolsDex.PContracts.PRoyaltyPool  (RoyaltyPoolConfig(..), findPoolOutput)
@@ -25,6 +25,7 @@ import Data.Text                    as T
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16  as Hex
 import qualified Data.Text.Encoding      as E
+import Plutarch.Trace
 
 mkByteString :: T.Text -> BS.ByteString
 mkByteString input = unsafeFromEither (Hex.decode . E.encodeUtf8 $ input)
@@ -34,7 +35,7 @@ unsafeFromEither (Left err)    = Prelude.error ("Err:" ++ show err)
 unsafeFromEither (Right value) = value
 
 royaltyWithdrawRequestScriptHash :: String
-royaltyWithdrawRequestScriptHash = "40a533ea4e3023c62912f029c7ad388bf3c2254e9c7fb3450024bc6e"
+royaltyWithdrawRequestScriptHash = "92c094b90cf3637a96a13e9bc9a04ce8bb7e48c7ed0b5d1cc5ca7332"
 
 royaltyWithdrawRequestScriptHashP :: Term s PValidatorHash
 royaltyWithdrawRequestScriptHashP = pcon $ PValidatorHash $ phexByteStr royaltyWithdrawRequestScriptHash
@@ -142,12 +143,11 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
         additionalBytes = getField @"additionalBytes" conf
         withdrawData'   = pfromData withdrawDataRaw
         
-    withdrawData <- pletFieldsC @'["poolNft", "withdrawRoyaltyX", "withdrawRoyaltyY", "royaltyAddress", "royaltyPubKey", "exFee"] withdrawData'
+    withdrawData <- pletFieldsC @'["poolNft", "withdrawRoyaltyX", "withdrawRoyaltyY", "exFee"] withdrawData'
     let
         poolNft          = getField @"poolNft"          withdrawData
         withdrawRoyaltyX = getField @"withdrawRoyaltyX" withdrawData
         withdrawRoyaltyY = getField @"withdrawRoyaltyY" withdrawData
-        royaltyPubKey    = getField @"royaltyPubKey"    withdrawData
     
     -- Extract input pool
     poolIn' <- tlet $ pelemAt # poolInIx # inputs
@@ -157,7 +157,7 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
 
     parsedPoolInput <- pletFieldsC @'["datum", "address", "value"] poolInput
     inputDatum  <- tlet $ extractPoolConfigFromDatum parsedPoolInput
-    prevConfig  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "royaltyFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "treasuryAddress", "royaltyPubKeyHash256", "nonce"] inputDatum
+    prevConfig  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "royaltyFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "treasuryAddress", "royaltyPubKey", "nonce"] inputDatum
     let
         {-|
             -- To ensure the immutability of the pool datum, all fields should be extracted from the input pool datum, 
@@ -177,14 +177,20 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
         prevRoyaltyY          = getField @"royaltyY" prevConfig
         prevDAOPolicy         = getField @"DAOPolicy" prevConfig
         prevTreasuryAddress   = getField @"treasuryAddress" prevConfig
-        prevRoyaltyPubKeyHash256 = getField @"royaltyPubKeyHash256" prevConfig
-        prevNonce                = getField @"nonce" prevConfig
+        prevRoyaltyPubKey     = getField @"royaltyPubKey" prevConfig
+        prevNonce             = getField @"nonce" prevConfig
 
         -- Input value related fields
         prevPoolValue = getField @"value" parsedPoolInput
         prevXValue    = assetClassValueOf # prevPoolValue # prevPoolX
         prevYValue    = assetClassValueOf # prevPoolValue # prevPoolY
         prevLqValue   = assetClassValueOf # prevPoolValue # prevPoolLq
+
+        prevLovelaceToken2Token =
+            pif
+                ((prevPoolX #== pAdaAssetClass) #|| (prevPoolY #== pAdaAssetClass))
+                (pconstant 0)
+                (assetClassValueOf # prevPoolValue # pAdaAssetClass)
 
         prevPoolValueLength = pValueLength # prevPoolValue
 
@@ -214,6 +220,12 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
         newXValue    = assetClassValueOf # newPoolValue # prevPoolX
         newYValue    = assetClassValueOf # newPoolValue # prevPoolY
         newLqValue   = assetClassValueOf # newPoolValue # prevPoolLq
+
+        newLovelaceToken2Token =
+            pif
+                ((prevPoolX #== pAdaAssetClass) #|| (prevPoolY #== pAdaAssetClass))
+                (pconstant 0)
+                (assetClassValueOf # newPoolValue # pAdaAssetClass)
 
         newPoolValueLength = pValueLength # newPoolValue
 
@@ -248,6 +260,8 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
             (prevYValue - withdrawRoyaltyY) #== newYValue #&&
             prevLqValue #== newLqValue
 
+        correctLovelaceToken2Token = prevLovelaceToken2Token #== newLovelaceToken2Token
+
         -- Signature verification
     dataToSign <- 
         tcon $ (WithdrawRoyaltyDataToSign $
@@ -258,9 +272,7 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
     let                    
         dataToSignRaw = (additionalBytes <> pserialiseData # (punsafeCoerce dataToSign))
 
-        signatureIsCorrect = pverifyEd25519Signature # royaltyPubKey # dataToSignRaw # signature
-
-        correctPubKey = (pblake2b_256 # royaltyPubKey) #== prevRoyaltyPubKeyHash256
+        signatureIsCorrect = pverifyEd25519Signature # prevRoyaltyPubKey # dataToSignRaw # signature
 
         -- Tx should contains only two inputs: pool, withdraw request
         strictInputs = (plength # inputs) #== 2
@@ -281,7 +293,7 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
                 #$ pdcons @"royaltyY" @PInteger # pdata newRoyaltyY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
-                #$ pdcons @"royaltyPubKeyHash256" @PByteString # pdata prevRoyaltyPubKeyHash256
+                #$ pdcons @"royaltyPubKey" @PByteString # pdata prevRoyaltyPubKey
                 #$ pdcons @"nonce" @PInteger # pdata (prevNonce + 1)
                     # pdnil)
     
@@ -297,7 +309,7 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
             signatureIsCorrect #&&
             strictInputs #&&
             finalPoolConfigIsCorrect #&&
-            correctPubKey #&&
-            correctPool
+            correctPool #&&
+            correctLovelaceToken2Token
 
     pure withdrawIsCorrect

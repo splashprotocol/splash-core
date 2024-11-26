@@ -9,6 +9,7 @@ import WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder
 
 import PExtra.Monadic
 import PExtra.Pair
+import PExtra.Ada
 import Plutarch
 import Plutarch.Api.V2 
 import Plutarch.DataRepr
@@ -88,9 +89,9 @@ newtype DAOV1Redeemer (s :: S)
 
 instance DerivePlutusType DAOV1Redeemer where type DPTStrat _ = PlutusTypeData
 
--- All actions shouldn't modify main poolConfig elements: poolNft, poolX, poolY, poolLq, royaltyFee, royaltyPubKeyHash256, royaltyX, royaltyY
+-- All actions shouldn't modify main poolConfig elements: poolNft, poolX, poolY, poolLq, royaltyFee, royaltyPubKey, royaltyX, royaltyY
 validateCommonFieldsAndSignatures 
-  :: PMemberFields RoyaltyPoolConfig '["poolNft", "poolX", "poolY", "poolLq", "royaltyFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "royaltyPubKeyHash256", "nonce"] s as
+  :: PMemberFields RoyaltyPoolConfig '["poolNft", "poolX", "poolY", "poolLq", "royaltyFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "royaltyPubKey", "nonce"] s as
   => HRec as 
   -> HRec as 
   -> Term s 
@@ -117,7 +118,7 @@ validateCommonFieldsAndSignatures prevConfig newConfig = plam $ \publicKeys sign
     prevPoolRoyaltyX = getField @"royaltyX" prevConfig
     prevPoolRoyaltyY = getField @"royaltyY" prevConfig
     prevPoolRoyaltyFee   = getField @"royaltyFee" prevConfig
-    prevPoolRoyaltyAddr  = getField @"royaltyPubKeyHash256" prevConfig
+    prevPoolRoyaltyAddr  = getField @"royaltyPubKey" prevConfig
     prevPoolNonce = pfromData $ getField @"nonce" prevConfig
 
     newPoolNft  = getField @"poolNft" newConfig
@@ -129,7 +130,7 @@ validateCommonFieldsAndSignatures prevConfig newConfig = plam $ \publicKeys sign
     newPoolRoyaltyX = getField @"royaltyX" newConfig
     newPoolRoyaltyY = getField @"royaltyY" newConfig
     newPoolRoyaltyFee   = getField @"royaltyFee" newConfig
-    newPoolRoyaltyAddr  = getField @"royaltyPubKeyHash256" newConfig
+    newPoolRoyaltyAddr  = getField @"royaltyPubKey" newConfig
     newPoolNonce = pfromData $ getField @"nonce" newConfig
 
     commonFieldsValid = 
@@ -224,9 +225,21 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
     prevPoolYValue   = assetClassValueOf # prevPoolValue # poolY
     prevPoolLqValue  = assetClassValueOf # prevPoolValue # poolLq
 
+    prevLovelaceToken2Token =
+      pif
+          ((poolX #== pAdaAssetClass) #|| (poolY #== pAdaAssetClass))
+          (pconstant 0)
+          (assetClassValueOf # prevPoolValue # pAdaAssetClass)
+
     newPoolXValue   = assetClassValueOf # newPoolValue # poolX
     newPoolYValue   = assetClassValueOf # newPoolValue # poolY
     newPoolLqValue  = assetClassValueOf # newPoolValue # poolLq
+
+    newLovelaceToken2Token =
+      pif
+          ((poolX #== pAdaAssetClass) #|| (poolY #== pAdaAssetClass))
+          (pconstant 0)
+          (assetClassValueOf # newPoolValue # pAdaAssetClass)
 
     -- xDiffInValue, yDiffInValue, xDiffInDatum and yDiffInDatum will be negative values, because we are withdrawing treasury  
     xDiffInValue = newPoolXValue - prevPoolXValue
@@ -247,7 +260,9 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
 
     treasuryAddrIsTheSame = prevTreasuryAddress #== newTreasuryAddress
 
-  pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1) #&& validFinalTreasuryXValue #&& validFinalTreasuryYValue
+    correctLovelaceToken2Token = prevLovelaceToken2Token #== newLovelaceToken2Token
+
+  pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1) #&& validFinalTreasuryXValue #&& validFinalTreasuryYValue #&& correctLovelaceToken2Token
 
 daoMultisigPolicyValidatorT :: Term s (PBuiltinList PByteString) -> Term s PInteger -> Term s PBool -> Term s (DAOV1Redeemer :--> PScriptContext :--> PBool)
 daoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam $ \redeemer' ctx' -> unTermCont $ do
@@ -291,8 +306,8 @@ daoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam $ \redeemer'
   poolInputAddr  <- tletField @"address" poolInputResolved
   poolOutputAddr <- tletField @"address" successor
 
-  prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "lqBound", "treasuryAddress", "royaltyFee", "royaltyPubKeyHash256", "nonce"] poolInputDatum
-  newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "lqBound", "treasuryAddress", "royaltyFee", "royaltyPubKeyHash256", "nonce"] poolOutputDatum
+  prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "lqBound", "treasuryAddress", "royaltyFee", "royaltyPubKey", "nonce"] poolInputDatum
+  newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "lqBound", "treasuryAddress", "royaltyFee", "royaltyPubKey", "nonce"] poolOutputDatum
   let  
     prevDAOPolicy = getField @"DAOPolicy" prevConf
     newDAOPolicy  = getField @"DAOPolicy" newConf
