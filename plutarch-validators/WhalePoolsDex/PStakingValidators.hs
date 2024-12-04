@@ -17,7 +17,7 @@ import qualified WhalePoolsDex.PContracts.PSimpleStaking      as Staking
 import qualified WhalePoolsDex.PContracts.PStakingWithPkhLock as PkhStaking
 
 cfgForStakingValidator :: Config
-cfgForStakingValidator = Config NoTracing
+cfgForStakingValidator = Config DoTracing
 
 wrapStakingValidator ::
     PIsData rdmr =>

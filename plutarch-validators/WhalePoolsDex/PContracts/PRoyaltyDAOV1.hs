@@ -22,6 +22,7 @@ import Plutarch.Crypto              (pverifyEd25519Signature)
 import Plutarch.Num                 ((#+))
 import Plutarch.Unsafe              (punsafeCoerce)
 import Plutarch.Api.V1.Value        (pisAdaOnlyValue)
+import Plutarch.Trace
 
 {-|
 The DAO V1 contract introduces a streamlined approach for managing operations in 
@@ -107,7 +108,7 @@ validateCommonFieldsAndSignatures
     :--> DAOAction
     :--> PBool
     )
-validateCommonFieldsAndSignatures prevConfig newConfig = plam $ \publicKeys signatures additionalBytesList threshold poolFee treasuryFee adminAddress poolAddress treasuryAddress action -> unTermCont $ do
+validateCommonFieldsAndSignatures prevConfig newConfig = plam $ \publicKeys signatures additionalBytesList threshold newPoolFee newTreasuryFee newAdminAddress newPoolAddress newTreasuryAddress action -> unTermCont $ do
   let
     prevPoolNft = getField @"poolNft" prevConfig
     prevPoolX   = getField @"poolX"   prevConfig
@@ -148,14 +149,14 @@ validateCommonFieldsAndSignatures prevConfig newConfig = plam $ \publicKeys sign
     tcon $ (DAOV1RequestDataToSign $
         pdcons @"daoAction" @DAOAction # pdata action
             #$ pdcons @"poolNft" @PAssetClass # pdata newPoolNft
-            #$ pdcons @"poolFee" @PInteger # pdata poolFee
-            #$ pdcons @"treasuryFee" @PInteger # pdata treasuryFee
-            #$ pdcons @"adminAddress" @(PBuiltinList (PAsData PStakingCredential)) # pdata adminAddress
-            #$ pdcons @"poolAddress" @PAddress # pdata poolAddress
-            #$ pdcons @"treasuryAddress" @PValidatorHash # pdata treasuryAddress
+            #$ pdcons @"poolFee" @PInteger # pdata newPoolFee
+            #$ pdcons @"treasuryFee" @PInteger # pdata newTreasuryFee
+            #$ pdcons @"adminAddress" @(PBuiltinList (PAsData PStakingCredential)) # pdata newAdminAddress
+            #$ pdcons @"poolAddress" @PAddress # pdata newPoolAddress
+            #$ pdcons @"treasuryAddress" @PValidatorHash # pdata newTreasuryAddress
             #$ pdcons @"treasuryXWithdraw" @PInteger # pdata (newPoolTreasuryX - prevPoolTreasuryX)
             #$ pdcons @"treasuryYWithdraw" @PInteger # pdata (newPoolTreasuryY - prevPoolTreasuryY)
-            #$ pdcons @"nonce" @PInteger # pdata newPoolNonce
+            #$ pdcons @"nonce" @PInteger # pdata prevPoolNonce
                 # pdnil)
   
   let
@@ -167,7 +168,15 @@ validateCommonFieldsAndSignatures prevConfig newConfig = plam $ \publicKeys sign
 
     verificationResults =
       pzipWith # 
-        plam (\signatureAndPublicKey dataToSign -> pverifyEd25519Signature # (pfromData (psndBuiltin # signatureAndPublicKey)) # dataToSign # (pfromData (pfstBuiltin # signatureAndPublicKey))) #
+        plam (\signatureAndPublicKey dataToSign -> unTermCont $ do
+          ptraceC "public key"
+          ptraceC $ pshow (psndBuiltin # signatureAndPublicKey)
+          ptraceC "signature"
+          ptraceC $ pshow (pfstBuiltin # signatureAndPublicKey)
+          ptraceC "dataToSign"
+          ptraceC $ pshow dataToSign
+          pure $ pverifyEd25519Signature # (pfromData (psndBuiltin # signatureAndPublicKey)) # dataToSign # (pfromData (pfstBuiltin # signatureAndPublicKey))
+        ) #
         signaturesAndPublicKeys #
         dataToSignList
 
@@ -267,6 +276,7 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
 daoMultisigPolicyValidatorT :: Term s (PBuiltinList PByteString) -> Term s PInteger -> Term s PBool -> Term s (DAOV1Redeemer :--> PScriptContext :--> PBool)
 daoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam $ \redeemer' ctx' -> unTermCont $ do
   redeemer <- pletFieldsC @'["action", "poolInIdx", "poolNft", "signatures", "additionalBytes"] redeemer'
+  ptraceC "1"
   let  
     action     = getField @"action" redeemer
     poolInIdx  = getField @"poolInIdx" redeemer
@@ -277,13 +287,16 @@ daoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam $ \redeemer'
     feeUtxoIdx = 1 - poolInIdx
 
   ctx <- pletFieldsC @'["txInfo", "purpose"] ctx'
+  ptraceC "2"
 
   PRewarding _ <- pmatchC $ getField @"purpose" ctx
+  ptraceC "3"
   let txinfo' = getField @"txInfo" ctx
 
   txInfo  <- pletFieldsC @'["inputs", "outputs"] txinfo'
   inputs  <- tletUnwrap $ getField @"inputs" txInfo
   outputs <- tletUnwrap $ getField @"outputs" txInfo
+  ptraceC "4"
 
   poolInput' <- tlet $ pelemAt # poolInIdx # inputs
   poolInput  <- pletFieldsC @'["outRef", "resolved"] poolInput'
@@ -306,8 +319,9 @@ daoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam $ \redeemer'
   poolInputAddr  <- tletField @"address" poolInputResolved
   poolOutputAddr <- tletField @"address" successor
 
-  prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "lqBound", "treasuryAddress", "royaltyFee", "royaltyPubKey", "nonce"] poolInputDatum
-  newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "lqBound", "treasuryAddress", "royaltyFee", "royaltyPubKey", "nonce"] poolOutputDatum
+  prevConf <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "treasuryAddress", "royaltyFee", "royaltyPubKey", "nonce"] poolInputDatum
+  newConf  <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "treasuryAddress", "royaltyFee", "royaltyPubKey", "nonce"] poolOutputDatum
+  ptraceC "6"
   let  
     prevDAOPolicy = getField @"DAOPolicy" prevConf
     newDAOPolicy  = getField @"DAOPolicy" newConf
@@ -474,5 +488,14 @@ daoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam $ \redeemer'
         pforce daoPolicyIsTheSame #&&
         pforce poolValueAndAddressAreTheSame #&&
         pforce updatedPoolFeeNumIsCorrect
+
+  ptraceC "correctTxInputsQty"
+  ptraceC $ pshow correctTxInputsQty
+  ptraceC "feeUtxoContainsOnlyAda"
+  ptraceC $ pshow feeUtxoContainsOnlyAda
+  ptraceC "validCommonFieldsAndSignatureThreshold"
+  ptraceC $ pshow validCommonFieldsAndSignatureThreshold
+  ptraceC "validAction"
+  ptraceC $ pshow validAction
 
   pure $ correctTxInputsQty #&& feeUtxoContainsOnlyAda #&& validCommonFieldsAndSignatureThreshold #&& validAction

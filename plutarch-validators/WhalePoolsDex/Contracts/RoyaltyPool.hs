@@ -31,7 +31,7 @@ data RoyaltyPoolConfig = RoyaltyPoolConfig
     , royaltyY    :: Integer
     , daoPolicy   :: [StakingCredential]
     , treasuryAddress :: ValidatorHash
-    , royaltyPubKeyHash256 :: BuiltinByteString
+    , royaltyPubKey :: BuiltinByteString
     , nonce :: Integer
     }
     deriving stock (Show)

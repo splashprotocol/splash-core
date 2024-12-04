@@ -29,7 +29,7 @@ import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawPool as PRWP
 import Data.ByteString (ByteString)
 
 cfgForMintingValidator :: Config
-cfgForMintingValidator = Config NoTracing
+cfgForMintingValidator = Config DoTracing
 
 wrapMintingValidator ::
     PIsData rdmr =>

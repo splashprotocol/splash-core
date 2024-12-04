@@ -34,12 +34,13 @@ unsafeFromEither (Left err)    = Prelude.error ("Err:" ++ show err)
 unsafeFromEither (Right value) = value
 
 daoV1RoyaltyPoolScriptHash :: BuiltinByteString
-daoV1RoyaltyPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "696d646ed9d942434fbba83e76f91839f118b8ee358799a15ab72be4"
+daoV1RoyaltyPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "9d9cb5dc5f037ebc29ee07ec88c419c980f870a4c5121e363c47f791"
 
 daoV1RoyaltyPoolCred :: Term s PStakingCredential
 daoV1RoyaltyPoolCred = pconstant (StakingHash . ScriptCredential . ValidatorHash $ daoV1RoyaltyPoolScriptHash)
 
 data DAOAction (s :: S) = WithdrawTreasury | ChangeStakePart | ChangeTreasuryFee | ChangeTreasuryAddress | ChangeAdminAddress | ChangePoolFee
+    deriving (Generic, PShow)
 
 instance PIsData DAOAction where
     pfromDataImpl tx =
