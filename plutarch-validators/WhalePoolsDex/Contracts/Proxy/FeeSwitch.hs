@@ -9,6 +9,7 @@ module WhalePoolsDex.Contracts.Proxy.FeeSwitch (
 import qualified PlutusTx
 import PlutusTx.Builtins
 import PlutusTx.IsData.Class
+import PlutusLedgerApi.V1.Value
 
 data DAOAction = WithdrawTreasury | ChangeStakePart | ChangeTreasuryFee | ChangeTreasuryAddress | ChangeAdminAddress | ChangePoolFee
     deriving (Show)
@@ -43,6 +44,7 @@ instance ToData DAOAction where
 data DAORedeemer = DAORedeemer
     { action    :: DAOAction
     , poolInIdx :: Integer
+    , poolNft   :: AssetClass
     }
     deriving (Show)
 

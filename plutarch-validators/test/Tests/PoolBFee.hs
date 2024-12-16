@@ -36,11 +36,11 @@ import Hedgehog.Range as Range
 import Debug.Trace
 
 checkPoolBFee = testGroup "CheckPoolBFeeContract"
-  [ -- HH.testProperty "pool_validator_hash_is_correct" validPoolHash should be fixed in next pr
-  HH.testProperty "pool_change_stake_part_is_correct (correct minting)" successPoolChangeStakePartCorrectMinting
+  [ HH.testProperty "pool_validator_hash_is_correct" validPoolHash
+  , HH.testProperty "pool_change_stake_part_is_correct (correct minting)" successPoolChangeStakePartCorrectMinting
   , HH.testProperty "pool_change_stake_part_is_incorrect (incorrect minting)" failedPoolChangeStakePartIncorrectMinting
   , HH.testProperty "pool_deposit_is_correct" successPoolDeposit
-  -- , HH.testProperty "pool_swap_is_correct" successPoolSwap should be fixed in next pr
+  , HH.testProperty "pool_swap_is_correct" successPoolSwap
   , HH.testProperty "pool_swap_incorrect_treasury" incorrectPoolYTreasury
   , HH.testProperty "pool_swap_incorrect_datum" incorrectPoolSwapDatum
   , HH.testProperty "incorrect_final_pool_tokens_qty" incorrectPoolTokensQtyInFinalValue
@@ -528,7 +528,7 @@ successPoolChangeStakePartCorrectMinting = withTests 1 $ property $ do
   let
     previousSc = Just $ StakingHash (PubKeyCredential stakeAdminPkh)
     newSc      = Just $ StakingHash (PubKeyCredential newPkhForSC)
-    sc  = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 1 True))
+    sc  = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator [stakeAdminPkh] 1 True))
 
   poolTxRef <- forAll genTxOutRef
   let
@@ -557,8 +557,8 @@ failedPoolChangeStakePartIncorrectMinting = withTests 1 $ property $ do
     previousSc = Just $ StakingHash (PubKeyCredential stakeAdminPkh)
     newSc      = Just $ StakingHash (PubKeyCredential newPkhForSC)
 
-    correctDAO    = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 1 True))
-    incorrectDAO  = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 4 True))
+    correctDAO    = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator [stakeAdminPkh] 1 True))
+    incorrectDAO  = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator [stakeAdminPkh] 4 True))
   
   poolTxRef <- forAll genTxOutRef
   let

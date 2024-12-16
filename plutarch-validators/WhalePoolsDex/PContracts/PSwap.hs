@@ -119,7 +119,7 @@ swapValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
         quoteIn  = assetClassValueOf # selfValue   # quote
         quoteOut = assetClassValueOf # rewardValue # quote
 
-    quoteDelta <- tlet $ quoteOut - quoteIn
+    quoteDelta  <- tlet $ quoteOut - quoteIn
     quoteAmount <-
         tlet $
             pif

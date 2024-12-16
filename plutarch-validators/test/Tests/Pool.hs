@@ -524,7 +524,7 @@ successPoolChangeStakePartCorrectMinting = withTests 1 $ property $ do
   let
     previousSc = Just $ StakingHash (PubKeyCredential stakeAdminPkh)
     newSc      = Just $ StakingHash (PubKeyCredential newPkhForSC)
-    daoSC      = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 1 True))
+    daoSC      = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator [stakeAdminPkh] 1 True))
 
   poolTxRef <- forAll genTxOutRef
   let
@@ -552,8 +552,8 @@ failedPoolChangeStakePartIncorrectMinting = withTests 1 $ property $ do
   let 
     previousSc = Just $ StakingHash (PubKeyCredential stakeAdminPkh)
     newSc      = Just $ StakingHash (PubKeyCredential newPkhForSC)
-    daoSC      = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 1 True))
-    incorrectDaoSC      = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator nft [stakeAdminPkh] 4 True))
+    daoSC      = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator [stakeAdminPkh] 1 True))
+    incorrectDaoSC = StakingHash $ ScriptCredential $ ValidatorHash $ getScriptHash $ scriptHash (unMintingPolicyScript (daoMintPolicyValidator [stakeAdminPkh] 4 True))
   
   poolTxRef <- forAll genTxOutRef
   let
