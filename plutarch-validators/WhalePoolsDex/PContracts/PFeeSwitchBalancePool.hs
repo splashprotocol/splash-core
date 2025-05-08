@@ -19,6 +19,7 @@ import WhalePoolsDex.PContracts.PPool        (findPoolOutput)
 import Plutarch.Api.V1.Scripts               (PValidatorHash)
 import Plutarch.Trace
 import Plutarch.Extra.TermCont
+import PExtra.PTriple
 
 extractBalancePoolConfig :: Term s (PTxOut :--> BalancePoolConfig)
 extractBalancePoolConfig = plam $ \txOut -> unTermCont $ do
@@ -162,11 +163,12 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
 
   pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1) #&& validFinalTreasuryXValue #&& validFinalTreasuryYValue
 
-daoMultisigPolicyValidatorT :: Term s PAssetClass -> Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple DAOAction PInteger) :--> PScriptContext :--> PBool)
-daoMultisigPolicyValidatorT poolNft daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx' -> unTermCont $ do
+daoMultisigPolicyValidatorT :: Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple3 DAOAction PInteger PAssetClass) :--> PScriptContext :--> PBool)
+daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx' -> unTermCont $ do
   let  
     action     = pfromData $ pfield @"_0" # redeemer
     poolInIdx  = pfromData $ pfield @"_1" # redeemer
+    poolNft    = pfromData $ pfield @"_2" # redeemer
 
   ctx <- pletFieldsC @'["txInfo", "purpose"] ctx'
 

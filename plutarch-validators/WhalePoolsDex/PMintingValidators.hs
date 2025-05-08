@@ -58,11 +58,11 @@ daoMintPolicyValidator stakeAdminPkh threshold lpFeeIsEditable =
         wrapMintingValidator $
             daoMultisigPolicyValidatorT (pconstant stakeAdminPkh) (pconstant threshold) (pconstant lpFeeIsEditable)
 
-daoBalanceMintPolicyValidator :: AssetClass -> [PubKeyHash] -> Integer -> Bool -> MintingPolicy
-daoBalanceMintPolicyValidator poolNft stakeAdminPkh threshold lpFeeIsEditable = 
+daoBalanceMintPolicyValidator :: [PubKeyHash] -> Integer -> Bool -> MintingPolicy
+daoBalanceMintPolicyValidator stakeAdminPkh threshold lpFeeIsEditable = 
     mkMintingPolicy cfgForMintingValidator $ 
         wrapMintingValidator $
-            BDao.daoMultisigPolicyValidatorT (pconstant poolNft) (pconstant stakeAdminPkh) (pconstant threshold) (pconstant lpFeeIsEditable)
+            BDao.daoMultisigPolicyValidatorT (pconstant stakeAdminPkh) (pconstant threshold) (pconstant lpFeeIsEditable)
 
 royaltyPoolDAOV1Validator :: [ByteString] -> Integer -> Bool -> MintingPolicy
 royaltyPoolDAOV1Validator admins threshold lpFeeIsEditable = 
