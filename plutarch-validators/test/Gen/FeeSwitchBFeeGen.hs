@@ -18,7 +18,7 @@ import HaskellWorks.Hedgehog.Gen hiding (MonadGen)
 
 import Data.Text as T
 
-import WhalePoolsDex.PContracts.PFeeSwitchBFee
+import WhalePoolsDex.PContracts.PPoolDAOV1BFee
 
 import qualified PlutusLedgerApi.V1.Interval as Interval
 import PlutusLedgerApi.V1.Value

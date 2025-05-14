@@ -1,4 +1,4 @@
-module WhalePoolsDex.PContracts.PFeeSwitch where
+module WhalePoolsDex.PContracts.PPoolDAOV1 where
 
 import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit)
 import PExtra.API (assetClassValueOf, ptryFromData, PAssetClass(..))

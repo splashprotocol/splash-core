@@ -116,8 +116,8 @@ library
     WhalePoolsDex.PContracts.PSwap
     WhalePoolsDex.PContracts.PSimpleStaking
     WhalePoolsDex.PContracts.PStakingWithPkhLock
-    WhalePoolsDex.PContracts.PFeeSwitchBalancePool
-    WhalePoolsDex.PContracts.PFeeSwitch
+    WhalePoolsDex.PContracts.PBalancePoolDAOV1
+    WhalePoolsDex.PContracts.PPoolDAOV1
     WhalePoolsDex.PContracts.PRoyaltyDAOV1
     WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder
     WhalePoolsDex.PContracts.PRoyaltyWithdrawPool

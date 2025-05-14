@@ -22,7 +22,7 @@ import PExtra.PTriple (PTuple3, ptuple3)
 
 import WhalePoolsDex.PContracts.PApi                  (containsSignature, getRewardValue', maxLqCap, zeroAsData)
 import WhalePoolsDex.PContracts.POrder                (OrderAction (Apply, Refund), OrderRedeemer)
-import WhalePoolsDex.PContracts.PFeeSwitchBalancePool (extractBalancePoolConfig)
+import WhalePoolsDex.PContracts.PBalancePoolDAOV1 (extractBalancePoolConfig)
 
 import qualified WhalePoolsDex.Contracts.Proxy.RedeemBalance as R
 

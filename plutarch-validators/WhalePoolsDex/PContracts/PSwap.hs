@@ -23,7 +23,7 @@ import PExtra.Monadic (tlet, tletField, tmatch)
 
 import WhalePoolsDex.PContracts.PApi
 import WhalePoolsDex.PContracts.POrder     (OrderAction (..), OrderRedeemer (..))
-import WhalePoolsDex.PContracts.PFeeSwitch (extractPoolConfig)
+import WhalePoolsDex.PContracts.PPoolDAOV1 (extractPoolConfig)
 
 import qualified WhalePoolsDex.Contracts.Proxy.Swap as S
 

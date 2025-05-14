@@ -17,13 +17,13 @@ import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
 
 import qualified WhalePoolsDex.PContracts.PAssets as A
-import WhalePoolsDex.PContracts.PFeeSwitch
+import WhalePoolsDex.PContracts.PPoolDAOV1
 import PlutusLedgerApi.V1.Scripts (MintingPolicy(..))
 import PlutusLedgerApi.V1.Value   (TokenName(..), AssetClass(..))
 import PlutusLedgerApi.V1.Crypto  (PubKeyHash)
 import PlutusLedgerApi.V1.Contexts
 import PlutusTx.Builtins.Internal
-import qualified WhalePoolsDex.PContracts.PFeeSwitchBalancePool as BDao
+import qualified WhalePoolsDex.PContracts.PBalancePoolDAOV1 as BDao
 import qualified WhalePoolsDex.PContracts.PRoyaltyDAOV1 as PRDAOV1
 import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawPool as PRWP
 import Data.ByteString (ByteString)
@@ -52,17 +52,17 @@ poolLqMiningValidator oref tn emission =
         wrapMintingValidator $
             A.poolLqMintValidatorT (pconstant oref) (pconstant tn) (pconstant emission)
 
-daoMintPolicyValidator :: [PubKeyHash] -> Integer -> Bool -> MintingPolicy
-daoMintPolicyValidator stakeAdminPkh threshold lpFeeIsEditable = 
+daoMintPolicyValidator :: [ByteString] -> Integer -> Bool -> MintingPolicy
+daoMintPolicyValidator admins threshold lpFeeIsEditable = 
     mkMintingPolicy cfgForMintingValidator $ 
         wrapMintingValidator $
-            daoMultisigPolicyValidatorT (pconstant stakeAdminPkh) (pconstant threshold) (pconstant lpFeeIsEditable)
+            daoMultisigPolicyValidatorT (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable)
 
-daoBalanceMintPolicyValidator :: [PubKeyHash] -> Integer -> Bool -> MintingPolicy
-daoBalanceMintPolicyValidator stakeAdminPkh threshold lpFeeIsEditable = 
+daoBalanceMintPolicyValidator :: [ByteString] -> Integer -> Bool -> MintingPolicy
+daoBalanceMintPolicyValidator admins threshold lpFeeIsEditable = 
     mkMintingPolicy cfgForMintingValidator $ 
         wrapMintingValidator $
-            BDao.daoMultisigPolicyValidatorT (pconstant stakeAdminPkh) (pconstant threshold) (pconstant lpFeeIsEditable)
+            BDao.daoMultisigPolicyValidatorT (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable)
 
 royaltyPoolDAOV1Validator :: [ByteString] -> Integer -> Bool -> MintingPolicy
 royaltyPoolDAOV1Validator admins threshold lpFeeIsEditable = 

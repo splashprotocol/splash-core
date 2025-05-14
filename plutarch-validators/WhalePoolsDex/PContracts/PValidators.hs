@@ -32,6 +32,8 @@ import Plutarch.Api.V2.Contexts (PScriptContext)
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
 
+import PlutusLedgerApi.V1.Credential
+
 wrapValidator ::
     (PIsData dt, PIsData rdmr) =>
     Term s (dt :--> rdmr :--> PScriptContext :--> PBool) ->

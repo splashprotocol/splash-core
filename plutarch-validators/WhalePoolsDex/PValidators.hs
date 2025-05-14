@@ -12,7 +12,7 @@ module WhalePoolsDex.PValidators (
     royaltyDepositValidator,
     royaltyRedeemValidator,
     royaltyWithdrawOrderValidator,
-    royaltyPooldaoV1ActionOrderValidator
+    aoV1ActionOrderValidator
 ) where
 
 import PlutusLedgerApi.V1.Scripts (Validator (getValidator))
@@ -39,6 +39,8 @@ import Plutarch.Api.V2.Contexts (PScriptContext)
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
 import Plutarch.Internal
+
+import PlutusLedgerApi.V1.Credential
 
 cfgForValidator :: Config
 cfgForValidator = Config NoTracing
@@ -92,5 +94,5 @@ royaltyRedeemValidator = mkValidator cfgForValidator $ wrapValidator PRR.royalty
 redeemBalanceValidator :: Validator
 redeemBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBR.redeemBalanceValidatorT
 
-royaltyPooldaoV1ActionOrderValidator :: Validator
-royaltyPooldaoV1ActionOrderValidator = mkValidator cfgForValidator $ wrapValidator PRDAOV1Request.daoV1ActionOrderValidator
+daoV1ActionOrderValidator :: StakingCredential -> Validator
+daoV1ActionOrderValidator daoV1StakingHash = mkValidator cfgForValidator $ wrapValidator $ PRDAOV1Request.daoV1ActionOrderValidator (pconstant daoV1StakingHash)
