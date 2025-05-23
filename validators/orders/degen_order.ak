@@ -1,9 +1,11 @@
 use aiken/builtin
 use aiken/dict
+use aiken/interval.{Finite, Interval, IntervalBound, PositiveInfinity}
 use aiken/list
+use aiken/time.{PosixTime}
 use aiken/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
-  Transaction, TransactionId, WithdrawFrom, find_input,
+  Transaction, TransactionId, ValidityRange, WithdrawFrom, find_input,
 }
 use aiken/transaction/credential.{
   Address, Credential, Inline, Referenced, ScriptCredential, from_script,
@@ -17,9 +19,9 @@ use splash/plutus.{Asset, VerificationKeyHash, mk_asset}
 use splash/rational.{Rational, rational}
 use splash/value_ext
 
-const this_tag = #[0]
+const this_tag = #[1]
 
-type LimitOrderConfig {
+type DegenOrderConfig {
   tag: OrderType,
   /// Where the output from the order must go.
   redeemer_address: Address,
@@ -33,8 +35,6 @@ type LimitOrderConfig {
   tradable_input: Int,
   /// Assumed cost (in Lovelace) of one step of execution.
   cost_per_ex_step: Int,
-  /// Minimal marginal output allowed per execution step.
-  min_marginal_output: Int,
   /// What we receive.
   output: Asset,
   /// Worst acceptable price (Output/Input).
@@ -42,19 +42,31 @@ type LimitOrderConfig {
   /// How much fee we pay to executor for whole swap.
   fee: Int,
   /// Executors permitted to execute this order.
-  permitted_executors: List<VerificationKeyHash>,
+  permitted_executors: VerificationKeyHash,
+  /// When this order can be cancelled.
+  cancellation_after: PosixTime,
 }
 
-//PASS [mem: 13555760, cpu:  4986785092] valid_batched_full_swap_at_base_price
+fn lower_bound(validity_range: ValidityRange) -> Int {
+  expect IntervalBound { bound_type: Finite(lb), is_inclusive: False } =
+    validity_range.lower_bound
+  lb
+}
+
 validator(witness: Referenced<Credential>) {
-  fn limit_order(
-    conf: LimitOrderConfig,
+  fn degen_order(
+    conf: DegenOrderConfig,
     action: Bool,
     ctx: ScriptContext,
   ) -> Bool {
     let tx = ctx.transaction
     when action is {
-      True -> dict.has_key(tx.withdrawals, witness)?
+      True ->
+        (
+          dict.to_list(tx.withdrawals)
+            |> builtin.head_list
+            |> builtin.fst_pair
+        ) == witness
       False -> {
         let is_authorized =
           list.has(tx.extra_signatories, conf.cancellation_pkh)
@@ -63,7 +75,9 @@ validator(witness: Referenced<Credential>) {
         let output = builtin.head_list(tx.outputs)
         let value_returned = self_input.output.value == output.value
         let correct_redeemer = output.address == conf.redeemer_address
-        is_authorized && value_returned && correct_redeemer
+        let tx_valid_after = lower_bound(tx.validity_range)
+        let valid_cancellation = tx_valid_after >= conf.cancellation_after
+        is_authorized && value_returned && correct_redeemer && valid_cancellation
       }
     }
   }
@@ -97,7 +111,7 @@ fn validation_step(
       let tag = builtin.head_list(fields)
       let this_tag: Data = this_tag
       if tag == this_tag {
-        expect conf: LimitOrderConfig = datum
+        expect conf: DegenOrderConfig = datum
         let successor = output
 
         let self_value = self.value
@@ -206,7 +220,7 @@ fn validation_step(
             valid_exchange_rate? && overall_integrity?
           } else {
             expect InlineDatum(successor_datum) = successor.datum
-            expect successor_conf: LimitOrderConfig = successor_datum
+            expect successor_conf: DegenOrderConfig = successor_datum
             let tradable_input_1 = successor_conf.tradable_input
             let tradable_input_removed = tradable_input_0 - tradable_input_1
             let fee_1 = successor_conf.fee
@@ -231,31 +245,21 @@ fn validation_step(
                   input_removed <= tradable_input_removed && -lovelace_delta <= fee_removed + cost_per_ex_step
                 }
               }
-            // Execution step is worth it.
-            let min_marginal_output = conf.min_marginal_output
-            let valid_marginal_output =
-              output_added >= min_marginal_output || is_terminated
             // Script and Stake cred preserved.
             let address_preserved = self_address == successor_address
             let expected_successor_conf =
-              LimitOrderConfig {
+              DegenOrderConfig {
                 ..conf,
                 tradable_input: tradable_input_1,
                 fee: fee_1,
               }
             // Immutable field are unchanged.
             let config_preserved = successor_conf == expected_successor_conf
-            valid_exchange_rate? && valid_fee? && overall_integrity? && valid_marginal_output? && address_preserved? && config_preserved?
+            valid_exchange_rate? && valid_fee? && overall_integrity? && address_preserved? && config_preserved?
           }
 
         let valid_authorization =
-          when conf.permitted_executors is {
-            [] -> True
-            non_empty_executors -> {
-              let executor_cred = builtin.head_list(signatories)
-              list.has(non_empty_executors, executor_cred)
-            }
-          }
+          conf.permitted_executors == builtin.head_list(signatories)
 
         valid_execution? && valid_authorization?
       } else {
@@ -301,20 +305,18 @@ fn reproduce_order(
   input: (PolicyId, ByteArray),
   output: (PolicyId, ByteArray),
   cost_per_ex_step: Int,
-  min_marginal_output: Int,
   fee: Int,
   base_price: Rational,
   redeemer_address: Address,
   cancellation_pkh: VerificationKeyHash,
-  permitted_executors: List<VerificationKeyHash>,
-) -> (Output, LimitOrderConfig) {
+  permitted_executors: VerificationKeyHash,
+) -> (Output, DegenOrderConfig) {
   let conf =
-    LimitOrderConfig {
+    DegenOrderConfig {
       tag: this_tag,
       beacon,
       tradable_input,
       cost_per_ex_step,
-      min_marginal_output,
       input: mk_asset(input.1st, input.2nd),
       output: mk_asset(output.1st, output.2nd),
       base_price,
@@ -322,6 +324,7 @@ fn reproduce_order(
       redeemer_address,
       cancellation_pkh,
       permitted_executors,
+      cancellation_after: 0,
     }
   let address = from_script(script)
   let output =
@@ -341,7 +344,6 @@ test reproduce_preprod_execution_one_to_one() {
         #"74657374746f6b656e",
       ),
       cost_per_ex_step: 500_000,
-      min_marginal_output: 1_000,
       fee: 500_000,
       base_price: Rational { num: 1, denom: 1000 },
       redeemer_address: from_verification_key(
@@ -351,7 +353,7 @@ test reproduce_preprod_execution_one_to_one() {
             #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
           ),
       cancellation_pkh: #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
-      permitted_executors: [],
+      permitted_executors: pkh1,
     )
   let ask_input_ref =
     OutputReference {
@@ -377,7 +379,6 @@ test reproduce_preprod_execution_one_to_one() {
       ),
       output: (ada_policy_id, ada_asset_name),
       cost_per_ex_step: 500_000,
-      min_marginal_output: 1_000,
       fee: 500_000,
       base_price: Rational { num: 1000, denom: 1 },
       redeemer_address: from_verification_key(
@@ -387,7 +388,7 @@ test reproduce_preprod_execution_one_to_one() {
             #"5bda73043d43ad8df5ce75639cf48e1f2b4545403be92f0113e37537",
           ),
       cancellation_pkh: #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
-      permitted_executors: [],
+      permitted_executors: pkh1,
     )
   let bid_input_ref =
     OutputReference {
@@ -435,6 +436,7 @@ test reproduce_preprod_execution_one_to_one() {
         ..transaction.placeholder(),
         inputs: [ask_input, bid_input],
         outputs: [ask_out, bid_out],
+        extra_signatories: [pkh1],
       },
     }
   batch_witness(0, withdrawal_ctx)
@@ -450,23 +452,34 @@ const name_y = "a"
 
 const beacon = "beacon"
 
+fn after(lower_bound: a) -> Interval<a> {
+  Interval {
+    lower_bound: IntervalBound {
+      bound_type: Finite(lower_bound),
+      is_inclusive: False,
+    },
+    upper_bound: IntervalBound {
+      bound_type: PositiveInfinity,
+      is_inclusive: False,
+    },
+  }
+}
+
 fn make_order(
   tradable_input: Int,
   cost_per_ex_step: Int,
   max_ex_steps: Int,
-  min_marginal_output: Int,
   fee: Int,
   base_price: Rational,
   redeemer_reward_pkh: VerificationKeyHash,
-  permitted_executors: List<VerificationKeyHash>,
-) -> (Output, LimitOrderConfig) {
+  permitted_executors: VerificationKeyHash,
+) -> (Output, DegenOrderConfig) {
   let conf =
-    LimitOrderConfig {
+    DegenOrderConfig {
       tag: this_tag,
       beacon,
       tradable_input,
       cost_per_ex_step,
-      min_marginal_output,
       input: mk_asset(ada_policy_id, ada_asset_name),
       output: mk_asset(policy_y, name_y),
       base_price,
@@ -474,6 +487,7 @@ fn make_order(
       redeemer_address: from_verification_key(redeemer_reward_pkh),
       cancellation_pkh: redeemer_reward_pkh,
       permitted_executors,
+      cancellation_after: 0,
     }
   let address = from_script(test_order_validator_sh)
   let lovelace_in = tradable_input + fee + cost_per_ex_step * max_ex_steps
@@ -486,10 +500,6 @@ fn make_order(
 const hex32 = #"f4c9f9c4252d86702c2f4c2e49e6648c7cffe3c8f2b6b7d779788f50"
 
 const pkh1 = #"f686d9aa9f784c7e3dc0027c57505444c0383776d159733776226ed2"
-
-const pkh2 = #"1544d2ed5fc4fafd503ef7334ccab11eb8a0815817aa0822938c4302"
-
-const pkh3 = #"b1ac43b559d103921480b55b64e818be4af47fb9f70ee5e1bc19dfa7"
 
 const test_witness = #"c4"
 
@@ -527,7 +537,35 @@ test normal_partial_swap_ada_to_token() {
     tradable_input: (tradable_input0, tradable_input1),
     fee: (fee0, fee1),
     cost_per_ex_step: cost_per_ex_step,
-    min_marginal_output: 1000,
+    base_price: price,
+  )
+}
+
+test normal_partial_market_swap_ada_to_token() {
+  let tradable_input0 = 1_000_000
+  let fee0 = 5000
+  let cost_per_ex_step = 10000
+  let steps = 5
+  let price = rational(0, 1)
+  let tradable_input_removed = 200_000
+  let tradable_input1 = tradable_input0 - tradable_input_removed
+  let input_amount0 = tradable_input0 + fee0 + cost_per_ex_step * steps
+  let fee_removed = fee0 * tradable_input_removed / input_amount0
+  let fee1 = fee0 - fee_removed
+  let input_removed = tradable_input_removed + fee_removed + cost_per_ex_step
+  let output_amount0 = 10_000
+  let input_amount1 = input_amount0 - input_removed
+  let output_added = 1
+  let output_amount1 = output_amount0 + output_added
+  test_partial_swap(
+    input: mk_asset(ada_policy_id, ada_asset_name),
+    output: mk_asset("x", "x"),
+    input_amount: (input_amount0, input_amount1),
+    output_amount: (output_amount0, output_amount1),
+    lovelace_amount: (input_amount0, input_amount1),
+    tradable_input: (tradable_input0, tradable_input1),
+    fee: (fee0, fee1),
+    cost_per_ex_step: cost_per_ex_step,
     base_price: price,
   )
 }
@@ -559,7 +597,6 @@ test normal_partial_swap_token_to_ada() {
     tradable_input: (tradable_input0, tradable_input1),
     fee: (fee0, fee1),
     cost_per_ex_step: cost_per_ex_step,
-    min_marginal_output: 1000,
     base_price: price,
   )
 }
@@ -592,7 +629,6 @@ test normal_partial_swap_token_to_token() {
     tradable_input: (tradable_input0, tradable_input1),
     fee: (fee0, fee1),
     cost_per_ex_step: cost_per_ex_step,
-    min_marginal_output: 1000,
     base_price: price,
   )
 }
@@ -603,21 +639,23 @@ fn test_cancell(
   cancellation_pkh: ByteArray,
   signatories: List<ByteArray>,
   cancellation_address: Address,
+  cancellation_after: PosixTime,
+  transaction_validity_range: ValidityRange,
 ) -> Bool {
   let conf0 =
-    LimitOrderConfig {
+    DegenOrderConfig {
       tag: this_tag,
       beacon: "beacon",
       tradable_input: 1000,
       cost_per_ex_step: 1000,
-      min_marginal_output: 1000,
       input: mk_asset("x", "x"),
       output: mk_asset("y", "y"),
       base_price: rational(1, 2),
       fee: 1000,
       redeemer_address,
       cancellation_pkh,
-      permitted_executors: [],
+      permitted_executors: #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
+      cancellation_after,
     }
   let address = from_script("spending_script")
   let output0 =
@@ -646,9 +684,10 @@ fn test_cancell(
         inputs: [order_input],
         outputs: [cancellation_output],
         extra_signatories: signatories,
+        validity_range: transaction_validity_range,
       },
     }
-  limit_order(witness, conf0, False, spending_ctx)
+  degen_order(witness, conf0, False, spending_ctx)
 }
 
 fn test_partial_swap(
@@ -660,23 +699,22 @@ fn test_partial_swap(
   tradable_input: (Int, Int),
   fee: (Int, Int),
   cost_per_ex_step: Int,
-  min_marginal_output: Int,
   base_price: Rational,
 ) -> Bool {
   let conf0 =
-    LimitOrderConfig {
+    DegenOrderConfig {
       tag: this_tag,
       beacon: "beacon",
       tradable_input: tradable_input.1st,
       cost_per_ex_step,
-      min_marginal_output,
       input,
       output,
       base_price,
       fee: fee.1st,
       redeemer_address: from_verification_key("redeemer"),
       cancellation_pkh: "canceller",
-      permitted_executors: [],
+      permitted_executors: pkh1,
+      cancellation_after: 0,
     }
   let address = from_script("spending_script")
   let ada_is_input = input.policy == ada_policy_id
@@ -752,7 +790,7 @@ fn test_partial_swap(
       address,
       value: value1,
       datum: InlineDatum(
-        LimitOrderConfig {
+        DegenOrderConfig {
           ..conf0,
           tradable_input: tradable_input.2nd,
           fee: fee.2nd,
@@ -779,9 +817,10 @@ fn test_partial_swap(
         ..transaction.placeholder(),
         inputs: [order_input],
         outputs: [order_output],
+        extra_signatories: [pkh1],
       },
     }
-  limit_order(witness, conf0, True, spending_ctx) && batch_witness(
+  degen_order(witness, conf0, True, spending_ctx) && batch_witness(
     0,
     withdrawal_ctx,
   )
@@ -791,7 +830,7 @@ test normal_cancellation() {
   let val = from_lovelace(1000) |> add("tkn", "btc", 1)
   let addr = from_verification_key("dude1")
   let signer = "dude0"
-  test_cancell((val, val), addr, signer, [signer], addr)
+  test_cancell((val, val), addr, signer, [signer], addr, 0, after(0))
 }
 
 test bad_cancellation_wrong_redeemer() {
@@ -804,6 +843,23 @@ test bad_cancellation_wrong_redeemer() {
     signer,
     [signer],
     from_verification_key("dude2"),
+    0,
+    after(0),
+  )
+}
+
+test bad_cancellation_premature() {
+  let val = from_lovelace(1000) |> add("tkn", "btc", 1)
+  let addr = from_verification_key("dude1")
+  let signer = "dude0"
+  !test_cancell(
+    (val, val),
+    addr,
+    signer,
+    [signer],
+    from_verification_key("dude2"),
+    1,
+    after(0),
   )
 }
 
@@ -811,21 +867,20 @@ test bad_cancellation_unauthorized() {
   let val = from_lovelace(1000) |> add("tkn", "btc", 1)
   let addr = from_verification_key("dude1")
   let signer = "dude0"
-  !test_cancell((val, val), addr, signer, ["dude2"], addr)
+  !test_cancell((val, val), addr, signer, ["dude2"], addr, 0, after(0))
 }
 
 fn test_mixed_full_swap(
   tradable_input: Int,
   cost_per_ex_step: Int,
   max_ex_steps: Int,
-  min_marginal_output: Int,
   fee: Int,
   base_price: Rational,
   removed_tradable_input: Int,
   removed_ex_fee: Int,
   removed_ex_budget: Int,
   added_output: Int,
-  permitted_executors: List<VerificationKeyHash>,
+  permitted_executors: VerificationKeyHash,
   executor: VerificationKeyHash,
 ) -> Bool {
   let (initial_order_utxo, initial_conf) =
@@ -833,7 +888,6 @@ fn test_mixed_full_swap(
       tradable_input,
       cost_per_ex_step,
       max_ex_steps,
-      min_marginal_output,
       fee,
       base_price,
       test_redeemer,
@@ -890,21 +944,20 @@ fn test_mixed_full_swap(
     }
   let wdrl_ctx =
     ScriptContext { purpose: WithdrawFrom(wit), transaction: ctx.transaction }
-  limit_order(wit, initial_conf, True, ctx) && batch_witness(0, wdrl_ctx)
+  degen_order(wit, initial_conf, True, ctx) && batch_witness(0, wdrl_ctx)
 }
 
 fn test_batched_full_swap(
   tradable_input: Int,
   cost_per_ex_step: Int,
   max_ex_steps: Int,
-  min_marginal_output: Int,
   fee: Int,
   base_price: Rational,
   removed_tradable_input: Int,
   removed_ex_fee: Int,
   removed_ex_budget: Int,
   added_output: Int,
-  permitted_executors: List<VerificationKeyHash>,
+  permitted_executors: VerificationKeyHash,
   executor: VerificationKeyHash,
   size: Int,
 ) -> Bool {
@@ -913,7 +966,6 @@ fn test_batched_full_swap(
       tradable_input,
       cost_per_ex_step,
       max_ex_steps,
-      min_marginal_output,
       fee,
       base_price,
       test_redeemer,
@@ -958,7 +1010,7 @@ fn test_batched_full_swap(
   list.foldl(
     list.range(0, size),
     True,
-    fn(_x, acc) { acc && limit_order(wit, initial_conf, True, ctx) },
+    fn(_x, acc) { acc && degen_order(wit, initial_conf, True, ctx) },
   ) && batch_witness(0, wdrl_ctx)
 }
 
@@ -968,19 +1020,15 @@ test valid_batched_full_swap_at_base_price() {
   let fee = 1_000_000
   let cost_per_ex_step = 30_000_000
   let max_ex_steps = 5
-  let min_final_output = tradable_input * base_price.num / base_price.denom
-  let min_marginal_output = min_final_output / max_ex_steps
 
   let removed_tradable_input = tradable_input
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = fee * removed_tradable_input / tradable_input
-  let allowed_executors =
-    []
+  let allowed_executors = pkh1
   test_batched_full_swap(
     tradable_input,
     cost_per_ex_step,
     max_ex_steps,
-    min_marginal_output,
     fee,
     base_price,
     removed_tradable_input,
@@ -999,19 +1047,15 @@ test valid_full_swap_at_base_price() {
   let fee = 1_000_000
   let cost_per_ex_step = 30_000_000
   let max_ex_steps = 5
-  let min_final_output = tradable_input * base_price.num / base_price.denom
-  let min_marginal_output = min_final_output / max_ex_steps
 
   let removed_tradable_input = tradable_input
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = fee * removed_tradable_input / tradable_input
-  let allowed_executors =
-    [pkh1, pkh2]
+  let allowed_executors = pkh1
   test_batched_full_swap(
     tradable_input,
     cost_per_ex_step,
     max_ex_steps,
-    min_marginal_output,
     fee,
     base_price,
     removed_tradable_input,
@@ -1030,19 +1074,15 @@ test valid_mixed_full_swap_at_base_price() {
   let fee = 1_000_000
   let cost_per_ex_step = 30_000_000
   let max_ex_steps = 5
-  let min_final_output = tradable_input * base_price.num / base_price.denom
-  let min_marginal_output = min_final_output / max_ex_steps
 
   let removed_tradable_input = tradable_input
   let added_output = removed_tradable_input * base_price.num / base_price.denom
   let removed_ex_fee = fee * removed_tradable_input / tradable_input
-  let allowed_executors =
-    [pkh1, pkh2]
+  let allowed_executors = pkh1
   test_mixed_full_swap(
     tradable_input,
     cost_per_ex_step,
     max_ex_steps,
-    min_marginal_output,
     fee,
     base_price,
     removed_tradable_input,
@@ -1060,20 +1100,16 @@ test invalid_full_swap_bad_exchange_rate() {
   let fee = 1_000_000
   let cost_per_ex_step = 30_000_000
   let max_ex_steps = 5
-  let min_final_output = tradable_input * base_price.num / base_price.denom
-  let min_marginal_output = min_final_output / max_ex_steps
 
   let removed_tradable_input = tradable_input
   let added_output =
     removed_tradable_input * base_price.num / base_price.denom - 1
   let removed_ex_fee = fee * removed_tradable_input / tradable_input
-  let allowed_executors =
-    [pkh1, pkh2, pkh3]
+  let allowed_executors = pkh1
   !test_batched_full_swap(
     tradable_input,
     cost_per_ex_step,
     max_ex_steps,
-    min_marginal_output,
     fee,
     base_price,
     removed_tradable_input,
@@ -1081,7 +1117,7 @@ test invalid_full_swap_bad_exchange_rate() {
     cost_per_ex_step,
     added_output,
     allowed_executors,
-    pkh3,
+    pkh1,
     50,
   )
 }
