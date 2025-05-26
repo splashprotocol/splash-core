@@ -1014,13 +1014,6 @@ fn test_batched_full_swap(
   ) && batch_witness(0, wdrl_ctx)
 }
 
-//PASS [mem: 12999234, cpu:  4802924444] valid_batched_full_swap_at_base_price (60)
-//PASS [mem:  6584004, cpu:  2434596374] valid_batched_full_swap_at_base_price (30)
-//PASS [mem:  3376389, cpu:  1250432339] valid_batched_full_swap_at_base_price (15)
-//PASS [mem:   596456, cpu:   224156842] valid_batched_full_swap_at_base_price (2)
-//PASS [mem:   382615, cpu:   145212573] valid_batched_full_swap_at_base_price (1)
-//PASS [mem:   352222, cpu:   132028670] valid_batched_full_swap_at_base_price (1) (w)
-//PASS [mem:   161841, cpu:    66261318] valid_batched_full_swap_at_base_price (1) (s)
 test valid_batched_full_swap_at_base_price() {
   let tradable_input = 1_000_000_000
   let base_price = rational(61, 100)
@@ -1044,7 +1037,7 @@ test valid_batched_full_swap_at_base_price() {
     added_output,
     allowed_executors,
     pkh1,
-    1,
+    60,
   )
 }
 
