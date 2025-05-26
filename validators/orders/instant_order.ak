@@ -25,10 +25,6 @@ type InstantOrderConfig {
   tag: OrderType,
   /// Where the output from the order must go.
   redeemer_address: Address,
-  /// PKH authorized to cancel order.
-  cancellation_pkh: VerificationKeyHash,
-  /// Beacon used to track progress.
-  beacon: PolicyId,
   /// What we receive.
   input: Asset,
   /// Tradable amount of Lovelace.
@@ -45,6 +41,10 @@ type InstantOrderConfig {
   permitted_executors: VerificationKeyHash,
   /// When this order can be cancelled.
   cancellation_after: PosixTime,
+  /// PKH authorized to cancel order.
+  cancellation_pkh: VerificationKeyHash,
+  /// Beacon used to track progress.
+  beacon: PolicyId,
 }
 
 fn lower_bound(validity_range: ValidityRange) -> Int {
