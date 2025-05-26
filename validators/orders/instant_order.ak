@@ -21,7 +21,7 @@ use splash/value_ext
 
 const this_tag = #[1]
 
-type DegenOrderConfig {
+type InstantOrderConfig {
   tag: OrderType,
   /// Where the output from the order must go.
   redeemer_address: Address,
@@ -54,8 +54,8 @@ fn lower_bound(validity_range: ValidityRange) -> Int {
 }
 
 validator(witness: Referenced<Credential>) {
-  fn degen_order(
-    conf: DegenOrderConfig,
+  fn instant_order(
+    conf: InstantOrderConfig,
     action: Bool,
     ctx: ScriptContext,
   ) -> Bool {
@@ -111,7 +111,7 @@ fn validation_step(
       let tag = builtin.head_list(fields)
       let this_tag: Data = this_tag
       if tag == this_tag {
-        expect conf: DegenOrderConfig = datum
+        expect conf: InstantOrderConfig = datum
         let successor = output
 
         let self_value = self.value
@@ -220,7 +220,7 @@ fn validation_step(
             valid_exchange_rate? && overall_integrity?
           } else {
             expect InlineDatum(successor_datum) = successor.datum
-            expect successor_conf: DegenOrderConfig = successor_datum
+            expect successor_conf: InstantOrderConfig = successor_datum
             let tradable_input_1 = successor_conf.tradable_input
             let tradable_input_removed = tradable_input_0 - tradable_input_1
             let fee_1 = successor_conf.fee
@@ -248,7 +248,7 @@ fn validation_step(
             // Script and Stake cred preserved.
             let address_preserved = self_address == successor_address
             let expected_successor_conf =
-              DegenOrderConfig {
+              InstantOrderConfig {
                 ..conf,
                 tradable_input: tradable_input_1,
                 fee: fee_1,
@@ -310,9 +310,9 @@ fn reproduce_order(
   redeemer_address: Address,
   cancellation_pkh: VerificationKeyHash,
   permitted_executors: VerificationKeyHash,
-) -> (Output, DegenOrderConfig) {
+) -> (Output, InstantOrderConfig) {
   let conf =
-    DegenOrderConfig {
+    InstantOrderConfig {
       tag: this_tag,
       beacon,
       tradable_input,
@@ -473,9 +473,9 @@ fn make_order(
   base_price: Rational,
   redeemer_reward_pkh: VerificationKeyHash,
   permitted_executors: VerificationKeyHash,
-) -> (Output, DegenOrderConfig) {
+) -> (Output, InstantOrderConfig) {
   let conf =
-    DegenOrderConfig {
+    InstantOrderConfig {
       tag: this_tag,
       beacon,
       tradable_input,
@@ -643,7 +643,7 @@ fn test_cancell(
   transaction_validity_range: ValidityRange,
 ) -> Bool {
   let conf0 =
-    DegenOrderConfig {
+    InstantOrderConfig {
       tag: this_tag,
       beacon: "beacon",
       tradable_input: 1000,
@@ -687,7 +687,7 @@ fn test_cancell(
         validity_range: transaction_validity_range,
       },
     }
-  degen_order(witness, conf0, False, spending_ctx)
+  instant_order(witness, conf0, False, spending_ctx)
 }
 
 fn test_partial_swap(
@@ -702,7 +702,7 @@ fn test_partial_swap(
   base_price: Rational,
 ) -> Bool {
   let conf0 =
-    DegenOrderConfig {
+    InstantOrderConfig {
       tag: this_tag,
       beacon: "beacon",
       tradable_input: tradable_input.1st,
@@ -790,7 +790,7 @@ fn test_partial_swap(
       address,
       value: value1,
       datum: InlineDatum(
-        DegenOrderConfig {
+        InstantOrderConfig {
           ..conf0,
           tradable_input: tradable_input.2nd,
           fee: fee.2nd,
@@ -820,7 +820,7 @@ fn test_partial_swap(
         extra_signatories: [pkh1],
       },
     }
-  degen_order(witness, conf0, True, spending_ctx) && batch_witness(
+  instant_order(witness, conf0, True, spending_ctx) && batch_witness(
     0,
     withdrawal_ctx,
   )
@@ -944,7 +944,7 @@ fn test_mixed_full_swap(
     }
   let wdrl_ctx =
     ScriptContext { purpose: WithdrawFrom(wit), transaction: ctx.transaction }
-  degen_order(wit, initial_conf, True, ctx) && batch_witness(0, wdrl_ctx)
+  instant_order(wit, initial_conf, True, ctx) && batch_witness(0, wdrl_ctx)
 }
 
 fn test_batched_full_swap(
@@ -1010,7 +1010,7 @@ fn test_batched_full_swap(
   list.foldl(
     list.range(0, size),
     True,
-    fn(_x, acc) { acc && degen_order(wit, initial_conf, True, ctx) },
+    fn(_x, acc) { acc && instant_order(wit, initial_conf, True, ctx) },
   ) && batch_witness(0, wdrl_ctx)
 }
 
