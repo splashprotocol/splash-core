@@ -19,10 +19,6 @@ use splash/value_ext
 
 const this_tag = #[0]
 
-//PASS [mem: 13609584, cpu:  5007011316] valid_batched_full_swap_at_base_price
-//PASS [mem: 13623736, cpu:  5012329418] valid_batched_full_swap_at_base_price
-//PASS [mem: 13494144, cpu:  4966254876] valid_batched_full_swap_at_base_price
-//PASS [mem: 13414404, cpu:  4933709436] valid_batched_full_swap_at_base_price
 type LimitOrderConfig {
   tag: OrderType,
   /// Where the output from the order must go.

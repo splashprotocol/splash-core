@@ -3,3 +3,5 @@ artifacts/
 # Aiken's project working directory
 build/
 .DS_Store
+token.txt
+seed.txt
