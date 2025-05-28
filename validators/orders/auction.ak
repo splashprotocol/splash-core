@@ -4,11 +4,16 @@
 
 use aiken/interval
 use aiken/list
-use aiken/transaction.{ScriptContext, Spend, find_input}
+use aiken/transaction.{Input, ScriptContext, Spend, find_input}
 use aiken/transaction/credential.{ScriptCredential, VerificationKeyCredential}
 use aiken/transaction/value.{ada_policy_id, lovelace_of, quantity_of}
 use splash/plutus.{Asset, VerificationKeyHash}
 use splash/rational.{Rational}
+
+type AuctionWitness {
+  KeyWitness(VerificationKeyHash)
+  TokenWitness(Asset)
+}
 
 type Config {
   // What we swap.
@@ -27,8 +32,8 @@ type Config {
   price_dacay_num: Int,
   // Fee per one unit of quote asset.
   fee_per_quote: Rational,
-  // Redeemer PK.
-  redeemer: VerificationKeyHash,
+  // Redeemer PK or token.
+  redeemer: AuctionWitness,
 }
 
 type Action {
@@ -41,9 +46,9 @@ const price_dacay_denom = 1000
 
 validator {
   fn auction(conf: Config, action: Action, ctx: ScriptContext) -> Bool {
+    let ScriptContext { transaction, purpose } = ctx
     when action is {
       Exec { span_ix, successor_ix } -> {
-        let ScriptContext { transaction, purpose } = ctx
         expect Spend(spent_utxo_reference) = purpose
         expect Some(self_input) =
           find_input(transaction.inputs, spent_utxo_reference)
@@ -110,17 +115,51 @@ validator {
         let valid_execution =
           quote_added * price_denom == base_subtracted * price_num
 
+        let value_delta =
+          value.merge(
+            value.without_lovelace(successor.value),
+            value.negate(value.without_lovelace(self.value)),
+          )
+        let no_assets_leaked =
+          value_delta
+            |> value.add(base_policy, conf.base.name, base_subtracted)
+            |> value.add(quote_policy, conf.quote.name, -quote_added)
+            |> value.is_zero
+
         // Validate successor
         let valid_successor =
           when successor.address.payment_credential is {
-            VerificationKeyCredential(successor_cred) ->
-              conf.redeemer == successor_cred && base_1 == 0
-            ScriptCredential(_) -> self.address == successor.address
+            VerificationKeyCredential(redeemer_cred) ->
+              conf.redeemer == KeyWitness(redeemer_cred) && base_1 == 0
+            ScriptCredential(_) -> and {
+                self.address == successor.address,
+                self.datum == successor.datum,
+                no_assets_leaked,
+              }
           }
 
         valid_span && valid_successor && valid_exchange && valid_execution && valid_fee
       }
-      Cancel -> list.has(ctx.transaction.extra_signatories, conf.redeemer)
+      Cancel -> {
+        expect Spend(spent_utxo_reference) = purpose
+        expect Some(self_input) =
+          find_input(transaction.inputs, spent_utxo_reference)
+        when conf.redeemer is {
+          KeyWitness(redeemer_cred) ->
+            list.has(ctx.transaction.extra_signatories, redeemer_cred)
+          TokenWitness(redeemer_asset) ->
+            list.any(
+              list.delete(ctx.transaction.inputs, self_input),
+              fn(input: Input) {
+                value.quantity_of(
+                  input.output.value,
+                  redeemer_asset.policy,
+                  redeemer_asset.name,
+                ) > 0
+              },
+            )
+        }
+      }
     }
   }
 }
