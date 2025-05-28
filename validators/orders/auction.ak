@@ -10,9 +10,9 @@ use aiken/transaction/value.{ada_policy_id, lovelace_of, quantity_of}
 use splash/plutus.{Asset, VerificationKeyHash}
 use splash/rational.{Rational}
 
-type AuctionWitness {
-  KeyWitness(VerificationKeyHash)
-  TokenWitness(Asset)
+type AuctionRedeemer {
+  AuctionRedeemerKey(VerificationKeyHash)
+  AuctionRedeemerToken(Asset)
 }
 
 type Config {
@@ -33,7 +33,7 @@ type Config {
   // Fee per one unit of quote asset.
   fee_per_quote: Rational,
   // Redeemer PK or token.
-  redeemer: AuctionWitness,
+  redeemer: AuctionRedeemer,
 }
 
 type Action {
@@ -130,7 +130,7 @@ validator {
         let valid_successor =
           when successor.address.payment_credential is {
             VerificationKeyCredential(redeemer_cred) ->
-              conf.redeemer == KeyWitness(redeemer_cred) && base_1 == 0
+              conf.redeemer == AuctionRedeemerKey(redeemer_cred) && base_1 == 0
             ScriptCredential(_) -> and {
                 self.address == successor.address,
                 self.datum == successor.datum,
@@ -145,9 +145,9 @@ validator {
         expect Some(self_input) =
           find_input(transaction.inputs, spent_utxo_reference)
         when conf.redeemer is {
-          KeyWitness(redeemer_cred) ->
+          AuctionRedeemerKey(redeemer_cred) ->
             list.has(ctx.transaction.extra_signatories, redeemer_cred)
-          TokenWitness(redeemer_asset) ->
+          AuctionRedeemerToken(redeemer_asset) ->
             list.any(
               list.delete(ctx.transaction.inputs, self_input),
               fn(input: Input) {
