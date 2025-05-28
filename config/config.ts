@@ -2,7 +2,7 @@ export type Config<T> = {
   validators?: T
 };
 
-const TEMPLATE_CONFIG_PATH = './config.template.json';
+const TEMPLATE_CONFIG_PATH = './config/config.template.json';
 const CONFIG_PATH = './config.json';
 
 export const strigifyAll = (_: any, value: any) => (typeof value === 'bigint' ? value.toString() : value);

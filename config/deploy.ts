@@ -74,8 +74,8 @@ export class Deployment {
                 undefined,
                 builtValidators.instantOrderWitness.script,
             )
-            .registerStake(instantOrderAddr)
-            .registerStake(instantOrderWitnessAddr)
+            // .registerStake(instantOrderAddr)
+            // .registerStake(instantOrderWitnessAddr)
             .complete();
 
         return tx;

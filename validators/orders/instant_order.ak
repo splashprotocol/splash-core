@@ -456,7 +456,7 @@ fn after(lower_bound: a) -> Interval<a> {
   Interval {
     lower_bound: IntervalBound {
       bound_type: Finite(lower_bound),
-      is_inclusive: False,
+      is_inclusive: True,
     },
     upper_bound: IntervalBound {
       bound_type: PositiveInfinity,
