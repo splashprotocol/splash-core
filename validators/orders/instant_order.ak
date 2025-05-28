@@ -48,7 +48,7 @@ type InstantOrderConfig {
 }
 
 fn lower_bound(validity_range: ValidityRange) -> Int {
-  expect IntervalBound { bound_type: Finite(lb), is_inclusive: False } =
+  expect IntervalBound { bound_type: Finite(lb), is_inclusive: True } =
     validity_range.lower_bound
   lb
 }
