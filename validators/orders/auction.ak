@@ -146,10 +146,10 @@ validator {
           find_input(transaction.inputs, spent_utxo_reference)
         when conf.redeemer is {
           AuctionRedeemerKey(redeemer_cred) ->
-            list.has(ctx.transaction.extra_signatories, redeemer_cred)
+            list.has(transaction.extra_signatories, redeemer_cred)
           AuctionRedeemerToken(redeemer_asset) ->
             list.any(
-              list.delete(ctx.transaction.inputs, self_input),
+              list.delete(transaction.inputs, self_input),
               fn(input: Input) {
                 value.quantity_of(
                   input.output.value,
