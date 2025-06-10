@@ -7,7 +7,7 @@ module WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder (
     royaltyWithdrawOrderValidatorT,
     parseRoyaltyWithdrawDatum,
     extractPoolConfigFromDatum,
-    extractRoyaltyWithdrawConfigFromDatum
+    extractRoyaltyWithdrawConfigFromDatum,
 ) where
 
 import qualified GHC.Generics as GHC
@@ -25,7 +25,7 @@ import Plutarch.Extra.Maybe
 import PExtra.Ada
 
 import WhalePoolsDex.PContracts.PApi
-import WhalePoolsDex.PContracts.PRoyaltyPool      (RoyaltyPoolConfig(..), parseDatum)
+import WhalePoolsDex.PContracts.PRoyaltyPool       (RoyaltyPoolConfig(..), parseDatum)
 import WhalePoolsDex.PContracts.POrder
 import Data.Text                    as T
 import qualified Data.ByteString as BS

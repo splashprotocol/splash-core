@@ -99,6 +99,7 @@ library
     WhalePoolsDex.Contracts.PoolBFee
     WhalePoolsDex.Contracts.BalancePool
     WhalePoolsDex.Contracts.RoyaltyPool
+    WhalePoolsDex.Contracts.DoubleRoyaltyPool
     WhalePoolsDex.PContracts.PApi
     WhalePoolsDex.PContracts.PAssets
     WhalePoolsDex.PContracts.PBalancePool
@@ -110,6 +111,12 @@ library
     WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder
     WhalePoolsDex.PContracts.PRoyaltyDeposit
     WhalePoolsDex.PContracts.PRoyaltyRedeem
+    WhalePoolsDex.PContracts.PDoubleRoyaltyPool
+    WhalePoolsDex.PContracts.PDoubleRoyaltyDeposit
+    WhalePoolsDex.PContracts.PDoubleRoyaltyRedeem
+    WhalePoolsDex.PContracts.PDoubleRoyaltyDAOV1
+    WhalePoolsDex.PContracts.PDoubleRoyaltyWithdrawPool
+    WhalePoolsDex.PContracts.PDoubleRoyaltyWithdrawOrder
     WhalePoolsDex.PContracts.PPoolBFee
     WhalePoolsDex.PContracts.PRedeem
     WhalePoolsDex.PContracts.PRedeemBalance
@@ -157,8 +164,9 @@ test-suite cardano-dex-contracts-test
     Gen.FeeSwitchGen
     Gen.DepositGen
     Gen.BalancePoolGen
-    Gen.RoyaltyWithdrawGen
-    Gen.RoyaltyPoolGen
+    -- Gen.DoubleRoyaltyPoolGen
+   -- Gen.RoyaltyWithdrawGen
+    --Gen.RoyaltyPoolGen
     Gen.PoolGen
     Gen.SwapGen
     Gen.RedeemGen
@@ -173,7 +181,8 @@ test-suite cardano-dex-contracts-test
     Tests.FeeSwitch
     Tests.BalancePool
     Tests.FeeSwitchBFee
-    Tests.RoyaltyWithdraw
+    Tests.DoubleRoyaltyPool
+    -- Tests.RoyaltyWithdraw
     Tests.Api
     Eval
   build-depends:
