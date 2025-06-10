@@ -65,6 +65,7 @@ newtype PoolConfig (s :: S)
                  , "DAOPolicy"        ':= PBuiltinList (PAsData PStakingCredential)
                  , "lqBound"          ':= PInteger
                  , "treasuryAddress"  ':= PValidatorHash
+                 , "nonce"            ':= PInteger
                  ]
             )
         )
@@ -196,7 +197,7 @@ readPoolState = phoistAcyclic $
 
 correctSwapConfig :: Term s (PoolConfig :--> PoolConfig :--> PInteger :--> PInteger :--> PBool)
 correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
-  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress"] prevDatum
+  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "lqBound", "treasuryAddress", "nonce"] prevDatum
   newConfig  <- pletFieldsC @'["treasuryX", "treasuryY"] newDatum
   
   let
@@ -211,6 +212,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
     prevDAOPolicy = getField @"DAOPolicy" prevConfig
     prevLqBound   = getField @"lqBound" prevConfig
     prevTreasuryAddress = getField @"treasuryAddress" prevConfig
+    prevNonce = getField @"nonce" prevConfig
 
     newTreasuryX = getField @"treasuryX" newConfig
     newTreasuryY = getField @"treasuryY" newConfig
@@ -248,6 +250,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"lqBound" @PInteger # pdata prevLqBound
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
+                #$ pdcons @"nonce" @PInteger # pdata prevNonce
                     # pdnil)
 
   let validConfig = expectedConfig #== newDatum

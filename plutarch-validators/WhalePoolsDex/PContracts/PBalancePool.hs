@@ -50,6 +50,7 @@ newtype BalancePoolConfig (s :: S)
                  , "treasuryY"        ':= PInteger
                  , "DAOPolicy"        ':= PBuiltinList (PAsData PStakingCredential)
                  , "treasuryAddress"  ':= PValidatorHash
+                 , "nonce"            ':= PInteger
                  ]
             )
         )
@@ -148,7 +149,7 @@ validSwap ::
 validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermCont $ do
     prevState  <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] prevState'
     newState   <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] newState'
-    prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress"] prevPoolConfig
+    prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "nonce"] prevPoolConfig
     newConfig  <- pletFieldsC @'["treasuryX", "treasuryY"] newPoolConfig
     let
         prevPoolNft = getField @"poolNft" prevConfig
@@ -161,6 +162,7 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermC
         prevTreasuryY = getField @"treasuryY" prevConfig
         prevDAOPolicy = getField @"DAOPolicy" prevConfig
         prevTreasuryAddress = getField @"treasuryAddress" prevConfig
+        prevNonce = getField @"nonce" prevConfig
 
         newTreasuryX = getField @"treasuryX" newConfig
         newTreasuryY = getField @"treasuryY" newConfig
@@ -223,6 +225,7 @@ validSwap = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermC
                 #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
+                #$ pdcons @"nonce" @PInteger # pdata prevNonce
                     # pdnil)
 
     pure $
@@ -274,7 +277,7 @@ validDepositRedeemAllTokens ::
 validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoolConfig -> unTermCont $ do
     prevState  <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] prevState'
     newState   <- pletFieldsC @'["reservesX", "reservesY", "liquidity"] newState'
-    prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress"] prevPoolConfig
+    prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "treasuryX", "treasuryY", "DAOPolicy", "treasuryAddress", "nonce"] prevPoolConfig
     let
         prevPoolNft = getField @"poolNft" prevConfig
         prevPoolX   = getField @"poolX"  prevConfig
@@ -286,6 +289,7 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
         prevTreasuryY = getField @"treasuryY" prevConfig
         prevDAOPolicy = getField @"DAOPolicy" prevConfig
         prevTreasuryAddress = getField @"treasuryAddress" prevConfig
+        prevNonce = getField @"nonce" prevConfig
         
         prevX  = pfromData $ getField @"reservesX" prevState
         prevY  = pfromData $ getField @"reservesY" prevState
@@ -315,6 +319,7 @@ validDepositRedeemAllTokens = plam $ \prevState' newState' prevPoolConfig newPoo
                 #$ pdcons @"treasuryY" @PInteger # pdata prevTreasuryY
                 #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
+                #$ pdcons @"nonce" @PInteger # pdata prevNonce
                     # pdnil)
 
     pure $ 

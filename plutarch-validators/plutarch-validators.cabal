@@ -99,6 +99,7 @@ library
     WhalePoolsDex.Contracts.PoolBFee
     WhalePoolsDex.Contracts.BalancePool
     WhalePoolsDex.Contracts.RoyaltyPool
+    WhalePoolsDex.Contracts.DoubleRoyaltyPool
     WhalePoolsDex.PContracts.PApi
     WhalePoolsDex.PContracts.PAssets
     WhalePoolsDex.PContracts.PBalancePool
@@ -110,6 +111,11 @@ library
     WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder
     WhalePoolsDex.PContracts.PRoyaltyDeposit
     WhalePoolsDex.PContracts.PRoyaltyRedeem
+    WhalePoolsDex.PContracts.PDoubleRoyaltyPool
+    WhalePoolsDex.PContracts.PDoubleRoyaltyDeposit
+    WhalePoolsDex.PContracts.PDoubleRoyaltyRedeem
+    WhalePoolsDex.PContracts.PDoubleRoyaltyDAOV1
+    WhalePoolsDex.PContracts.PDoubleRoyaltyWithdrawPool
     WhalePoolsDex.PContracts.PPoolBFee
     WhalePoolsDex.PContracts.PRedeem
     WhalePoolsDex.PContracts.PRedeemBalance
