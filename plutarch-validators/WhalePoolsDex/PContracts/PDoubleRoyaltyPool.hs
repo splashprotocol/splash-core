@@ -1,8 +1,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module WhalePoolsDex.PContracts.PRoyaltyPool (
-    RoyaltyPoolConfig (..),
-    PoolAction (..),
+module WhalePoolsDex.PContracts.PDoubleRoyaltyPool (
+    DoubleRoyaltyPoolConfig (..),
+    DoubleRoyaltyPoolAction (..),
     PoolRedeemer (..),
     PoolState(..),
     findPoolOutput,
@@ -40,7 +40,7 @@ import PExtra.Ada
 import PlutusLedgerApi.V1.Address
 import PlutusLedgerApi.V1.Credential
 
-import qualified WhalePoolsDex.Contracts.RoyaltyPool  as P
+import qualified WhalePoolsDex.Contracts.DoubleRoyaltyPool  as P
 import           WhalePoolsDex.PContracts.PApi        (burnLqInitial, feeDen, maxLqCap, tletUnwrap, zero, containsSignature)
 import           WhalePoolsDex.PConstants
 
@@ -51,31 +51,35 @@ import qualified Data.ByteString.Base16  as Hex
 import qualified Data.Text.Encoding      as E
 
 royaltyWithdrawPoolScriptHash :: BuiltinByteString
-royaltyWithdrawPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "b7f10508f0bca230b30172c17ae98fc11846ff573b4b91b4ea41ffc6"
+royaltyWithdrawPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "d80ff7c295e018708f9daf709ab1ce50634959d13247a5f708e8bded"
 
 royaltyStakeCred :: Term s PStakingCredential
 royaltyStakeCred = pconstant (StakingHash . ScriptCredential . ValidatorHash $ royaltyWithdrawPoolScriptHash)
 
-newtype RoyaltyPoolConfig (s :: S)
-    = RoyaltyPoolConfig
+newtype DoubleRoyaltyPoolConfig (s :: S)
+    = DoubleRoyaltyPoolConfig
         ( Term
             s
             ( PDataRecord
-                '[ "poolNft"           ':= PAssetClass
-                 , "poolX"             ':= PAssetClass
-                 , "poolY"             ':= PAssetClass
-                 , "poolLq"            ':= PAssetClass
-                 , "feeNum"            ':= PInteger
-                 , "treasuryFee"       ':= PInteger
-                 , "royaltyFee"        ':= PInteger
-                 , "treasuryX"         ':= PInteger
-                 , "treasuryY"         ':= PInteger
-                 , "royaltyX"          ':= PInteger
-                 , "royaltyY"          ':= PInteger
-                 , "DAOPolicy"         ':= PBuiltinList (PAsData PStakingCredential)
-                 , "treasuryAddress"   ':= PValidatorHash
-                 , "royaltyPubKey"     ':= PByteString
-                 , "nonce"             ':= PInteger
+                '[ "poolNft"             ':= PAssetClass
+                 , "poolX"               ':= PAssetClass
+                 , "poolY"               ':= PAssetClass
+                 , "poolLq"              ':= PAssetClass
+                 , "feeNum"              ':= PInteger
+                 , "treasuryFee"         ':= PInteger
+                 , "firstRoyaltyFee"     ':= PInteger
+                 , "secondRoyaltyFee"    ':= PInteger
+                 , "treasuryX"           ':= PInteger
+                 , "treasuryY"           ':= PInteger
+                 , "firstRoyaltyX"       ':= PInteger
+                 , "firstRoyaltyY"       ':= PInteger
+                 , "secondRoyaltyX"      ':= PInteger
+                 , "secondRoyaltyY"      ':= PInteger
+                 , "DAOPolicy"           ':= PBuiltinList (PAsData PStakingCredential)
+                 , "treasuryAddress"     ':= PValidatorHash
+                 , "firstRoyaltyPubKey"  ':= PByteString
+                 , "secondRoyaltyPubKey" ':= PByteString
+                 , "nonce"               ':= PInteger
                  ]
             )
         )
@@ -83,23 +87,23 @@ newtype RoyaltyPoolConfig (s :: S)
     deriving
         (PIsData, PDataFields, PlutusType, PEq)
 
-instance DerivePlutusType RoyaltyPoolConfig where type DPTStrat _ = PlutusTypeData
+instance DerivePlutusType DoubleRoyaltyPoolConfig where type DPTStrat _ = PlutusTypeData
 
-instance PUnsafeLiftDecl RoyaltyPoolConfig where type PLifted RoyaltyPoolConfig = P.RoyaltyPoolConfig
-deriving via (DerivePConstantViaData P.RoyaltyPoolConfig RoyaltyPoolConfig) instance (PConstantDecl P.RoyaltyPoolConfig)
+instance PUnsafeLiftDecl DoubleRoyaltyPoolConfig where type PLifted DoubleRoyaltyPoolConfig = P.DoubleRoyaltyPoolConfig
+deriving via (DerivePConstantViaData P.DoubleRoyaltyPoolConfig DoubleRoyaltyPoolConfig) instance (PConstantDecl P.DoubleRoyaltyPoolConfig)
 
-instance PTryFrom PData (PAsData RoyaltyPoolConfig)
+instance PTryFrom PData (PAsData DoubleRoyaltyPoolConfig)
 
-data PoolAction (s :: S) = Deposit | Redeem | Swap | DAOAction | WithdrawRoyalty
+data DoubleRoyaltyPoolAction (s :: S) = Deposit | Redeem | Swap | DAOAction | WithdrawRoyalty
 
-instance PIsData PoolAction where
+instance PIsData DoubleRoyaltyPoolAction where
     pfromDataImpl tx =
         let x = pasInt # pforgetData tx
          in pmatch' x pcon
     pdataImpl x = pmatch x (punsafeCoerce . pdata . pcon')
 
-instance PlutusType PoolAction where
-    type PInner PoolAction = PInteger
+instance PlutusType DoubleRoyaltyPoolAction where
+    type PInner DoubleRoyaltyPoolAction = PInteger
 
     pcon' Deposit = 0
     pcon' Redeem = 1
@@ -117,7 +121,11 @@ instance PlutusType PoolAction where
                 ( pif 
                     (x #== 2) 
                     (f Swap) 
-                    ( pif (x #== 3) (f DAOAction) (f WithdrawRoyalty)) 
+                    ( pif 
+                        (x #== 3) 
+                        (f DAOAction) 
+                        (f WithdrawRoyalty)
+                    ) 
                 )
             )
 
@@ -126,7 +134,7 @@ newtype PoolRedeemer (s :: S)
         ( Term
             s
             ( PDataRecord
-                '[ "action" ':= PoolAction
+                '[ "action" ':= DoubleRoyaltyPoolAction
                  , "selfIx" ':= PInteger
                  ]
             )
@@ -173,7 +181,7 @@ newtype PoolDiff (s :: S)
 
 instance DerivePlutusType PoolDiff where type DPTStrat _ = PlutusTypeData
 
-extractPoolConfig :: Term s (PTxOut :--> RoyaltyPoolConfig)
+extractPoolConfig :: Term s (PTxOut :--> DoubleRoyaltyPoolConfig)
 extractPoolConfig = plam $ \txOut -> unTermCont $ do
   txOutDatum <- tletField @"datum" txOut
 
@@ -183,12 +191,12 @@ extractPoolConfig = plam $ \txOut -> unTermCont $ do
 
   PDatum poolDatum <- pmatchC rawDatum
 
-  tletUnwrap $ ptryFromData @(RoyaltyPoolConfig) $ poolDatum
+  tletUnwrap $ ptryFromData @(DoubleRoyaltyPoolConfig) $ poolDatum
 
-readPoolState :: Term s (RoyaltyPoolConfig :--> PTxOut :--> PoolState)
+readPoolState :: Term s (DoubleRoyaltyPoolConfig :--> PTxOut :--> PoolState)
 readPoolState = phoistAcyclic $
     plam $ \conf' out -> unTermCont $ do
-        conf  <- pletFieldsC @'["poolX", "poolY", "poolLq", "treasuryX", "treasuryY", "royaltyX", "royaltyY"] conf'
+        conf  <- pletFieldsC @'["poolX", "poolY", "poolLq", "treasuryX", "treasuryY", "firstRoyaltyX", "firstRoyaltyY", "secondRoyaltyX", "secondRoyaltyY"] conf'
         let
             poolX  = getField @"poolX"  conf
             poolY  = getField @"poolY"  conf
@@ -197,8 +205,11 @@ readPoolState = phoistAcyclic $
             poolXTreasury = getField @"treasuryX" conf
             poolYTreasury = getField @"treasuryY" conf
 
-            poolXRoyalty = getField @"royaltyX" conf
-            poolYRoyalty = getField @"royaltyY" conf
+            poolXFirstRoyalty = getField @"firstRoyaltyX" conf
+            poolYFirstRoyalty = getField @"firstRoyaltyY" conf
+
+            poolXSecondRoyalty = getField @"secondRoyaltyX" conf
+            poolYSecondRoyalty = getField @"secondRoyaltyY" conf
 
         value <- tletField @"value" out
         let 
@@ -213,87 +224,115 @@ readPoolState = phoistAcyclic $
                     (assetClassValueOf # value # pAdaAssetClass)
         tcon $
             PoolState $
-                pdcons @"reservesX" @PInteger # pdata (x - poolXTreasury - poolXRoyalty)
-                    #$ pdcons @"reservesY" @PInteger # pdata (y - poolYTreasury - poolYRoyalty)
+                pdcons @"reservesX" @PInteger # pdata (x - poolXTreasury - poolXFirstRoyalty - poolXSecondRoyalty)
+                    #$ pdcons @"reservesY" @PInteger # pdata (y - poolYTreasury - poolYFirstRoyalty - poolYSecondRoyalty)
                     #$ pdcons @"liquidity" @PInteger # lq
                     #$ pdcons @"lovelaceToken2Token" @PInteger # pdata lovelaceToken2Token
                         # pdnil
 
-correctSwapConfig :: Term s (RoyaltyPoolConfig :--> RoyaltyPoolConfig :--> PInteger :--> PInteger :--> PBool)
+correctSwapConfig :: Term s (DoubleRoyaltyPoolConfig :--> DoubleRoyaltyPoolConfig :--> PInteger :--> PInteger :--> PBool)
 correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
-  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "royaltyFee", "treasuryX", "treasuryY", "royaltyX", "royaltyY", "DAOPolicy", "treasuryAddress", "royaltyPubKey", "nonce"] prevDatum
-  newConfig  <- pletFieldsC @'["treasuryX", "treasuryY", "royaltyX", "royaltyY"] newDatum
+  prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "firstRoyaltyFee", "secondRoyaltyFee", "treasuryX", "treasuryY", "firstRoyaltyX", "firstRoyaltyY", "secondRoyaltyX", "secondRoyaltyY", "DAOPolicy", "treasuryAddress", "firstRoyaltyPubKey", "secondRoyaltyPubKey", "nonce"] prevDatum
+  newConfig  <- pletFieldsC @'["treasuryX", "treasuryY", "firstRoyaltyX", "firstRoyaltyY", "secondRoyaltyX", "secondRoyaltyY"] newDatum
   
   let
     prevPoolNft = getField @"poolNft" prevConfig
-    prevPoolX   = getField @"poolX"  prevConfig
-    prevPoolY   = getField @"poolY"  prevConfig
-    prevPoolLq  = getField @"poolLq" prevConfig
-    prevFeeNum  = getField @"feeNum" prevConfig
+    prevPoolX   = getField @"poolX"   prevConfig
+    prevPoolY   = getField @"poolY"   prevConfig
+    prevPoolLq  = getField @"poolLq"  prevConfig
+    prevFeeNum  = getField @"feeNum"  prevConfig
     prevTreasuryFeeNum = getField @"treasuryFee" prevConfig
-    prevRoyaltyFeeNum  = getField @"royaltyFee"  prevConfig
+    prevFirstRoyaltyFeeNum   = getField @"firstRoyaltyFee"  prevConfig
+    prevSecondRoyaltyFeeNum  = getField @"secondRoyaltyFee" prevConfig
     prevTreasuryX = getField @"treasuryX" prevConfig
     prevTreasuryY = getField @"treasuryY" prevConfig
-    prevRoyaltyX  = getField @"royaltyX" prevConfig
-    prevRoyaltyY  = getField @"royaltyY" prevConfig
-    prevDAOPolicy = getField @"DAOPolicy" prevConfig
+    prevfirstRoyaltyX   = getField @"firstRoyaltyX"   prevConfig
+    prevfirstRoyaltyY   = getField @"firstRoyaltyY"   prevConfig
+    prevSecondRoyaltyX  = getField @"secondRoyaltyX"  prevConfig
+    prevSecondRoyaltyY  = getField @"secondRoyaltyY"  prevConfig
+    prevDAOPolicy       = getField @"DAOPolicy"       prevConfig
     prevTreasuryAddress = getField @"treasuryAddress" prevConfig
-    prevroyaltyPubKey   = getField @"royaltyPubKey" prevConfig
-    prevnonce           = getField @"nonce" prevConfig
+    prevFirstRoyaltyPubKey  = getField @"firstRoyaltyPubKey" prevConfig
+    prevSecondRoyaltyPubKey = getField @"secondRoyaltyPubKey" prevConfig
+    prevnonce               = getField @"nonce" prevConfig
 
     newTreasuryX = getField @"treasuryX" newConfig
     newTreasuryY = getField @"treasuryY" newConfig
-    newRoyaltyX  = getField @"royaltyX" newConfig
-    newRoyaltyY  = getField @"royaltyY" newConfig
+    newfirstRoyaltyX   = getField @"firstRoyaltyX"  newConfig
+    newfirstRoyaltyY   = getField @"firstRoyaltyY"  newConfig
+    newSecondRoyaltyX  = getField @"secondRoyaltyX" newConfig
+    newSecondRoyaltyY  = getField @"secondRoyaltyY" newConfig
 
-    dt = 
+    deltaTreasury = 
       pif
         (zero #< dx)
         (newTreasuryX - prevTreasuryX)
         (newTreasuryY - prevTreasuryY)
 
-    c2t = 
+    c2firstTreasury = 
       pif
         (zero #< dx)
         (dx * prevTreasuryFeeNum)
         (dy * prevTreasuryFeeNum)
         
-    dr = 
+    deltaFirstRoyalty = 
       pif
         (zero #< dx)
-        (newRoyaltyX - prevRoyaltyX)
-        (newRoyaltyY - prevRoyaltyY)
+        (newfirstRoyaltyX - prevfirstRoyaltyX)
+        (newfirstRoyaltyY - prevfirstRoyaltyY)
 
-    c2r = 
+    deltaSecondRoyalty = 
       pif
         (zero #< dx)
-        (dx * prevRoyaltyFeeNum)
-        (dy * prevRoyaltyFeeNum)
+        (newSecondRoyaltyX - prevSecondRoyaltyX)
+        (newSecondRoyaltyY - prevSecondRoyaltyY)
+
+    c2firstRoyalty = 
+      pif
+        (zero #< dx)
+        (dx * prevFirstRoyaltyFeeNum)
+        (dy * prevFirstRoyaltyFeeNum)
+
+    c2secondRoyalty = 
+      pif
+        (zero #< dx)
+        (dx * prevSecondRoyaltyFeeNum)
+        (dy * prevSecondRoyaltyFeeNum)
         
-    validTreasuryAndRoyaltyChange = (feeDen * dr #<= c2r) #&& (c2r #< feeDen * (dr + 1)) #&& (feeDen * dt #<= c2t) #&& (c2t #< feeDen * (dt + 1))
+    validTreasuryAndRoyaltyChange = 
+        (feeDen * deltaFirstRoyalty #<= c2firstRoyalty) 
+        #&& (c2firstRoyalty #< feeDen * (deltaFirstRoyalty + 1))
+        #&& (feeDen * deltaSecondRoyalty #<= c2secondRoyalty) 
+        #&& (c2secondRoyalty #< feeDen * (deltaSecondRoyalty + 1)) 
+        #&& (feeDen * deltaTreasury #<= c2firstTreasury) 
+        #&& (c2firstTreasury #< feeDen * (deltaTreasury + 1))
 
     anotherTokenTreasuryAndRoyaltyCorrect =
       pif
         (zero #< dx)
-        ((prevTreasuryY #== newTreasuryY) #&& (prevRoyaltyY #== newRoyaltyY))
-        ((prevTreasuryX #== newTreasuryX) #&& (prevRoyaltyX #== newRoyaltyX))
+        ((prevTreasuryY #== newTreasuryY) #&& (prevfirstRoyaltyY #== newfirstRoyaltyY) #&& (prevSecondRoyaltyY #== newSecondRoyaltyY))
+        ((prevTreasuryX #== newTreasuryX) #&& (prevfirstRoyaltyX #== newfirstRoyaltyX) #&& (prevSecondRoyaltyX #== newSecondRoyaltyX))
 
   expectedConfig <-
-        tcon $ (RoyaltyPoolConfig $
+        tcon $ (DoubleRoyaltyPoolConfig $
             pdcons @"poolNft" @PAssetClass # pdata prevPoolNft
-                #$ pdcons @"poolX"  @PAssetClass # pdata prevPoolX
-                #$ pdcons @"poolY"  @PAssetClass # pdata prevPoolY
+                #$ pdcons @"poolX" @PAssetClass # pdata prevPoolX
+                #$ pdcons @"poolY" @PAssetClass # pdata prevPoolY
                 #$ pdcons @"poolLq" @PAssetClass # pdata prevPoolLq
                 #$ pdcons @"feeNum" @PInteger # pdata prevFeeNum
                 #$ pdcons @"treasuryFee" @PInteger # pdata prevTreasuryFeeNum
-                #$ pdcons @"royaltyFee"  @PInteger # pdata prevRoyaltyFeeNum
-                #$ pdcons @"treasuryX"   @PInteger # pdata newTreasuryX
-                #$ pdcons @"treasuryY"   @PInteger # pdata newTreasuryY
-                #$ pdcons @"royaltyX"    @PInteger # pdata newRoyaltyX
-                #$ pdcons @"royaltyY"    @PInteger # pdata newRoyaltyY
-                #$ pdcons @"DAOPolicy"   @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
+                #$ pdcons @"firstRoyaltyFee" @PInteger # pdata prevFirstRoyaltyFeeNum
+                #$ pdcons @"secondRoyaltyFee" @PInteger # pdata prevSecondRoyaltyFeeNum
+                #$ pdcons @"treasuryX" @PInteger # pdata newTreasuryX
+                #$ pdcons @"treasuryY" @PInteger # pdata newTreasuryY
+                #$ pdcons @"firstRoyaltyX" @PInteger # pdata newfirstRoyaltyX
+                #$ pdcons @"firstRoyaltyY" @PInteger # pdata newfirstRoyaltyY
+                #$ pdcons @"secondRoyaltyX" @PInteger # pdata newSecondRoyaltyX
+                #$ pdcons @"secondRoyaltyY" @PInteger # pdata newSecondRoyaltyY
+                #$ pdcons @"DAOPolicy" @(PBuiltinList (PAsData PStakingCredential)) # pdata prevDAOPolicy
                 #$ pdcons @"treasuryAddress" @PValidatorHash # pdata prevTreasuryAddress
-                #$ pdcons @"royaltyPubKey"   @PByteString # pdata prevroyaltyPubKey
+                #$ pdcons @"firstRoyaltyPubKey" @PByteString # pdata prevFirstRoyaltyPubKey
+                #$ pdcons @"secondRoyaltyPubKey" @PByteString # pdata prevSecondRoyaltyPubKey
                 #$ pdcons @"nonce" @PInteger # pdata prevnonce
                     # pdnil)
 
@@ -314,7 +353,7 @@ findPoolOutput =
                 )
                 (const $ ptraceError "Pool output not found")
 
-validDAOAction :: ClosedTerm (RoyaltyPoolConfig :--> PTxInfo :--> PBool)
+validDAOAction :: ClosedTerm (DoubleRoyaltyPoolConfig :--> PTxInfo :--> PBool)
 validDAOAction = plam $ \cfg txInfo -> unTermCont $ do
   wdrl     <- tletField @"wdrl" txInfo
   policies <- tletField @"DAOPolicy" cfg
@@ -330,12 +369,12 @@ validRoyaltyWithdrawAction = plam $ \txInfo -> unTermCont $ do
       headWithdrawl = plookup # royaltyStakeCred # wdrl
   pure $ Maybe.pisJust # headWithdrawl
 
-parseDatum :: ClosedTerm (PDatum :--> RoyaltyPoolConfig)
+parseDatum :: ClosedTerm (PDatum :--> DoubleRoyaltyPoolConfig)
 parseDatum = plam $ \newDatum -> unTermCont $ do
   PDatum poolDatum <- pmatchC newDatum
-  tletUnwrap $ ptryFromData @(RoyaltyPoolConfig) $ poolDatum
+  tletUnwrap $ ptryFromData @(DoubleRoyaltyPoolConfig) $ poolDatum
 
-poolValidatorT :: ClosedTerm (RoyaltyPoolConfig :--> PoolRedeemer :--> PScriptContext :--> PBool)
+poolValidatorT :: ClosedTerm (DoubleRoyaltyPoolConfig :--> PoolRedeemer :--> PScriptContext :--> PBool)
 poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
     redeemer <- pletFieldsC @'["action", "selfIx"] redeemer'
     let
@@ -410,14 +449,15 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                     Swap -> unTermCont $ do
                         feeNum   <- tletField @"feeNum" conf
                         tFeeNum  <- tletField @"treasuryFee" conf
-                        rFeeNum  <- tletField @"royaltyFee"  conf
+                        firstRoyaltyFeeNum  <- tletField @"firstRoyaltyFee"  conf
+                        secondRoyaltyFeeNum  <- tletField @"secondRoyaltyFee"  conf
                         feeDen'  <- tlet feeDen
                         let
                             newConfig     = parseDatum # succD
                             validTreasury = correctSwapConfig # conf # newConfig # dx # dy
 
-                            dxf = dx * (feeNum - tFeeNum - rFeeNum)
-                            dyf = dy * (feeNum - tFeeNum - rFeeNum)
+                            dxf = dx * (feeNum - tFeeNum - firstRoyaltyFeeNum - secondRoyaltyFeeNum)
+                            dyf = dy * (feeNum - tFeeNum - firstRoyaltyFeeNum - secondRoyaltyFeeNum)
 
                             validSwap =
                                 pif

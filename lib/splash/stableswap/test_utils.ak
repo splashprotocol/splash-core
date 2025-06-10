@@ -265,12 +265,12 @@ pub fn make_pool_state_transition_context(
     purpose: Spend(placeholder_utxo),
     transaction: transaction.placeholder()
       |> fn(transaction) {
-           Transaction {
-             ..transaction,
-             inputs: [pool_input],
-             outputs: [pool_output_utxo],
-           }
-         },
+          Transaction {
+            ..transaction,
+            inputs: [pool_input],
+            outputs: [pool_output_utxo],
+          }
+        },
   }
 }
 
@@ -342,12 +342,12 @@ pub fn make_proxy_dao_tx_context(
     purpose: Spend(placeholder_utxo),
     transaction: transaction.placeholder()
       |> fn(transaction) {
-           Transaction {
-             ..transaction,
-             inputs: [pool_input, proxy_dao_input],
-             outputs: [pool_output_utxo, proxy_dao_output_utxo],
-           }
-         },
+          Transaction {
+            ..transaction,
+            inputs: [pool_input, proxy_dao_input],
+            outputs: [pool_output_utxo, proxy_dao_output_utxo],
+          }
+        },
   }
 }
 
@@ -419,11 +419,11 @@ pub fn make_proxy_dao_tx_context_with_new_pool_stake_cred(
     purpose: Spend(placeholder_utxo),
     transaction: transaction.placeholder()
       |> fn(transaction) {
-           Transaction {
-             ..transaction,
-             inputs: [pool_input, proxy_dao_input],
-             outputs: [pool_output_utxo, proxy_dao_output_utxo],
-           }
-         },
+          Transaction {
+            ..transaction,
+            inputs: [pool_input, proxy_dao_input],
+            outputs: [pool_output_utxo, proxy_dao_output_utxo],
+          }
+        },
   }
 }

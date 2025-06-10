@@ -7,7 +7,9 @@ module WhalePoolsDex.PMintingValidators (
     wrapMintingValidator,
     daoBalanceMintPolicyValidator,
     royaltyPoolDAOV1Validator,
-    royaltyWithdrawPoolValidator
+    royaltyWithdrawPoolValidator,
+    doubleRoyaltyPoolDAOV1Validator,
+    doubleRoyaltyWithdrawPoolValidator
 ) where
 
 import Plutarch
@@ -25,7 +27,9 @@ import PlutusLedgerApi.V1.Contexts
 import PlutusTx.Builtins.Internal
 import qualified WhalePoolsDex.PContracts.PFeeSwitchBalancePool as BDao
 import qualified WhalePoolsDex.PContracts.PRoyaltyDAOV1 as PRDAOV1
+import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyDAOV1 as PDRDAOV1
 import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawPool as PRWP
+import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyWithdrawPool as PRDWP
 import Data.ByteString (ByteString)
 
 cfgForMintingValidator :: Config
@@ -70,9 +74,21 @@ royaltyPoolDAOV1Validator admins threshold lpFeeIsEditable =
         wrapMintingValidator $ 
             PRDAOV1.daoMultisigPolicyValidatorT (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable)
 
+doubleRoyaltyPoolDAOV1Validator :: [ByteString] -> Integer -> Bool -> MintingPolicy
+doubleRoyaltyPoolDAOV1Validator admins threshold lpFeeIsEditable = 
+    mkMintingPolicy cfgForMintingValidator $ 
+        wrapMintingValidator $ 
+            PDRDAOV1.doubleRoyaltyDaoMultisigPolicyValidatorT (pconstant admins) (pconstant threshold) (pconstant lpFeeIsEditable)
+
 royaltyWithdrawPoolValidator :: MintingPolicy
 royaltyWithdrawPoolValidator = 
     mkMintingPolicy cfgForMintingValidator $ 
         wrapMintingValidator $ 
             PRWP.royaltyWithdrawPoolValidatorT
+
+doubleRoyaltyWithdrawPoolValidator :: MintingPolicy
+doubleRoyaltyWithdrawPoolValidator = 
+    mkMintingPolicy cfgForMintingValidator $ 
+        wrapMintingValidator $ 
+            PRDWP.doubleRoyaltyWithdrawPoolValidatorT
 
