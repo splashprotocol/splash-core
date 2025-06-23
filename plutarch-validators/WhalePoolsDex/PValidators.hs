@@ -9,8 +9,11 @@ module WhalePoolsDex.PValidators (
     redeemBalanceValidator,
     depositBalanceValidator,
     royaltyPoolValidator,
+    doubleRoyaltyPoolValidator,
     royaltyDepositValidator,
+    doubleRoyaltyDepositValidator,
     royaltyRedeemValidator,
+    doubleRoyaltyRedeemValidator,
     royaltyWithdrawOrderValidator,
     royaltyPooldaoV1ActionOrderValidator
 ) where
@@ -27,8 +30,11 @@ import qualified WhalePoolsDex.PContracts.PSwap        as PS
 import qualified WhalePoolsDex.PContracts.PDepositBalance as PBD
 import qualified WhalePoolsDex.PContracts.PRedeemBalance  as PBR
 import qualified WhalePoolsDex.PContracts.PRoyaltyPool    as PRP
+import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyPool   as PDRP
 import qualified WhalePoolsDex.PContracts.PRoyaltyDeposit   as PRD
+import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyDeposit   as PDRD
 import qualified WhalePoolsDex.PContracts.PRoyaltyRedeem    as PRR
+import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyRedeem    as PDRR
 import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder as PRWC
 import qualified WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder as PRDAOV1Request
 
@@ -94,3 +100,12 @@ redeemBalanceValidator = mkValidator cfgForValidator $ wrapValidator PBR.redeemB
 
 royaltyPooldaoV1ActionOrderValidator :: Validator
 royaltyPooldaoV1ActionOrderValidator = mkValidator cfgForValidator $ wrapValidator PRDAOV1Request.daoV1ActionOrderValidator
+
+doubleRoyaltyPoolValidator :: Validator
+doubleRoyaltyPoolValidator = mkValidator cfgForValidator $ wrapValidator PDRP.poolValidatorT
+
+doubleRoyaltyDepositValidator :: Validator
+doubleRoyaltyDepositValidator = mkValidator cfgForValidator $ wrapValidator PDRD.doubleRoyaltyDepositValidatorT
+
+doubleRoyaltyRedeemValidator :: Validator
+doubleRoyaltyRedeemValidator = mkValidator cfgForValidator $ wrapValidator PDRR.doubleRoyaltyRedeemValidatorT

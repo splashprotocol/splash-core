@@ -7,7 +7,9 @@ module WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder (
     royaltyWithdrawOrderValidatorT,
     parseRoyaltyWithdrawDatum,
     extractPoolConfigFromDatum,
-    extractRoyaltyWithdrawConfigFromDatum
+    extractRoyaltyWithdrawConfigFromDatum,
+    extractDoubleRoyaltyWithdrawConfigFromDatum,
+    extractDoubleRoyaltyPoolConfigFromDatum
 ) where
 
 import qualified GHC.Generics as GHC
@@ -25,8 +27,9 @@ import Plutarch.Extra.Maybe
 import PExtra.Ada
 
 import WhalePoolsDex.PContracts.PApi
-import WhalePoolsDex.PContracts.PRoyaltyPool      (RoyaltyPoolConfig(..), parseDatum)
+import WhalePoolsDex.PContracts.PRoyaltyPool       (RoyaltyPoolConfig(..), parseDatum)
 import WhalePoolsDex.PContracts.POrder
+import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyPool as PDRoyalty (DoubleRoyaltyPoolConfig(..), parseDatum)
 import Data.Text                    as T
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16  as Hex
@@ -182,6 +185,13 @@ extractPoolConfigFromDatum outputDatum = unTermCont $ do
     inputParsedDatum <- tletField @"outputDatum" inputDatum'
     pure $ parseDatum # inputParsedDatum
 
+extractDoubleRoyaltyPoolConfigFromDatum :: PMemberFields PTxOut '["datum"] s as => HRec as -> Term s PDRoyalty.DoubleRoyaltyPoolConfig
+extractDoubleRoyaltyPoolConfigFromDatum outputDatum = unTermCont $ do
+    inputDatum  <- tletUnwrap $ getField @"datum" outputDatum
+    POutputDatum inputDatum' <- pmatchC inputDatum
+    inputParsedDatum <- tletField @"outputDatum" inputDatum'
+    pure $ PDRoyalty.parseDatum # inputParsedDatum
+
 parseRoyaltyWithdrawDatum :: ClosedTerm (PDatum :--> RoyaltyWithdrawConfig)
 parseRoyaltyWithdrawDatum = plam $ \newDatum -> unTermCont $ do
   PDatum poolDatum <- pmatchC newDatum
@@ -193,6 +203,18 @@ extractRoyaltyWithdrawConfigFromDatum outputDatum = unTermCont $ do
     POutputDatum inputDatum' <- pmatchC inputDatum
     inputParsedDatum <- tletField @"outputDatum" inputDatum'
     pure $ parseRoyaltyWithdrawDatum # inputParsedDatum
+
+parseDoubleRoyaltyWithdrawDatum :: ClosedTerm (PDatum :--> PDRoyalty.DoubleRoyaltyPoolConfig)
+parseDoubleRoyaltyWithdrawDatum = plam $ \newDatum -> unTermCont $ do
+  PDatum poolDatum <- pmatchC newDatum
+  tletUnwrap $ ptryFromData @(PDRoyalty.DoubleRoyaltyPoolConfig) $ poolDatum
+
+extractDoubleRoyaltyWithdrawConfigFromDatum :: PMemberFields PTxOut '["datum"] s as => HRec as -> Term s PDRoyalty.DoubleRoyaltyPoolConfig
+extractDoubleRoyaltyWithdrawConfigFromDatum outputDatum = unTermCont $ do
+    inputDatum  <- tletUnwrap $ getField @"datum" outputDatum
+    POutputDatum inputDatum' <- pmatchC inputDatum
+    inputParsedDatum <- tletField @"outputDatum" inputDatum'
+    pure $ parseDoubleRoyaltyWithdrawDatum # inputParsedDatum
 
 royaltyWithdrawOrderValidatorT :: ClosedTerm (RoyaltyWithdrawConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
 royaltyWithdrawOrderValidatorT = plam $ \conf' redeemer' ctx' -> unTermCont $ do
