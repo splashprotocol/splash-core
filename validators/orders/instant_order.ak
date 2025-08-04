@@ -27,24 +27,20 @@ type InstantOrderConfig {
   redeemer_address: Address,
   /// What we receive.
   input: Asset,
-  /// Tradable amount of Lovelace.
-  tradable_input: Int,
-  /// Assumed cost (in Lovelace) of one step of execution.
-  cost_per_ex_step: Int,
   /// What we receive.
   output: Asset,
   /// Worst acceptable price (Output/Input).
   base_price: Rational,
-  /// How much fee we pay to executor for whole swap.
+  /// Flat fee for the whole swap.
   fee: Int,
+  /// Lovelace amount that covers min utxo value.
+  min_lovelace: Int,
   /// Executors permitted to execute this order.
   permitted_executors: VerificationKeyHash,
   /// When this order can be cancelled.
   cancellation_after: PosixTime,
   /// PKH authorized to cancel order.
   cancellation_pkh: VerificationKeyHash,
-  /// Beacon used to track progress.
-  beacon: PolicyId,
 }
 
 fn lower_bound(validity_range: ValidityRange) -> Int {
@@ -183,85 +179,40 @@ fn validation_step(
           }
 
         let output_delta = output_1 - output_0
-        let input_removed = input_0 - input_1
-        let lovelace_delta = lovelace_1 - lovelace_0
 
-        let cost_per_ex_step = conf.cost_per_ex_step
-        let tradable_input_0 = conf.tradable_input
-        let fee_0 = conf.fee
+        let fee = conf.fee
+        let tradable_input_0 =
+          if ada_is_input {
+            input_0 - fee - conf.min_lovelace
+          } else {
+            input_0
+          }
         let base_price = conf.base_price
 
-        let self_address = self.address
         let successor_address = successor.address
-
         let is_terminated = successor_address == conf.redeemer_address
-        let valid_execution =
-          if is_terminated {
-            let tradable_input_removed = tradable_input_0
-            let fee_removed = fee_0
-            let output_added =
-              if ada_is_output {
-                output_delta + fee_removed + cost_per_ex_step
-              } else {
-                output_delta
-              }
-            let valid_exchange_rate =
-              output_added * base_price.denom >= tradable_input_removed * base_price.num
-            let overall_integrity =
-              if ada_is_input {
-                input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
-              } else {
-                if ada_is_output {
-                  input_removed <= tradable_input_removed
-                } else {
-                  input_removed <= tradable_input_removed && -lovelace_delta <= fee_removed + cost_per_ex_step
-                }
-              }
-            valid_exchange_rate? && overall_integrity?
+
+        let tradable_input_1 =
+          if ada_is_input {
+            input_1 - conf.min_lovelace
           } else {
-            expect InlineDatum(successor_datum) = successor.datum
-            expect successor_conf: InstantOrderConfig = successor_datum
-            let tradable_input_1 = successor_conf.tradable_input
-            let tradable_input_removed = tradable_input_0 - tradable_input_1
-            let fee_1 = successor_conf.fee
-            let fee_removed = fee_0 - fee_1
-            let output_added =
-              if ada_is_output {
-                output_delta + fee_removed + cost_per_ex_step
-              } else {
-                output_delta
-              }
-            let valid_exchange_rate =
-              output_added * base_price.denom >= tradable_input_removed * base_price.num
-            let valid_fee =
-              fee_removed <= tradable_input_removed * fee_0 / tradable_input_0
-            let overall_integrity =
-              if ada_is_input {
-                input_removed <= tradable_input_removed + fee_removed + cost_per_ex_step
-              } else {
-                if ada_is_output {
-                  input_removed <= tradable_input_removed
-                } else {
-                  input_removed <= tradable_input_removed && -lovelace_delta <= fee_removed + cost_per_ex_step
-                }
-              }
-            // Script and Stake cred preserved.
-            let address_preserved = self_address == successor_address
-            let expected_successor_conf =
-              InstantOrderConfig {
-                ..conf,
-                tradable_input: tradable_input_1,
-                fee: fee_1,
-              }
-            // Immutable field are unchanged.
-            let config_preserved = successor_conf == expected_successor_conf
-            valid_exchange_rate? && valid_fee? && overall_integrity? && address_preserved? && config_preserved?
+            input_1
           }
+        let tradable_input_removed = tradable_input_0 - tradable_input_1
+        let fee_removed = fee
+        let output_added =
+          if ada_is_output {
+            output_delta + fee_removed
+          } else {
+            output_delta
+          }
+        let valid_exchange_rate =
+          output_added * base_price.denom >= tradable_input_removed * base_price.num
 
         let valid_authorization =
           conf.permitted_executors == builtin.head_list(signatories)
 
-        valid_execution? && valid_authorization?
+        valid_exchange_rate? && is_terminated? && valid_authorization?
       } else {
         True
       }
@@ -294,6 +245,29 @@ fn left_biased_zip_validate(
   }
 }
 
+const test_redeemer = #"a2"
+
+const test_order_validator_sh = #"a4"
+
+const policy_y = #"f2"
+
+const name_y = "a"
+
+const min_lovelace = 1_500_000
+
+fn after(lower_bound: a) -> Interval<a> {
+  Interval {
+    lower_bound: IntervalBound {
+      bound_type: Finite(lower_bound),
+      is_inclusive: True,
+    },
+    upper_bound: IntervalBound {
+      bound_type: PositiveInfinity,
+      is_inclusive: False,
+    },
+  }
+}
+
 fn reproduce_eol_order(address: Address, value: Value) -> Output {
   Output { address, value, datum: NoDatum, reference_script: None }
 }
@@ -301,10 +275,8 @@ fn reproduce_eol_order(address: Address, value: Value) -> Output {
 fn reproduce_order(
   script: ByteArray,
   value: Value,
-  tradable_input: Int,
   input: (PolicyId, ByteArray),
   output: (PolicyId, ByteArray),
-  cost_per_ex_step: Int,
   fee: Int,
   base_price: Rational,
   redeemer_address: Address,
@@ -314,13 +286,11 @@ fn reproduce_order(
   let conf =
     InstantOrderConfig {
       tag: this_tag,
-      beacon,
-      tradable_input,
-      cost_per_ex_step,
       input: mk_asset(input.1st, input.2nd),
       output: mk_asset(output.1st, output.2nd),
       base_price,
       fee,
+      min_lovelace,
       redeemer_address,
       cancellation_pkh,
       permitted_executors,
@@ -337,13 +307,11 @@ test reproduce_preprod_execution_one_to_one() {
     reproduce_order(
       script: #"3e428b6289aba5280f1df5c1b9e0f55c28925f659e954858817630b6",
       value: from_lovelace(102_500_000),
-      tradable_input: 100_000_000,
       input: (ada_policy_id, ada_asset_name),
       output: (
         #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
         #"74657374746f6b656e",
       ),
-      cost_per_ex_step: 500_000,
       fee: 500_000,
       base_price: Rational { num: 1, denom: 1000 },
       redeemer_address: from_verification_key(
@@ -372,13 +340,11 @@ test reproduce_preprod_execution_one_to_one() {
             #"74657374746f6b656e",
             100_000,
           ),
-      tradable_input: 100_000,
       input: (
         #"fd10da3e6a578708c877e14b6aaeda8dc3a36f666a346eec52a30b3a",
         #"74657374746f6b656e",
       ),
       output: (ada_policy_id, ada_asset_name),
-      cost_per_ex_step: 500_000,
       fee: 500_000,
       base_price: Rational { num: 1000, denom: 1 },
       redeemer_address: from_verification_key(
@@ -442,33 +408,8 @@ test reproduce_preprod_execution_one_to_one() {
   batch_witness(0, withdrawal_ctx)
 }
 
-const test_redeemer = #"a2"
-
-const test_order_validator_sh = #"a4"
-
-const policy_y = #"f2"
-
-const name_y = "a"
-
-const beacon = "beacon"
-
-fn after(lower_bound: a) -> Interval<a> {
-  Interval {
-    lower_bound: IntervalBound {
-      bound_type: Finite(lower_bound),
-      is_inclusive: True,
-    },
-    upper_bound: IntervalBound {
-      bound_type: PositiveInfinity,
-      is_inclusive: False,
-    },
-  }
-}
-
 fn make_order(
   tradable_input: Int,
-  cost_per_ex_step: Int,
-  max_ex_steps: Int,
   fee: Int,
   base_price: Rational,
   redeemer_reward_pkh: VerificationKeyHash,
@@ -477,20 +418,18 @@ fn make_order(
   let conf =
     InstantOrderConfig {
       tag: this_tag,
-      beacon,
-      tradable_input,
-      cost_per_ex_step,
       input: mk_asset(ada_policy_id, ada_asset_name),
       output: mk_asset(policy_y, name_y),
       base_price,
       fee,
+      min_lovelace,
       redeemer_address: from_verification_key(redeemer_reward_pkh),
       cancellation_pkh: redeemer_reward_pkh,
       permitted_executors,
       cancellation_after: 0,
     }
   let address = from_script(test_order_validator_sh)
-  let lovelace_in = tradable_input + fee + cost_per_ex_step * max_ex_steps
+  let lovelace_in = tradable_input + fee + min_lovelace
   let value = from_lovelace(lovelace_in)
   let output =
     Output { address, value, datum: InlineDatum(conf), reference_script: None }
@@ -515,15 +454,12 @@ type Foo {
 test normal_partial_swap_ada_to_token() {
   let tradable_input0 = 1_000_000
   let fee0 = 5000
-  let cost_per_ex_step = 10000
   let steps = 5
   let price = rational(1, 2)
   let tradable_input_removed = 200_000
-  let tradable_input1 = tradable_input0 - tradable_input_removed
-  let input_amount0 = tradable_input0 + fee0 + cost_per_ex_step * steps
+  let input_amount0 = tradable_input0 + fee0 * steps
   let fee_removed = fee0 * tradable_input_removed / input_amount0
-  let fee1 = fee0 - fee_removed
-  let input_removed = tradable_input_removed + fee_removed + cost_per_ex_step
+  let input_removed = tradable_input_removed + fee_removed
   let output_amount0 = 10_000
   let input_amount1 = input_amount0 - input_removed
   let output_added = tradable_input_removed * price.num / price.denom
@@ -534,9 +470,7 @@ test normal_partial_swap_ada_to_token() {
     input_amount: (input_amount0, input_amount1),
     output_amount: (output_amount0, output_amount1),
     lovelace_amount: (input_amount0, input_amount1),
-    tradable_input: (tradable_input0, tradable_input1),
-    fee: (fee0, fee1),
-    cost_per_ex_step: cost_per_ex_step,
+    fee: fee0,
     base_price: price,
   )
 }
@@ -544,15 +478,11 @@ test normal_partial_swap_ada_to_token() {
 test normal_partial_market_swap_ada_to_token() {
   let tradable_input0 = 1_000_000
   let fee0 = 5000
-  let cost_per_ex_step = 10000
-  let steps = 5
   let price = rational(0, 1)
   let tradable_input_removed = 200_000
-  let tradable_input1 = tradable_input0 - tradable_input_removed
-  let input_amount0 = tradable_input0 + fee0 + cost_per_ex_step * steps
-  let fee_removed = fee0 * tradable_input_removed / input_amount0
-  let fee1 = fee0 - fee_removed
-  let input_removed = tradable_input_removed + fee_removed + cost_per_ex_step
+  let input_amount0 = tradable_input0 + fee0
+  let fee_removed = fee0
+  let input_removed = tradable_input_removed + fee_removed
   let output_amount0 = 10_000
   let input_amount1 = input_amount0 - input_removed
   let output_added = 1
@@ -563,9 +493,7 @@ test normal_partial_market_swap_ada_to_token() {
     input_amount: (input_amount0, input_amount1),
     output_amount: (output_amount0, output_amount1),
     lovelace_amount: (input_amount0, input_amount1),
-    tradable_input: (tradable_input0, tradable_input1),
-    fee: (fee0, fee1),
-    cost_per_ex_step: cost_per_ex_step,
+    fee: fee0,
     base_price: price,
   )
 }
@@ -573,20 +501,17 @@ test normal_partial_market_swap_ada_to_token() {
 test normal_partial_swap_token_to_ada() {
   let tradable_input0 = 1_000_000
   let fee0 = 5000
-  let cost_per_ex_step = 10000
   let steps = 5
   let price = rational(1, 2)
   let tradable_input_removed = 200_000
-  let tradable_input1 = tradable_input0 - tradable_input_removed
   let input_amount0 = tradable_input0
   let fee_removed = fee0 * tradable_input_removed / input_amount0
-  let fee1 = fee0 - fee_removed
   let input_removed = tradable_input_removed
   let tradable_output0 = 10_000
-  let output_amount0 = tradable_output0 + fee0 + cost_per_ex_step * steps
+  let output_amount0 = tradable_output0 + fee0 * steps
   let input_amount1 = input_amount0 - input_removed
   let output_added =
-    tradable_input_removed * price.num / price.denom - fee_removed - cost_per_ex_step
+    tradable_input_removed * price.num / price.denom - fee_removed
   let output_amount1 = output_amount0 + output_added
   test_partial_swap(
     input: mk_asset("x", "x"),
@@ -594,9 +519,7 @@ test normal_partial_swap_token_to_ada() {
     input_amount: (input_amount0, input_amount1),
     output_amount: (output_amount0, output_amount1),
     lovelace_amount: (output_amount0, output_amount1),
-    tradable_input: (tradable_input0, tradable_input1),
-    fee: (fee0, fee1),
-    cost_per_ex_step: cost_per_ex_step,
+    fee: fee0,
     base_price: price,
   )
 }
@@ -604,19 +527,16 @@ test normal_partial_swap_token_to_ada() {
 test normal_partial_swap_token_to_token() {
   let tradable_input0 = 1_000_000
   let fee0 = 5000
-  let cost_per_ex_step = 10000
   let steps = 5
   let price = rational(1, 2)
   let tradable_input_removed = 200_000
-  let tradable_input1 = tradable_input0 - tradable_input_removed
   let input_amount0 = tradable_input0
   let fee_removed = fee0 * tradable_input_removed / input_amount0
-  let fee1 = fee0 - fee_removed
   let input_removed = tradable_input_removed
   let tradable_output0 = 10_000
   let output_amount0 = tradable_output0
-  let lovelace0 = fee0 + cost_per_ex_step * steps
-  let lovelace1 = lovelace0 - fee_removed - cost_per_ex_step
+  let lovelace0 = fee0 * steps
+  let lovelace1 = lovelace0 - fee_removed
   let input_amount1 = input_amount0 - input_removed
   let output_added = tradable_input_removed * price.num / price.denom
   let output_amount1 = output_amount0 + output_added
@@ -626,9 +546,7 @@ test normal_partial_swap_token_to_token() {
     input_amount: (input_amount0, input_amount1),
     output_amount: (output_amount0, output_amount1),
     lovelace_amount: (lovelace0, lovelace1),
-    tradable_input: (tradable_input0, tradable_input1),
-    fee: (fee0, fee1),
-    cost_per_ex_step: cost_per_ex_step,
+    fee: fee0,
     base_price: price,
   )
 }
@@ -645,13 +563,11 @@ fn test_cancell(
   let conf0 =
     InstantOrderConfig {
       tag: this_tag,
-      beacon: "beacon",
-      tradable_input: 1000,
-      cost_per_ex_step: 1000,
       input: mk_asset("x", "x"),
       output: mk_asset("y", "y"),
       base_price: rational(1, 2),
       fee: 1000,
+      min_lovelace,
       redeemer_address,
       cancellation_pkh,
       permitted_executors: #"4be4fa25f029d14c0d723af4a1e6fa7133fc3a610f880336ad685cba",
@@ -696,21 +612,17 @@ fn test_partial_swap(
   input_amount: (Int, Int),
   output_amount: (Int, Int),
   lovelace_amount: (Int, Int),
-  tradable_input: (Int, Int),
-  fee: (Int, Int),
-  cost_per_ex_step: Int,
+  fee: Int,
   base_price: Rational,
 ) -> Bool {
   let conf0 =
     InstantOrderConfig {
       tag: this_tag,
-      beacon: "beacon",
-      tradable_input: tradable_input.1st,
-      cost_per_ex_step,
       input,
       output,
       base_price,
-      fee: fee.1st,
+      fee,
+      min_lovelace,
       redeemer_address: from_verification_key("redeemer"),
       cancellation_pkh: "canceller",
       permitted_executors: pkh1,
@@ -787,15 +699,9 @@ fn test_partial_swap(
   let order_input = Input { output_reference: order_input_ref, output: output0 }
   let order_output =
     Output {
-      address,
+      address: conf0.redeemer_address,
       value: value1,
-      datum: InlineDatum(
-        InstantOrderConfig {
-          ..conf0,
-          tradable_input: tradable_input.2nd,
-          fee: fee.2nd,
-        },
-      ),
+      datum: NoDatum,
       reference_script: None,
     }
   let witness = Inline(ScriptCredential("batch_wit"))
@@ -872,13 +778,10 @@ test bad_cancellation_unauthorized() {
 
 fn test_mixed_full_swap(
   tradable_input: Int,
-  cost_per_ex_step: Int,
-  max_ex_steps: Int,
   fee: Int,
   base_price: Rational,
   removed_tradable_input: Int,
   removed_ex_fee: Int,
-  removed_ex_budget: Int,
   added_output: Int,
   permitted_executors: VerificationKeyHash,
   executor: VerificationKeyHash,
@@ -886,8 +789,6 @@ fn test_mixed_full_swap(
   let (initial_order_utxo, initial_conf) =
     make_order(
       tradable_input,
-      cost_per_ex_step,
-      max_ex_steps,
       fee,
       base_price,
       test_redeemer,
@@ -897,8 +798,7 @@ fn test_mixed_full_swap(
     OutputReference { transaction_id: TransactionId(hex32), output_index: 0 }
   let order_input =
     Input { output_reference: order_input_ref, output: initial_order_utxo }
-  let removed_input =
-    removed_tradable_input + removed_ex_fee + removed_ex_budget
+  let removed_input = removed_tradable_input + removed_ex_fee
   let third_output =
     Output {
       address: from_script("fghjj"),
@@ -949,13 +849,10 @@ fn test_mixed_full_swap(
 
 fn test_batched_full_swap(
   tradable_input: Int,
-  cost_per_ex_step: Int,
-  max_ex_steps: Int,
   fee: Int,
   base_price: Rational,
   removed_tradable_input: Int,
   removed_ex_fee: Int,
-  removed_ex_budget: Int,
   added_output: Int,
   permitted_executors: VerificationKeyHash,
   executor: VerificationKeyHash,
@@ -964,8 +861,6 @@ fn test_batched_full_swap(
   let (initial_order_utxo, initial_conf) =
     make_order(
       tradable_input,
-      cost_per_ex_step,
-      max_ex_steps,
       fee,
       base_price,
       test_redeemer,
@@ -975,8 +870,7 @@ fn test_batched_full_swap(
     OutputReference { transaction_id: TransactionId(hex32), output_index: 0 }
   let order_input =
     Input { output_reference: order_input_ref, output: initial_order_utxo }
-  let removed_input =
-    removed_tradable_input + removed_ex_fee + removed_ex_budget
+  let removed_input = removed_tradable_input + removed_ex_fee
   let order_output =
     Output {
       address: initial_conf.redeemer_address,
@@ -1016,24 +910,19 @@ fn test_batched_full_swap(
 
 test valid_batched_full_swap_at_base_price() {
   let tradable_input = 1_000_000_000
-  let base_price = rational(61, 100)
+  let base_price = rational(100, 100)
   let fee = 1_000_000
-  let cost_per_ex_step = 30_000_000
-  let max_ex_steps = 5
 
   let removed_tradable_input = tradable_input
   let added_output = removed_tradable_input * base_price.num / base_price.denom
-  let removed_ex_fee = fee * removed_tradable_input / tradable_input
+  let removed_ex_fee = fee
   let allowed_executors = pkh1
   test_batched_full_swap(
     tradable_input,
-    cost_per_ex_step,
-    max_ex_steps,
     fee,
     base_price,
     removed_tradable_input,
     removed_ex_fee,
-    cost_per_ex_step,
     added_output,
     allowed_executors,
     pkh1,
@@ -1045,22 +934,17 @@ test valid_full_swap_at_base_price() {
   let tradable_input = 1_000_000_000
   let base_price = rational(61, 100)
   let fee = 1_000_000
-  let cost_per_ex_step = 30_000_000
-  let max_ex_steps = 5
 
   let removed_tradable_input = tradable_input
   let added_output = removed_tradable_input * base_price.num / base_price.denom
-  let removed_ex_fee = fee * removed_tradable_input / tradable_input
+  let removed_ex_fee = fee
   let allowed_executors = pkh1
   test_batched_full_swap(
     tradable_input,
-    cost_per_ex_step,
-    max_ex_steps,
     fee,
     base_price,
     removed_tradable_input,
     removed_ex_fee,
-    cost_per_ex_step,
     added_output,
     allowed_executors,
     pkh1,
@@ -1072,22 +956,17 @@ test valid_mixed_full_swap_at_base_price() {
   let tradable_input = 1_000_000_000
   let base_price = rational(61, 100)
   let fee = 1_000_000
-  let cost_per_ex_step = 30_000_000
-  let max_ex_steps = 5
 
   let removed_tradable_input = tradable_input
   let added_output = removed_tradable_input * base_price.num / base_price.denom
-  let removed_ex_fee = fee * removed_tradable_input / tradable_input
+  let removed_ex_fee = fee
   let allowed_executors = pkh1
   test_mixed_full_swap(
     tradable_input,
-    cost_per_ex_step,
-    max_ex_steps,
     fee,
     base_price,
     removed_tradable_input,
     removed_ex_fee,
-    cost_per_ex_step,
     added_output,
     allowed_executors,
     pkh1,
@@ -1096,25 +975,20 @@ test valid_mixed_full_swap_at_base_price() {
 
 test invalid_full_swap_bad_exchange_rate() {
   let tradable_input = 1_000_000_000
-  let base_price = rational(61, 100)
+  let base_price = rational(100, 100)
   let fee = 1_000_000
-  let cost_per_ex_step = 30_000_000
-  let max_ex_steps = 5
 
   let removed_tradable_input = tradable_input
   let added_output =
     removed_tradable_input * base_price.num / base_price.denom - 1
-  let removed_ex_fee = fee * removed_tradable_input / tradable_input
+  let removed_ex_fee = fee
   let allowed_executors = pkh1
   !test_batched_full_swap(
     tradable_input,
-    cost_per_ex_step,
-    max_ex_steps,
     fee,
     base_price,
     removed_tradable_input,
     removed_ex_fee,
-    cost_per_ex_step,
     added_output,
     allowed_executors,
     pkh1,
