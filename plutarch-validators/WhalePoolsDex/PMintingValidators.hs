@@ -8,8 +8,7 @@ module WhalePoolsDex.PMintingValidators (
     daoBalanceMintPolicyValidator,
     royaltyPoolDAOV1Validator,
     royaltyWithdrawPoolValidator,
-    doubleRoyaltyPoolDAOV1Validator,
-    doubleRoyaltyWithdrawPoolValidator
+    doubleRoyaltyPoolDAOV1Validator
 ) where
 
 import Plutarch
@@ -29,7 +28,6 @@ import qualified WhalePoolsDex.PContracts.PFeeSwitchBalancePool as BDao
 import qualified WhalePoolsDex.PContracts.PRoyaltyDAOV1 as PRDAOV1
 import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyDAOV1 as PDRDAOV1
 import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawPool as PRWP
-import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyWithdrawPool as PRDWP
 import Data.ByteString (ByteString)
 
 cfgForMintingValidator :: Config
@@ -85,10 +83,3 @@ royaltyWithdrawPoolValidator =
     mkMintingPolicy cfgForMintingValidator $ 
         wrapMintingValidator $ 
             PRWP.royaltyWithdrawPoolValidatorT
-
-doubleRoyaltyWithdrawPoolValidator :: MintingPolicy
-doubleRoyaltyWithdrawPoolValidator = 
-    mkMintingPolicy cfgForMintingValidator $ 
-        wrapMintingValidator $ 
-            PRDWP.doubleRoyaltyWithdrawPoolValidatorT
-
