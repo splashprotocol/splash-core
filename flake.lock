@@ -2956,7 +2956,7 @@
       },
       "locked": {
         "lastModified": 1656595231,
-        "narHash": "sha256-3EBhSroECMOSP02qZGT0Zb3QHWibI/tYjdcaT5/YotY=",
+        "narHash": "sha256-/UzVhInSfS8QTNvuLCzXtrRxhC0sCPB9G8ieu2rIgQA=",
         "owner": "input-output-hk",
         "repo": "plutus",
         "rev": "b39a526e983cb931d0cc49b7d073d6d43abd22b5",
@@ -3016,7 +3016,7 @@
       },
       "locked": {
         "lastModified": 1656595231,
-        "narHash": "sha256-3EBhSroECMOSP02qZGT0Zb3QHWibI/tYjdcaT5/YotY=",
+        "narHash": "sha256-/UzVhInSfS8QTNvuLCzXtrRxhC0sCPB9G8ieu2rIgQA=",
         "owner": "input-output-hk",
         "repo": "plutus",
         "rev": "b39a526e983cb931d0cc49b7d073d6d43abd22b5",
@@ -3032,7 +3032,7 @@
       "flake": false,
       "locked": {
         "lastModified": 1656595231,
-        "narHash": "sha256-3EBhSroECMOSP02qZGT0Zb3QHWibI/tYjdcaT5/YotY=",
+        "narHash": "sha256-/UzVhInSfS8QTNvuLCzXtrRxhC0sCPB9G8ieu2rIgQA=",
         "owner": "input-output-hk",
         "repo": "plutus",
         "rev": "b39a526e983cb931d0cc49b7d073d6d43abd22b5",
@@ -3140,7 +3140,7 @@
       "flake": false,
       "locked": {
         "lastModified": 1647139352,
-        "narHash": "sha256-JyHAQfTTUswP8MeGEZibx/2/v01Q7cU5mNpnmDazh24=",
+        "narHash": "sha256-NDVzTC/eDhVeulbIg6h/I1z9Nt9G31EqkiM9IBjfhT0=",
         "owner": "protolude",
         "repo": "protolude",
         "rev": "3e249724fd0ead27370c8c297b1ecd38f92cbd5b",
@@ -3156,7 +3156,7 @@
       "flake": false,
       "locked": {
         "lastModified": 1647139352,
-        "narHash": "sha256-JyHAQfTTUswP8MeGEZibx/2/v01Q7cU5mNpnmDazh24=",
+        "narHash": "sha256-NDVzTC/eDhVeulbIg6h/I1z9Nt9G31EqkiM9IBjfhT0=",
         "owner": "protolude",
         "repo": "protolude",
         "rev": "3e249724fd0ead27370c8c297b1ecd38f92cbd5b",

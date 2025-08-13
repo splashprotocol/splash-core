@@ -1,3 +1,5 @@
+{-# LANGUAGE BlockArguments #-}
+
 module Main(main) where
 
 import WhalePoolsDex.PMintingValidators
