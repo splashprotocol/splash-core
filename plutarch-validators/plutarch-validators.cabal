@@ -115,7 +115,6 @@ library
     WhalePoolsDex.PContracts.PDoubleRoyaltyDeposit
     WhalePoolsDex.PContracts.PDoubleRoyaltyRedeem
     WhalePoolsDex.PContracts.PDoubleRoyaltyDAOV1
-    WhalePoolsDex.PContracts.PDoubleRoyaltyWithdrawPool
     WhalePoolsDex.PContracts.PDoubleRoyaltyWithdrawOrder
     WhalePoolsDex.PContracts.PPoolBFee
     WhalePoolsDex.PContracts.PRedeem
