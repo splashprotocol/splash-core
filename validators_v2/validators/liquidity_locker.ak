@@ -115,14 +115,14 @@ fn test_redeem(
       purpose: Spend(order_input_ref),
       transaction: transaction.placeholder()
         |> fn(transaction) {
-             Transaction {
-               ..transaction,
-               inputs: [order_input],
-               outputs: [order_output],
-               extra_signatories: signatories,
-               validity_range: validity_range,
-             }
-           },
+            Transaction {
+              ..transaction,
+              inputs: [order_input],
+              outputs: [order_output],
+              extra_signatories: signatories,
+              validity_range: validity_range,
+            }
+          },
     }
   liquidity_locker(initial_conf, 0, ctx)
 }
@@ -158,13 +158,13 @@ fn test_relock_or_transfer(
       purpose: Spend(order_input_ref),
       transaction: transaction.placeholder()
         |> fn(transaction) {
-             Transaction {
-               ..transaction,
-               inputs: [order_input],
-               outputs: [order_output],
-               extra_signatories: signatories,
-             }
-           },
+            Transaction {
+              ..transaction,
+              inputs: [order_input],
+              outputs: [order_output],
+              extra_signatories: signatories,
+            }
+          },
     }
   liquidity_locker(initial_conf, 0, ctx)
 }

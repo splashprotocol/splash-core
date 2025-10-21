@@ -46,13 +46,13 @@ test valid_mint() {
       purpose: Mint(string_28),
       transaction: transaction.placeholder()
         |> fn(transaction) {
-             Transaction {
-               ..transaction,
-               inputs: [input],
-               mint: value.add(value.zero(), string_28, beacon_name, 1)
-                 |> value.to_minted_value(),
-             }
-           },
+            Transaction {
+              ..transaction,
+              inputs: [input],
+              mint: value.add(value.zero(), string_28, beacon_name, 1)
+                |> value.to_minted_value(),
+            }
+          },
     }
   beacon(order_input_ref, True, ctx)
 }
@@ -68,12 +68,12 @@ test valid_burn() {
       purpose: Mint(string_28),
       transaction: transaction.placeholder()
         |> fn(transaction) {
-             Transaction {
-               ..transaction,
-               mint: value.add(value.zero(), string_28, beacon_name, -1)
-                 |> value.to_minted_value(),
-             }
-           },
+            Transaction {
+              ..transaction,
+              mint: value.add(value.zero(), string_28, beacon_name, -1)
+                |> value.to_minted_value(),
+            }
+          },
     }
   beacon(order_input_ref, True, ctx)
 }
@@ -89,12 +89,12 @@ test invalid_mint_required_input_not_present() fail {
       purpose: Mint(string_28),
       transaction: transaction.placeholder()
         |> fn(transaction) {
-             Transaction {
-               ..transaction,
-               mint: value.add(value.zero(), string_28, beacon_name, 1)
-                 |> value.to_minted_value(),
-             }
-           },
+            Transaction {
+              ..transaction,
+              mint: value.add(value.zero(), string_28, beacon_name, 1)
+                |> value.to_minted_value(),
+            }
+          },
     }
   beacon(order_input_ref, True, ctx)
 }
