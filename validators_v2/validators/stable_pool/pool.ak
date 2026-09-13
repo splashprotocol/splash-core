@@ -1,3 +1,8 @@
+// ⚠️ CRITICAL VULNERABILITY — DO NOT USE.
+// This validator family was exploited on 13 September 2026 (Splash ADA/OADA StableSwap pool drained).
+// Tradable reserves are computed as total − protocol_fees with no positivity check; a negative reserve
+// passes the invariant checks. See README.md and SPLASH_STABLESWAP_INCIDENT_2026-09-13.pdf in this directory.
+
 use aiken/bytearray
 use aiken/list
 use aiken/math
