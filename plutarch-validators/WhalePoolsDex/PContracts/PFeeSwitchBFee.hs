@@ -1,6 +1,6 @@
 module WhalePoolsDex.PContracts.PFeeSwitch where
 
-import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit)
+import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit, feeDen)
 import PExtra.API (assetClassValueOf, ptryFromData, PAssetClass(..))
 import PExtra.Monadic
 import Plutarch
@@ -78,6 +78,8 @@ daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer
     updatedTreasuryFeeIsCorrect = pdelay (newTreasuryFee #<= treasuryFeeNumUpperLimit #&& treasuryFeeNumLowerLimit #<= newTreasuryFee)
 
     -- Checks that new pool fee num value satisfy protocol bounds
+    validFeeConfiguration = zero #< newPoolFeeNumX #&& newPoolFeeNumX #<= feeDen #&& zero #< newPoolFeeNumY #&& newPoolFeeNumY #<= feeDen
+
     updatedPoolFeeNumIsCorrect = 
       pdelay (
         (newPoolFeeNumX #<= poolFeeNumUpperLimit #&& poolFeeNumLowerLimit #<= newPoolFeeNumX) #&&
@@ -227,4 +229,4 @@ daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer
         pforce poolValueAndAddressAreTheSame #&&
         pforce updatedPoolFeeNumIsCorrect
 
-  pure $ validCommonFields #&& validThreshold #&& validAction
+  pure $ validCommonFields #&& validThreshold #&& validFeeConfiguration #&& validAction

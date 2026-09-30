@@ -23,7 +23,7 @@ import Plutarch.Api.V1.Scripts      (PValidatorHash)
 import Plutarch.Extra.Maybe         as Maybe
 import Plutarch.Api.V1.AssocMap     as Map
 
-import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromData, assetClass, pValueLength)
+import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromData, assetClass, pPreserveOtherAssets, pDistinctPoolAssets)
 import PExtra.List                  (pelemAt)
 import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
 import PExtra.Ada
@@ -184,6 +184,19 @@ readPoolState = phoistAcyclic $
                     #$ pdcons @"lovelaceToken2Token" @PInteger # pdata lovelaceToken2Token
                         # pdnil
 
+validPoolBacking :: Term s (PoolConfig :--> PTxOut :--> PBool :--> PBool)
+validPoolBacking = plam $ \conf out allowTerminal -> unTermCont $ do
+    fields <- pletFieldsC @'["treasuryX", "treasuryY"] conf
+    state <- tlet $ readPoolState # conf # out
+    rx <- tletField @"reservesX" state
+    ry <- tletField @"reservesY" state
+    lq <- tletField @"liquidity" state
+    pure $ (zero #<= getField @"treasuryX" fields #&&
+            zero #<= getField @"treasuryY" fields) #&&
+           burnLqInitial #<= lq #&& lq #<= maxLqCap #&&
+           zero #<= rx #&& zero #<= ry #&&
+           ((zero #< rx #&& zero #< ry) #|| (allowTerminal #&& lq #== burnLqInitial))
+
 poolBFeeValidatorT :: ClosedTerm (PoolConfig :--> PoolRedeemer :--> PScriptContext :--> PBool)
 poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
     redeemer <- pletFieldsC @'["action", "selfIx"] redeemer'
@@ -205,15 +218,15 @@ poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
     let 
         selfInRef    = getField @"outRef" selfIn
         selfIdentity = selfRef #== selfInRef -- self is the output currently validated by this script
-
-        selfInput = getField @"resolved" selfIn
         
+        selfInput = getField @"resolved" selfIn
+
     s0  <- tlet $ readPoolState # conf # selfInput
     lq0 <- tletField @"liquidity" s0
 
     pure $
         selfIdentity #&& (pmatch action $ \case
-            Destroy -> lq0 #<= burnLqInitial -- all tokens except for permanetly locked ones are removed
+            Destroy -> pcon PFalse -- retirement must use the governed DAO action
             _ -> unTermCont $ do
                 outputs <- tletUnwrap $ getField @"outputs" txInfo
 
@@ -247,11 +260,12 @@ poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                 selfValue     <- tletUnwrap $ getField @"value" self
                 succesorValue <- tletUnwrap $ getField @"value" successor
 
-                let 
-                    selfValueLength = pValueLength # selfValue
-                    succesorValueLength = pValueLength # succesorValue
-
-                    noMoreTokens = selfValueLength #== succesorValueLength
+                poolX <- tletField @"poolX" conf
+                poolY <- tletField @"poolY" conf
+                poolLq <- tletField @"poolLq" conf
+                let noMoreTokens = pDistinctPoolAssets # poolX # poolY # poolLq # nft #&&
+                                   pPreserveOtherAssets # selfValue # succesorValue # poolX # poolY # poolLq # nft #&&
+                                   assetClassValueOf # selfValue # nft #== 1
 
                 selfAddr <- tletUnwrap $ getField @"address" self
                 succAddr <- tletUnwrap $ getField @"address" successor
@@ -266,6 +280,7 @@ poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                             let
                                 newConfig     = parseDatum # succD
                                 validTreasury = correctSwapConfig # conf # newConfig # dx # dy
+                                validBacking = validPoolBacking # conf # selfInput # pcon PFalse #&& validPoolBacking # newConfig # successorOut # pcon PFalse
 
                                 swapAllowed = lqBound #<= (rx0 * 2)
 
@@ -275,9 +290,9 @@ poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                                 validSwap =
                                     pif
                                         (zero #< dx)
-                                        (-dy * (rx0 * feeDen' + dxf) #<= ry0 * dxf)
-                                        (-dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
-                            pure $ noMoreTokens #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
+                                        (dy #< zero #&& -dy * (rx0 * feeDen' + dxf) #<= ry0 * dxf)
+                                        (dx #< zero #&& zero #< dy #&& -dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
+                            pure $ noMoreTokens #&& validBacking #&& zero #< feeNumX #&& feeNumX #<= feeDen' #&& zero #< feeNumY #&& feeNumY #<= feeDen' #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
                         DAOAction -> validDAOAction # conf # txinfo'
                         _ -> unTermCont $ do
                             POutputDatum selfD' <- pmatchC selfDatum
@@ -285,6 +300,10 @@ poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                             let
                               confPreserved      = selfD #== succD -- whole config preserved
                               validDepositRedeem = dlq * rx0 #<= dx * lq0 #&& dlq * ry0 #<= dy * lq0
-                            pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly
+                              validLiquidityAction = pmatch action $ \case
+                                  Deposit -> zero #< dlq
+                                  Redeem -> dlq #< zero
+                                  _ -> pcon PFalse
+                            pure $ noMoreTokens #&& validPoolBacking # conf # selfInput # pcon PFalse #&& validPoolBacking # conf # successorOut # pcon PTrue #&& confPreserved #&& scriptPreserved #&& validLiquidityAction #&& validDepositRedeem -- either deposit or redeem is performed properly
                 pure $ valid #&& correctLovelaceToken2TokenValue
             )
