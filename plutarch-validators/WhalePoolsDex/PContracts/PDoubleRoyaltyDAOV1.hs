@@ -4,7 +4,7 @@ module WhalePoolsDex.PContracts.PDoubleRoyaltyDAOV1 (
 
 import qualified GHC.Generics as GHC
 
-import WhalePoolsDex.PContracts.PApi         (tletUnwrap, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit, feeDen)
+import WhalePoolsDex.PContracts.PApi         (tletUnwrap, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit, feeDen, zero)
 import WhalePoolsDex.PContracts.PFeeSwitch   (findOutput)
 import WhalePoolsDex.PContracts.PDoubleRoyaltyPool
 import WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder

@@ -6,7 +6,7 @@ module WhalePoolsDex.PContracts.PRoyaltyDAOV1 (
 
 import qualified GHC.Generics as GHC
 
-import WhalePoolsDex.PContracts.PApi         (tletUnwrap, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit, feeDen)
+import WhalePoolsDex.PContracts.PApi         (tletUnwrap, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit, feeDen, zero)
 import WhalePoolsDex.PContracts.PFeeSwitch   (findOutput)
 import WhalePoolsDex.PContracts.PRoyaltyPool
 import WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder
