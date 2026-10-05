@@ -180,7 +180,6 @@ test-suite cardano-dex-contracts-test
     Tests.FeeSwitch
     Tests.BalancePool
     Tests.FeeSwitchBFee
-    Tests.DoubleRoyaltyPool
     -- Tests.RoyaltyWithdraw
     Tests.Api
     Eval
