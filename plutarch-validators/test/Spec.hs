@@ -55,9 +55,10 @@ mintingPolicyHash =
   . PlutusV2.getMintingPolicy
 
 main :: IO ()
-main = defaultMain $ dependentTestGroup "Contracts" AllSucceed
+main = defaultMain $ testGroup "Contracts"
   [ tests
-  , testCase "export royalty-pool deployment artifacts" exportRoyaltyPoolArtifacts
+  , after AllSucceed "contract checks" $
+      testCase "export royalty-pool deployment artifacts" exportRoyaltyPoolArtifacts
   ]
 
 -- | Export the exact serialized scripts used for a royalty-pool deployment.
