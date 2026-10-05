@@ -207,3 +207,20 @@ test-suite cardano-dex-contracts-test
     , serialise
     , hw-hedgehog
     , HasBigDecimal
+
+executable export-royalty-dao-v1
+  import:          lang
+  main-is:          ExportRoyaltyDaoV1.hs
+  hs-source-dirs:   app
+  build-depends:
+    , aeson
+    , base
+    , base16-bytestring
+    , bytestring
+    , directory
+    , filepath
+    , plutarch-validators
+    , plutus-ledger-api
+    , plutus-tx
+    , serialise
+    , text

@@ -1,0 +1,58 @@
+{
+  "network": "preprod",
+  "purpose": "Disposable mock DAO V1 administrators for Preprod only",
+  "threshold": 4,
+  "lpFeeIsEditable": true,
+  "daoAdminVerificationKeys": [
+    "257412edc7b79af27a0e1495ce6efe0c421b539207221c16b5cbe981de3b3ea4",
+    "dc71a2f067a9fee4cea91ad9464f9e7c2120d46b059890e83d31bea063582744",
+    "14796499ebecb8669c046393acbdfae88c46257ffe2c79c37178a871e5022576",
+    "ddff5df374412db21bca181099bfef105e0e0be4588f3133fca02cdd11dd0802",
+    "d33a873c8722683843f0f8e3dd48f8d0f675da32267626de3fb9f20cb38e0dd2",
+    "6709d7bb249f71159d10f5875c43fb2dc8bee368beb1bd370275afffe7b7f15e"
+  ],
+  "paymentKeyHashes": [
+    "49aa45694db358be303c442f131afdad1988d1994b5b79880b568b77",
+    "325c595133426929ba0cc706437093a3d51634b037370e94ed9899bd",
+    "96f89f8f17184c6a832ff513d2583e602aa2ed7ec972779b967a9c49",
+    "df0e75a29a507f9fa67e9d391804a53a501e567bc0be6d3498fb07a7",
+    "746bd28ac467fcd1b4d3e10b6d0fbfe5ed8427fbc15fedb19d5cae94",
+    "d37273cbf3747a892ac01dc5d78c26fa68d5eb4a10ead9f25fc76d7c"
+  ],
+  "administrators": [
+    {
+      "index": 1,
+      "verificationKey": "257412edc7b79af27a0e1495ce6efe0c421b539207221c16b5cbe981de3b3ea4",
+      "paymentKeyHash": "49aa45694db358be303c442f131afdad1988d1994b5b79880b568b77"
+    },
+    {
+      "index": 2,
+      "verificationKey": "dc71a2f067a9fee4cea91ad9464f9e7c2120d46b059890e83d31bea063582744",
+      "paymentKeyHash": "325c595133426929ba0cc706437093a3d51634b037370e94ed9899bd"
+    },
+    {
+      "index": 3,
+      "verificationKey": "14796499ebecb8669c046393acbdfae88c46257ffe2c79c37178a871e5022576",
+      "paymentKeyHash": "96f89f8f17184c6a832ff513d2583e602aa2ed7ec972779b967a9c49"
+    },
+    {
+      "index": 4,
+      "verificationKey": "ddff5df374412db21bca181099bfef105e0e0be4588f3133fca02cdd11dd0802",
+      "paymentKeyHash": "df0e75a29a507f9fa67e9d391804a53a501e567bc0be6d3498fb07a7"
+    },
+    {
+      "index": 5,
+      "verificationKey": "d33a873c8722683843f0f8e3dd48f8d0f675da32267626de3fb9f20cb38e0dd2",
+      "paymentKeyHash": "746bd28ac467fcd1b4d3e10b6d0fbfe5ed8427fbc15fedb19d5cae94"
+    },
+    {
+      "index": 6,
+      "verificationKey": "6709d7bb249f71159d10f5875c43fb2dc8bee368beb1bd370275afffe7b7f15e",
+      "paymentKeyHash": "d37273cbf3747a892ac01dc5d78c26fa68d5eb4a10ead9f25fc76d7c"
+    }
+  ],
+  "semantics": {
+    "daoAdminVerificationKeys": "32-byte raw Ed25519 verification keys. These exact bytes parameterize DAO V1 because the validator verifies signatures against them.",
+    "paymentKeyHashes": "28-byte Blake2b-224 Cardano payment-key hashes. Metadata only; never use as DAO V1 verification-key parameters."
+  }
+}

@@ -5,3 +5,6 @@ build/
 .DS_Store
 token.txt
 seed.txt
+
+# Local Preprod-only mnemonic material; never commit.
+/.private/

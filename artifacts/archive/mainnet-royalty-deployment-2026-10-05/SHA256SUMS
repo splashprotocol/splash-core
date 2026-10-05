@@ -1,0 +1,13 @@
+21a1b84adaa649489ca8486fc1c4cdc2a4dabfccb84903963e7f01457df9d351  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/double-royalty-dao-v1-policy.uplc
+aa3fc24976a57e7f7c8407e562d43ac89cee9b931f83ecc4f6c68618f6ddff0f  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/double-royalty-deposit.uplc
+78e6dcac99d0eba96fb403d8f71041756d379ca47300ec3e5391e41db8026aa2  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/double-royalty-pool.uplc
+22e2453803e100b1d4341cd12d21fdca4fb1709fd9ddd43a0d304632a1531f56  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/double-royalty-redeem.uplc
+110633dc1b7d763049ac7adf22f25bb3dc56a66905d9bb54735c32d80330e233  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/double-royalty-withdraw-order.uplc
+9472776438e829948b88225328b48fcc697722c60c4f48b6061e8d0a51e8e127  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/royalty-dao-v1-action-order.uplc
+db6250eccccad2d18c7f9a37c961f084f4eb003c25bfbb464ef09975eb9464b8  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/royalty-dao-v1-policy.uplc
+119fca577b2814b6da6ed1a18c9a856d5b6db148397c31ed549ceebd34bff3cd  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/royalty-deposit.uplc
+3c0f34f15772f25337111d78f2a14d80c4f53bbe7b6696a3f5af5784e0155786  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/royalty-pool.uplc
+3154b2bcbe2832a7b02a312e116177bad0ede33dfd46aae5c7cc4999b8c8c6b2  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/royalty-redeem.uplc
+c16c4fc7e0106154855c0d7352f2707363cba387dcc01bc1e6d9fd623db44093  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/royalty-withdraw-order.uplc
+58c5a8ca73b6239e24633fff34a6fd95593437366b9936717fedf8a54466576c  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/royalty-withdraw-pool-policy.uplc
+ad4b3acd21bfe05f4c4e2be088897a1b99f32031c0e8a90e6544a3f64b50c43d  artifacts/archive/mainnet-royalty-deployment-2026-10-05/raw-cbor/script-hashes.txt
