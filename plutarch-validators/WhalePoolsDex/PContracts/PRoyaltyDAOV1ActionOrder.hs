@@ -34,7 +34,7 @@ unsafeFromEither (Left err)    = Prelude.error ("Err:" ++ show err)
 unsafeFromEither (Right value) = value
 
 daoV1RoyaltyPoolScriptHash :: BuiltinByteString
-daoV1RoyaltyPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "66e711a4bf9ddf46ff239143870b6893055a4fd4dea9f99fed6665cd"
+daoV1RoyaltyPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "56e45b69e269ac0cdae96f52c28b6ae2f1daf1b2d5777b212a55c3ee"
 
 daoV1RoyaltyPoolCred :: Term s PStakingCredential
 daoV1RoyaltyPoolCred = pconstant (StakingHash . ScriptCredential . ValidatorHash $ daoV1RoyaltyPoolScriptHash)

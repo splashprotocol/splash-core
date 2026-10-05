@@ -51,7 +51,7 @@ import qualified Data.ByteString.Base16  as Hex
 import qualified Data.Text.Encoding      as E
 
 royaltyWithdrawPoolScriptHash :: BuiltinByteString
-royaltyWithdrawPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "b06af42921ec84197df52d049736ae4e38dc4d568772455c088d7e49"
+royaltyWithdrawPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "e0de1016c69f04483037d4cb6cc85bb6d42bc75b80774bc5bc48eb2f"
 
 royaltyStakeCred :: Term s PStakingCredential
 royaltyStakeCred = pconstant (StakingHash . ScriptCredential . ValidatorHash $ royaltyWithdrawPoolScriptHash)
