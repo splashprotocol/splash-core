@@ -33,9 +33,10 @@ import qualified Data.Text as T
 import PlutusTx.Builtins.Internal (BuiltinByteString(..))
 import PlutusLedgerApi.V1.Value
 import Debug.Trace
-import System.Directory (createDirectoryIfMissing)
+import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
 import System.Environment (lookupEnv)
-import System.FilePath ((</>))
+import System.FilePath ((</>), isRelative, takeDirectory)
+import System.IO.Error (ioError, userError)
 
 mkPubKeyHash :: String -> PubKeyHash
 mkPubKeyHash str = PubKeyHash $ BuiltinByteString $ mkByteString . T.pack $ str
@@ -66,7 +67,13 @@ main = defaultMain $ testGroup "Contracts"
 -- directory. A write failure fails the containing Tasty test case.
 exportRoyaltyPoolArtifacts :: IO ()
 exportRoyaltyPoolArtifacts = do
-  artifactRoot <- maybe "artifacts/plutarch" id <$> lookupEnv "SPLASH_ARTIFACTS_DIR"
+  projectRoot <- getCurrentDirectory >>= findProjectRoot
+  configuredRoot <- lookupEnv "SPLASH_ARTIFACTS_DIR"
+  let artifactRoot = case configuredRoot of
+        Nothing -> projectRoot </> "artifacts/plutarch"
+        Just root
+          | isRelative root -> projectRoot </> root
+          | otherwise -> root
   let outputDir = artifactRoot </> "royalty-pools"
   createDirectoryIfMissing True outputDir
   let
@@ -139,6 +146,17 @@ exportRoyaltyPoolArtifacts = do
 
 writeArtifact :: FilePath -> (FilePath, BS.ByteString) -> IO ()
 writeArtifact outputDir (fileName, bytes) = BS.writeFile (outputDir </> fileName) bytes
+
+findProjectRoot :: FilePath -> IO FilePath
+findProjectRoot directory = do
+  hasProjectFile <- doesFileExist (directory </> "cabal.project")
+  if hasProjectFile
+    then pure directory
+    else
+      let parent = takeDirectory directory
+      in if parent == directory
+        then ioError $ userError "could not locate cabal.project for artifact export"
+        else findProjectRoot parent
 
 -- test123 = testGroup "TestGroup"
 --   [ royaltyWithdraw ]
