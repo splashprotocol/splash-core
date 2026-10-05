@@ -16,7 +16,8 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Codec.Serialise (serialise)
-import PlutusLedgerApi.V1.Scripts (getScriptHash, scriptHash, unMintingPolicyScript)
+import PlutusLedgerApi.V1.Scripts (getScriptHash, unMintingPolicyScript)
+import Plutarch.Api.V2 (scriptHash)
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (getArgs)
 import System.Exit (die)
