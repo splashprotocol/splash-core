@@ -219,6 +219,7 @@ executable export-royalty-dao-v1
     , bytestring
     , directory
     , filepath
+    , plutarch
     , plutarch-validators
     , plutus-ledger-api
     , plutus-tx
