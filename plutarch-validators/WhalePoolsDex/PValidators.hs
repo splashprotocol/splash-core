@@ -15,6 +15,7 @@ module WhalePoolsDex.PValidators (
     royaltyRedeemValidator,
     doubleRoyaltyRedeemValidator,
     royaltyWithdrawOrderValidator,
+    doubleRoyaltyWithdrawOrderValidator,
     royaltyPooldaoV1ActionOrderValidator
 ) where
 
@@ -36,6 +37,7 @@ import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyDeposit   as PDRD
 import qualified WhalePoolsDex.PContracts.PRoyaltyRedeem    as PRR
 import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyRedeem    as PDRR
 import qualified WhalePoolsDex.PContracts.PRoyaltyWithdrawOrder as PRWC
+import qualified WhalePoolsDex.PContracts.PDoubleRoyaltyWithdrawOrder as PDRWC
 import qualified WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder as PRDAOV1Request
 
 import Plutarch
@@ -88,6 +90,9 @@ royaltyPoolValidator = mkValidator cfgForValidator $ wrapValidator PRP.poolValid
 
 royaltyWithdrawOrderValidator :: Validator
 royaltyWithdrawOrderValidator = mkValidator cfgForValidator $ wrapValidator PRWC.royaltyWithdrawOrderValidatorT
+
+doubleRoyaltyWithdrawOrderValidator :: Validator
+doubleRoyaltyWithdrawOrderValidator = mkValidator cfgForValidator $ wrapValidator PDRWC.doubleRoyaltyWithdrawOrderValidatorT
 
 royaltyDepositValidator :: Validator
 royaltyDepositValidator = mkValidator cfgForValidator $ wrapValidator PRD.royaltyDepositValidatorT

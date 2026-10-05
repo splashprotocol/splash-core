@@ -186,6 +186,8 @@ test-suite cardano-dex-contracts-test
     Eval
   build-depends:
     , base
+    , directory
+    , filepath
     , HUnit
     , text
     , base16-bytestring
@@ -200,7 +202,7 @@ test-suite cardano-dex-contracts-test
     , hedgehog
     , rio
     , tasty-hunit
-    , tasty
+    , tasty >= 1.5.4
     , tasty-hedgehog
     , plutus-core
     , serialise

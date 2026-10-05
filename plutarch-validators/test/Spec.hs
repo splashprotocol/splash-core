@@ -33,6 +33,9 @@ import qualified Data.Text as T
 import PlutusTx.Builtins.Internal (BuiltinByteString(..))
 import PlutusLedgerApi.V1.Value
 import Debug.Trace
+import System.Directory (createDirectoryIfMissing)
+import System.Environment (lookupEnv)
+import System.FilePath ((</>))
 
 mkPubKeyHash :: String -> PubKeyHash
 mkPubKeyHash str = PubKeyHash $ BuiltinByteString $ mkByteString . T.pack $ str
@@ -52,16 +55,20 @@ mintingPolicyHash =
   . PlutusV2.getMintingPolicy
 
 main :: IO ()
-main = do
-  -- defaultMain test123
+main = defaultMain $ dependentTestGroup "Contracts" AllSucceed
+  [ tests
+  , testCase "export royalty-pool deployment artifacts" exportRoyaltyPoolArtifacts
+  ]
+
+-- | Export the exact serialized scripts used for a royalty-pool deployment.
+-- Set SPLASH_ARTIFACTS_DIR to override the default repository-local output
+-- directory. A write failure fails the containing Tasty test case.
+exportRoyaltyPoolArtifacts :: IO ()
+exportRoyaltyPoolArtifacts = do
+  artifactRoot <- maybe "artifacts/plutarch" id <$> lookupEnv "SPLASH_ARTIFACTS_DIR"
+  let outputDir = artifactRoot </> "royalty-pools"
+  createDirectoryIfMissing True outputDir
   let
-  --   nftCS = "e07f13716ab4dfffb388ad7c67a6ed6642dc9f1145f5c3077ecd33e8"
-  --   nftTN = "6e6674"
-
-  --   cs = CurrencySymbol $ BuiltinByteString $ mkByteString $ T.pack nftCS
-  --   tn = TokenName $ BuiltinByteString $ mkByteString $ T.pack nftTN
-  --   ac = AssetClass (cs, tn)
-
     pk1 = (mkByteString . T.pack $ "0bb1d2db22f9b641f0afe8d8a398279cb778d8f86167500f7e63ebbdc35b4d69")
     pk2 = (mkByteString . T.pack $ "4e8221615500dbf6737b02992610ffeed82da6826dc3d9729febf1d32d766615")
     pk3 = (mkByteString . T.pack $ "ae536160ccec4f078982396125773d509072397e35ed6fab7af2a762ca147318")
@@ -70,43 +77,72 @@ main = do
     pk6 = (mkByteString . T.pack $ "a7d30e99673c57638bdb65b5a0554ddee3135131940a41bbd3534b0d4c709506")
     -- hash = validatorHash 
 
-    doubelRoyaltyDaoValidator = doubleRoyaltyPoolDAOV1Validator [pk1, pk2, pk3, pk4, pk5, pk6] 4 True
+    admins = [pk1, pk2, pk3, pk4, pk5, pk6]
+    royaltyDaoValidator = royaltyPoolDAOV1Validator admins 4 True
+    doubleRoyaltyDaoValidator = doubleRoyaltyPoolDAOV1Validator admins 4 True
 
     doubleRoyaltyPoolHash = validatorHash doubleRoyaltyPoolValidator
     royaltyPoolHash = validatorHash royaltyPoolValidator
-    daoV1ValidatorHash = mintingPolicyHash doubelRoyaltyDaoValidator
+    royaltyDaoValidatorHash = mintingPolicyHash royaltyDaoValidator
+    doubleRoyaltyDaoValidatorHash = mintingPolicyHash doubleRoyaltyDaoValidator
     royaltyDoubleDepositHash = validatorHash doubleRoyaltyDepositValidator
     royaltyDoubleRedeemHash = validatorHash doubleRoyaltyRedeemValidator
+    royaltyDepositHash = validatorHash royaltyDepositValidator
+    royaltyRedeemHash = validatorHash royaltyRedeemValidator
     daoV1OrderValidatorHash = validatorHash royaltyPooldaoV1ActionOrderValidator
     royaltyWithdrawOrderValidatorHash = validatorHash royaltyWithdrawOrderValidator
+    doubleRoyaltyWithdrawOrderValidatorHash = validatorHash doubleRoyaltyWithdrawOrderValidator
+    royaltyWithdrawPoolPolicyHash = mintingPolicyHash royaltyWithdrawPoolValidator
 
     royaltyWithdrawOrder = LBS.toStrict $ serialise (unValidatorScript royaltyWithdrawOrderValidator)
+    doubleRoyaltyWithdrawOrder = LBS.toStrict $ serialise (unValidatorScript doubleRoyaltyWithdrawOrderValidator)
     doubleRoyaltyPool = LBS.toStrict $ serialise (unValidatorScript doubleRoyaltyPoolValidator)
     royaltyPool = LBS.toStrict $ serialise (unValidatorScript royaltyPoolValidator)
     doubleRoyaltyPoolDeposit = LBS.toStrict $ serialise (unValidatorScript doubleRoyaltyDepositValidator)
     doubleRoyaltyPoolRedeem = LBS.toStrict $ serialise (unValidatorScript doubleRoyaltyRedeemValidator)
-    daoV1Validator = LBS.toStrict $ serialise (unMintingPolicyScript doubelRoyaltyDaoValidator)
-    -- daoV1OrderValidator = LBS.toStrict $ serialise (unValidatorScript royaltyPooldaoV1ActionOrderValidator)
+    royaltyPoolDeposit = LBS.toStrict $ serialise (unValidatorScript royaltyDepositValidator)
+    royaltyPoolRedeem = LBS.toStrict $ serialise (unValidatorScript royaltyRedeemValidator)
+    royaltyWithdrawPoolPolicy = LBS.toStrict $ serialise (unMintingPolicyScript royaltyWithdrawPoolValidator)
+    royaltyDaoPolicy = LBS.toStrict $ serialise (unMintingPolicyScript royaltyDaoValidator)
+    doubleRoyaltyDaoPolicy = LBS.toStrict $ serialise (unMintingPolicyScript doubleRoyaltyDaoValidator)
+    daoV1OrderValidator = LBS.toStrict $ serialise (unValidatorScript royaltyPooldaoV1ActionOrderValidator)
 
-  -- traceM $ "royaltyWithdraw doueble pool hash: " ++ show doubleRoyaltyWithdrawPoolHash
-  traceM $ "roaylty double pool hash: " ++ show doubleRoyaltyPoolHash
-  traceM $ "roaylty pool hash: " ++ show royaltyPoolHash
-  -- traceM $ "roaylty double pool deposit: " ++ show royaltyDoubleDepositHash
-  -- traceM $ "roaylty double pool redeem: " ++ show royaltyDoubleRedeemHash
-  -- traceM $ "roaylty dao v1 order hash: " ++ show daoV1OrderValidatorHash
-  traceM $ "double roaylty withdraw v1 order : " ++ show royaltyWithdrawOrderValidatorHash
-  BS.writeFile ("/home/bromel/projects/whalepools-core/plutarch-validators/royaltyPool.uplc") royaltyPool
-  BS.writeFile ("/home/bromel/projects/whalepools-core/plutarch-validators/doubleRoyaltyPool.uplc") doubleRoyaltyPool
-  -- BS.writeFile ("/home/bromel/projects/whalepools-core/plutarch-validators/doubleRoyaltyDeposit.uplc") doubleRoyaltyPoolDeposit
-  -- BS.writeFile ("/home/bromel/projects/whalepools-core/plutarch-validators/doubleRoyaltyRedeem.uplc") doubleRoyaltyPoolRedeem
-  -- BS.writeFile ("/home/bromel/projects/whalepools-core/plutarch-validators/doubleRoyaltyDAOV1.uplc") daoV1Validator
-  --BS.writeFile ("/home/bromel/projects/whalepools-core/plutarch-validators/royaltyDAOV1Order.uplc") daoV1OrderValidator
-  pure ()
+  mapM_ (writeArtifact outputDir)
+    [ ("royalty-pool.uplc", royaltyPool)
+    , ("double-royalty-pool.uplc", doubleRoyaltyPool)
+    , ("royalty-deposit.uplc", royaltyPoolDeposit)
+    , ("royalty-redeem.uplc", royaltyPoolRedeem)
+    , ("double-royalty-deposit.uplc", doubleRoyaltyPoolDeposit)
+    , ("double-royalty-redeem.uplc", doubleRoyaltyPoolRedeem)
+    , ("royalty-withdraw-order.uplc", royaltyWithdrawOrder)
+    , ("double-royalty-withdraw-order.uplc", doubleRoyaltyWithdrawOrder)
+    , ("royalty-withdraw-pool-policy.uplc", royaltyWithdrawPoolPolicy)
+    , ("royalty-dao-v1-policy.uplc", royaltyDaoPolicy)
+    , ("double-royalty-dao-v1-policy.uplc", doubleRoyaltyDaoPolicy)
+    , ("royalty-dao-v1-action-order.uplc", daoV1OrderValidator)
+    ]
+  writeFile (outputDir </> "script-hashes.txt") $ unlines
+    [ "royalty-pool=" ++ show royaltyPoolHash
+    , "double-royalty-pool=" ++ show doubleRoyaltyPoolHash
+    , "royalty-dao-v1-policy=" ++ show royaltyDaoValidatorHash
+    , "double-royalty-dao-v1-policy=" ++ show doubleRoyaltyDaoValidatorHash
+    , "double-royalty-deposit=" ++ show royaltyDoubleDepositHash
+    , "double-royalty-redeem=" ++ show royaltyDoubleRedeemHash
+    , "royalty-deposit=" ++ show royaltyDepositHash
+    , "royalty-redeem=" ++ show royaltyRedeemHash
+    , "royalty-dao-v1-action-order=" ++ show daoV1OrderValidatorHash
+    , "royalty-withdraw-order=" ++ show royaltyWithdrawOrderValidatorHash
+    , "double-royalty-withdraw-order=" ++ show doubleRoyaltyWithdrawOrderValidatorHash
+    , "royalty-withdraw-pool-policy=" ++ show royaltyWithdrawPoolPolicyHash
+    ]
+
+writeArtifact :: FilePath -> (FilePath, BS.ByteString) -> IO ()
+writeArtifact outputDir (fileName, bytes) = BS.writeFile (outputDir </> fileName) bytes
 
 -- test123 = testGroup "TestGroup"
 --   [ royaltyWithdraw ]
 
-tests = testGroup "Contracts"
+tests = testGroup "contract checks"
   [ feeSwitch
   , feeSwitchBFee
   , balancePool
