@@ -478,4 +478,4 @@ doubleRoyaltyDaoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam
         pforce poolValueAndAddressAreTheSame #&&
         pforce updatedPoolFeeNumIsCorrect
 
-  pure $ correctTxInputsQty #&& feeUtxoContainsOnlyAda #&& validCommonFieldsAndSignatureThreshold #&& validFeeConfiguration #&& validAction
+  pure $ correctTxInputsQty #&& feeUtxoContainsOnlyAda #&& (correctPoolNftInNewPool #== 1) #&& validCommonFieldsAndSignatureThreshold #&& validFeeConfiguration #&& validAction

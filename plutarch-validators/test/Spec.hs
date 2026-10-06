@@ -31,6 +31,7 @@ import qualified Data.ByteString.Short  as SBS
 import qualified PlutusLedgerApi.V2 as PlutusV2
 import qualified Data.Text as T
 import PlutusTx.Builtins.Internal (BuiltinByteString(..))
+import PlutusTx.Builtins (fromBuiltin)
 import PlutusLedgerApi.V1.Value
 import Debug.Trace
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
@@ -93,11 +94,16 @@ exportRoyaltyPoolArtifacts = do
     royaltyPoolHash = validatorHash royaltyPoolValidator
     royaltyDaoValidatorHash = mintingPolicyHash royaltyDaoValidator
     doubleRoyaltyDaoValidatorHash = mintingPolicyHash doubleRoyaltyDaoValidator
+    royaltyDaoHashBytes = fromBuiltin $ getScriptHash $ scriptHash $ PlutusV2.getMintingPolicy royaltyDaoValidator
+    doubleRoyaltyDaoHashBytes = fromBuiltin $ getScriptHash $ scriptHash $ PlutusV2.getMintingPolicy doubleRoyaltyDaoValidator
+    daoV1Order = royaltyPooldaoV1ActionOrderValidatorFor royaltyDaoHashBytes
+    doubleRoyaltyDaoV1Order = royaltyPooldaoV1ActionOrderValidatorFor doubleRoyaltyDaoHashBytes
     royaltyDoubleDepositHash = validatorHash doubleRoyaltyDepositValidator
     royaltyDoubleRedeemHash = validatorHash doubleRoyaltyRedeemValidator
     royaltyDepositHash = validatorHash royaltyDepositValidator
     royaltyRedeemHash = validatorHash royaltyRedeemValidator
-    daoV1OrderValidatorHash = validatorHash royaltyPooldaoV1ActionOrderValidator
+    daoV1OrderValidatorHash = validatorHash daoV1Order
+    doubleRoyaltyDaoV1OrderValidatorHash = validatorHash doubleRoyaltyDaoV1Order
     royaltyWithdrawOrderValidatorHash = validatorHash royaltyWithdrawOrderValidator
     doubleRoyaltyWithdrawOrderValidatorHash = validatorHash doubleRoyaltyWithdrawOrderValidator
     royaltyWithdrawPoolPolicyHash = mintingPolicyHash royaltyWithdrawPoolValidator
@@ -113,7 +119,8 @@ exportRoyaltyPoolArtifacts = do
     royaltyWithdrawPoolPolicy = LBS.toStrict $ serialise (unMintingPolicyScript royaltyWithdrawPoolValidator)
     royaltyDaoPolicy = LBS.toStrict $ serialise (unMintingPolicyScript royaltyDaoValidator)
     doubleRoyaltyDaoPolicy = LBS.toStrict $ serialise (unMintingPolicyScript doubleRoyaltyDaoValidator)
-    daoV1OrderValidator = LBS.toStrict $ serialise (unValidatorScript royaltyPooldaoV1ActionOrderValidator)
+    daoV1OrderValidator = LBS.toStrict $ serialise (unValidatorScript daoV1Order)
+    doubleRoyaltyDaoV1OrderValidator = LBS.toStrict $ serialise (unValidatorScript doubleRoyaltyDaoV1Order)
 
   mapM_ (writeArtifact outputDir)
     [ ("royalty-pool.uplc", royaltyPool)
@@ -128,6 +135,7 @@ exportRoyaltyPoolArtifacts = do
     , ("royalty-dao-v1-policy.uplc", royaltyDaoPolicy)
     , ("double-royalty-dao-v1-policy.uplc", doubleRoyaltyDaoPolicy)
     , ("royalty-dao-v1-action-order.uplc", daoV1OrderValidator)
+    , ("double-royalty-dao-v1-action-order.uplc", doubleRoyaltyDaoV1OrderValidator)
     ]
   writeFile (outputDir </> "script-hashes.txt") $ unlines
     [ "royalty-pool=" ++ show royaltyPoolHash
@@ -139,6 +147,7 @@ exportRoyaltyPoolArtifacts = do
     , "royalty-deposit=" ++ show royaltyDepositHash
     , "royalty-redeem=" ++ show royaltyRedeemHash
     , "royalty-dao-v1-action-order=" ++ show daoV1OrderValidatorHash
+    , "double-royalty-dao-v1-action-order=" ++ show doubleRoyaltyDaoV1OrderValidatorHash
     , "royalty-withdraw-order=" ++ show royaltyWithdrawOrderValidatorHash
     , "double-royalty-withdraw-order=" ++ show doubleRoyaltyWithdrawOrderValidatorHash
     , "royalty-withdraw-pool-policy=" ++ show royaltyWithdrawPoolPolicyHash
