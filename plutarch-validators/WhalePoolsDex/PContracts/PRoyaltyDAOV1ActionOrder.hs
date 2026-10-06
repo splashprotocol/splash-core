@@ -39,6 +39,10 @@ daoV1RoyaltyPoolScriptHash = BuiltinByteString $ mkByteString . T.pack $ "56e45b
 daoV1RoyaltyPoolCred :: Term s PStakingCredential
 daoV1RoyaltyPoolCred = pconstant (StakingHash . ScriptCredential . ValidatorHash $ daoV1RoyaltyPoolScriptHash)
 
+daoV1RoyaltyPoolCredFor :: BS.ByteString -> Term s PStakingCredential
+daoV1RoyaltyPoolCredFor scriptHashBytes =
+  pconstant (StakingHash . ScriptCredential . ValidatorHash . BuiltinByteString $ scriptHashBytes)
+
 data DAOAction (s :: S) = WithdrawTreasury | ChangeStakePart | ChangeTreasuryFee | ChangeTreasuryAddress | ChangeAdminAddress | ChangePoolFee
     deriving (Generic, PShow)
 
@@ -132,7 +136,10 @@ The contract manages two primary actions, focusing on validation and handling: A
 -}
 
 daoV1ActionOrderValidator :: Term s (DAOV1RequestConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
-daoV1ActionOrderValidator = plam $ \config redeemer' ctx' -> unTermCont $ do
+daoV1ActionOrderValidator = daoV1ActionOrderValidatorFor (mkByteString . T.pack $ "56e45b69e269ac0cdae96f52c28b6ae2f1daf1b2d5777b212a55c3ee")
+
+daoV1ActionOrderValidatorFor :: BS.ByteString -> Term s (DAOV1RequestConfig :--> OrderRedeemer :--> PScriptContext :--> PBool)
+daoV1ActionOrderValidatorFor daoScriptHash = plam $ \config redeemer' ctx' -> unTermCont $ do
   ctx      <- pletFieldsC @'["txInfo", "purpose"] ctx'
   config'  <- pletFieldsC @'["daoAction", "poolNft", "treasuryXWithdraw", "treasuryYWithdraw", "requestorPkh", "exFee"] config
   let
@@ -178,7 +185,7 @@ daoV1ActionOrderValidator = plam $ \config redeemer' ctx' -> unTermCont $ do
 
             wdrl     <- tletField @"wdrl" txInfo'
             let
-                headWithdrawl = plookup # daoV1RoyaltyPoolCred # wdrl
+                headWithdrawl = plookup # daoV1RoyaltyPoolCredFor daoScriptHash # wdrl
                 daoV1ContractIsInvoked = Maybe.pisJust # headWithdrawl
 
             poolValue      <- tletField @"value" pool

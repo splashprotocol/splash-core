@@ -16,7 +16,7 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Codec.Serialise (serialise)
-import PlutusLedgerApi.V1.Scripts (getScriptHash, unMintingPolicyScript)
+import PlutusLedgerApi.V1.Scripts (getScriptHash, unMintingPolicyScript, unValidatorScript)
 import PlutusTx.Builtins (fromBuiltin)
 import Plutarch.Api.V2 (scriptHash)
 import System.Directory (createDirectoryIfMissing)
@@ -27,6 +27,7 @@ import WhalePoolsDex.PMintingValidators
   ( royaltyPoolDAOV1Validator
   , doubleRoyaltyPoolDAOV1Validator
   )
+import WhalePoolsDex.PValidators (royaltyPooldaoV1ActionOrderValidatorFor)
 
 data Input = Input
   { network :: Text.Text
@@ -85,9 +86,29 @@ export inputFile outputDir = do
           . unMintingPolicyScript
       royaltyHash = scriptHashHex royalty
       doubleRoyaltyHash = scriptHashHex doubleRoyalty
+      royaltyHashBytes = either (error . show) id $ Hex.decode (Text.encodeUtf8 $ Text.pack royaltyHash)
+      doubleRoyaltyHashBytes = either (error . show) id $ Hex.decode (Text.encodeUtf8 $ Text.pack doubleRoyaltyHash)
+      royaltyRequest = royaltyPooldaoV1ActionOrderValidatorFor royaltyHashBytes
+      doubleRoyaltyRequest = royaltyPooldaoV1ActionOrderValidatorFor doubleRoyaltyHashBytes
+      royaltyRequestBytes = LBS.toStrict $ serialise (unValidatorScript royaltyRequest)
+      doubleRoyaltyRequestBytes = LBS.toStrict $ serialise (unValidatorScript doubleRoyaltyRequest)
+      validatorHashHex =
+        Text.unpack
+          . Text.decodeUtf8
+          . Hex.encode
+          . fromBuiltin
+          . getScriptHash
+          . scriptHash
+          . unValidatorScript
+      royaltyRequestHash = validatorHashHex royaltyRequest
+      doubleRoyaltyRequestHash = validatorHashHex doubleRoyaltyRequest
   BS.writeFile (outputDir </> "royalty-dao-v1-policy.uplc") royaltyBytes
   BS.writeFile (outputDir </> "double-royalty-dao-v1-policy.uplc") doubleRoyaltyBytes
+  BS.writeFile (outputDir </> "royalty-dao-v1-action-order.uplc") royaltyRequestBytes
+  BS.writeFile (outputDir </> "double-royalty-dao-v1-action-order.uplc") doubleRoyaltyRequestBytes
   writeFile (outputDir </> "script-hashes.txt") $ unlines
     [ "royalty-dao-v1-policy=" ++ royaltyHash
     , "double-royalty-dao-v1-policy=" ++ doubleRoyaltyHash
+    , "royalty-dao-v1-action-order=" ++ royaltyRequestHash
+    , "double-royalty-dao-v1-action-order=" ++ doubleRoyaltyRequestHash
     ]
