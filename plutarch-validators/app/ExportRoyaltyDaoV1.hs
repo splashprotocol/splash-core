@@ -17,6 +17,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Codec.Serialise (serialise)
 import PlutusLedgerApi.V1.Scripts (getScriptHash, unMintingPolicyScript)
+import PlutusTx.Builtins (fromBuiltin)
 import Plutarch.Api.V2 (scriptHash)
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (getArgs)
@@ -74,8 +75,16 @@ export inputFile outputDir = do
       doubleRoyalty = doubleRoyaltyPoolDAOV1Validator admins (threshold input) (lpFeeIsEditable input)
       royaltyBytes = LBS.toStrict $ serialise (unMintingPolicyScript royalty)
       doubleRoyaltyBytes = LBS.toStrict $ serialise (unMintingPolicyScript doubleRoyalty)
-      royaltyHash = show . getScriptHash . scriptHash . unMintingPolicyScript $ royalty
-      doubleRoyaltyHash = show . getScriptHash . scriptHash . unMintingPolicyScript $ doubleRoyalty
+      scriptHashHex =
+        Text.unpack
+          . Text.decodeUtf8
+          . Hex.encode
+          . fromBuiltin
+          . getScriptHash
+          . scriptHash
+          . unMintingPolicyScript
+      royaltyHash = scriptHashHex royalty
+      doubleRoyaltyHash = scriptHashHex doubleRoyalty
   BS.writeFile (outputDir </> "royalty-dao-v1-policy.uplc") royaltyBytes
   BS.writeFile (outputDir </> "double-royalty-dao-v1-policy.uplc") doubleRoyaltyBytes
   writeFile (outputDir </> "script-hashes.txt") $ unlines
