@@ -134,6 +134,24 @@ def verify(directory: pathlib.Path, admin_manifest: pathlib.Path) -> None:
         print(f"{name}={hashes[name]}")
 
 
+def verify_release_manifest(directory: pathlib.Path, release_manifest: pathlib.Path) -> None:
+    release = json.loads(release_manifest.read_text())
+    if release.get("network") != "mainnet" or release.get("scriptCount") != len(EXPECTED):
+        fail("release manifest network or script count mismatch")
+    scripts = release.get("scripts", {})
+    if set(scripts) != set(EXPECTED):
+        fail("release manifest script set mismatch")
+    hashes = read_hashes(directory / "script-hashes.txt")
+    for name in EXPECTED:
+        body = (directory / f"{name}.uplc").read_bytes()
+        if scripts[name].get("hash") != hashes[name]:
+            fail(f"release manifest script hash mismatch: {name}")
+        sha256 = hashlib.sha256(body).hexdigest()
+        if scripts[name].get("sha256") != sha256:
+            fail(f"release manifest SHA-256 mismatch: {name}")
+    print(f"Verified release manifest: {release_manifest}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("artifact_dir", type=pathlib.Path)
@@ -143,9 +161,12 @@ def main() -> int:
         default=pathlib.Path(__file__).resolve().parents[1]
         / "deployments/mainnet/royalty-dao-v1-admins-2026-10-06.json",
     )
+    parser.add_argument("--release-manifest", type=pathlib.Path)
     arguments = parser.parse_args()
     try:
         verify(arguments.artifact_dir, arguments.admin_manifest)
+        if arguments.release_manifest:
+            verify_release_manifest(arguments.artifact_dir, arguments.release_manifest)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"REJECTED: {error}", file=sys.stderr)
         return 1

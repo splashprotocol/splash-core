@@ -38,7 +38,7 @@ Record the last three command outputs alongside the downloaded artifact bundle. 
 
 - The archived `2026-10-05/raw-cbor` bundle has production-key DAO policy hashes `56e45b69...` and `591b89ca...`. Its pool CBOR corresponds by recorded source revision to the guarded pool sources, but its DAO policies predate the successor-NFT fix.
 - `/Users/aleksandr/newScripts` is **mixed**: its two pool CBOR files are byte-identical to the archive, while its DAO policies hash to the Preprod test values `90052675...` and `f687c733...`. Its single DAO order still hashes to archived `2073f4c8...`. Never deploy this directory as one set.
-- `/Users/aleksandr/newnewScripts` and `/Users/aleksandr/scriptsDaoTests/preprod-royalty-dao-v1` contain Preprod test-key DAO artifacts. None of the available DAO policy CBOR files contain the latest successor-NFT fix. The post-fix production DAO policies and both matching DAO orders still need to be compiled and exported.
+- `/Users/aleksandr/newnewScripts` and `/Users/aleksandr/scriptsDaoTests/preprod-royalty-dao-v1` contain Preprod test-key DAO artifacts. The newer bundle at `artifacts/mainnet-royalty-f853526/raw-cbor` has independently verified byte hashes, production keys, and both DAO order bindings. Its source-build provenance and deployed-byte behavior still need confirmation; see `deployments/mainnet/royalty-scripts-f853526.json`.
 
 ## Separate dependency for double royalty withdrawal
 

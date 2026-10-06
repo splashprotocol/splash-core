@@ -69,6 +69,27 @@ class MainnetArtifactVerificationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "does not contain its final DAO policy hash"):
             verifier.verify(self.output, ADMIN_MANIFEST)
 
+    def test_release_manifest_rejects_wrong_sha256(self):
+        hashes = verifier.read_hashes(self.output / "script-hashes.txt")
+        release_path = self.output / "release.json"
+        release_path.write_text(json.dumps({
+            "network": "mainnet",
+            "scriptCount": len(verifier.EXPECTED),
+            "scripts": {
+                name: {
+                    "hash": hashes[name],
+                    "sha256": hashlib.sha256((self.output / f"{name}.uplc").read_bytes()).hexdigest(),
+                }
+                for name in verifier.EXPECTED
+            },
+        }))
+        verifier.verify_release_manifest(self.output, release_path)
+        release = json.loads(release_path.read_text())
+        release["scripts"]["royalty-pool"]["sha256"] = "00" * 32
+        release_path.write_text(json.dumps(release))
+        with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+            verifier.verify_release_manifest(self.output, release_path)
+
 
 if __name__ == "__main__":
     unittest.main()
