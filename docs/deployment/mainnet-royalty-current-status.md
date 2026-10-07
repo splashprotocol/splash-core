@@ -3,8 +3,10 @@
 This is the starting point for the next agent. Read the [deployment handoff](mainnet-royalty-handoff.md) and [13-script allowlist](mainnet-royalty-script-list.md) for the broader context.
 
 The 13-script list covers royalty pools only. Ordinary `PPool` and `PPoolBFee`
-have a separate [export procedure](mainnet-simple-pool-export.md); their new
-hashes are not yet present in this status record.
+have a separate [export procedure](mainnet-simple-pool-export.md). The two
+ordinary pool validators have byte-verified local candidate hashes recorded
+there; the ordinary DAO policy is awaiting a fresh remote export, and the
+bidirectional-fee DAO implementation is not yet wired for release.
 
 ## Current artifacts
 

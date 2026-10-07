@@ -231,6 +231,7 @@ executable export-simple-pools
   main-is:          ExportSimplePools.hs
   hs-source-dirs:   app
   build-depends:
+    , aeson
     , base
     , base16-bytestring
     , bytestring
