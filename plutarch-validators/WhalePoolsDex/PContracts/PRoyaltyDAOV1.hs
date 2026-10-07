@@ -6,7 +6,7 @@ module WhalePoolsDex.PContracts.PRoyaltyDAOV1 (
 
 import qualified GHC.Generics as GHC
 
-import WhalePoolsDex.PContracts.PApi         (tletUnwrap, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit)
+import WhalePoolsDex.PContracts.PApi         (tletUnwrap, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit, feeDen, zero)
 import WhalePoolsDex.PContracts.PFeeSwitch   (findOutput)
 import WhalePoolsDex.PContracts.PRoyaltyPool
 import WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder
@@ -20,7 +20,7 @@ import Plutarch.DataRepr
 import Plutarch.Prelude
 import Plutarch.Extra.TermCont
 import Plutarch.Api.V1.Scripts      (PValidatorHash)
-import PExtra.API                   (assetClassValueOf, PAssetClass(..), pValueLength)
+import PExtra.API                   (assetClassValueOf, PAssetClass(..), pPreserveOtherAssets)
 import Plutarch.Builtin             (pserialiseData, ppairDataBuiltin)
 import Plutarch.Crypto              (pverifyEd25519Signature)
 import Plutarch.Num                 ((#+))
@@ -269,10 +269,7 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
 
     correctLovelaceToken2Token = prevLovelaceToken2Token #== newLovelaceToken2Token
 
-    selfValueLength     = pValueLength # prevPoolValue
-    succesorValueLength = pValueLength # newPoolValue
-
-    correctTokensQty = selfValueLength #== succesorValueLength
+    correctTokensQty = pPreserveOtherAssets # prevPoolValue # newPoolValue # poolX # poolY # poolLq # poolNft
 
   pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1) #&& validFinalTreasuryXValue #&& validFinalTreasuryYValue #&& correctLovelaceToken2Token #&& correctTokensQty
 
@@ -344,6 +341,9 @@ daoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam $ \redeemer'
     updatedTreasuryFeeIsCorrect = pdelay (newTreasuryFee #<= treasuryFeeNumUpperLimit #&& treasuryFeeNumLowerLimit #<= newTreasuryFee)
 
     -- Checks that new pool fee num value satisfy protocol bounds
+    newEffectiveFee = newPoolFeeNum - newTreasuryFee - getField @"royaltyFee" newConf
+    validFeeConfiguration = zero #< newEffectiveFee #&& newEffectiveFee #<= feeDen
+
     updatedPoolFeeNumIsCorrect = pdelay (newPoolFeeNum #<= poolFeeNumUpperLimit #&& poolFeeNumLowerLimit #<= newPoolFeeNum)
     -- poolFee treasuryFee adminAddress poolAddress treasuryAddress
     -- Checks that main pool properties: tokenX, tokenY, tokenLq, tokenNft, feeNum aren't modified
@@ -491,4 +491,4 @@ daoMultisigPolicyValidatorT daoPhs threshold lpFeeIsEditable = plam $ \redeemer'
         pforce poolValueAndAddressAreTheSame #&&
         pforce updatedPoolFeeNumIsCorrect
 
-  pure $ correctTxInputsQty #&& feeUtxoContainsOnlyAda #&& validCommonFieldsAndSignatureThreshold #&& validAction
+  pure $ correctTxInputsQty #&& feeUtxoContainsOnlyAda #&& (correctPoolNftInNewPool #== 1) #&& validCommonFieldsAndSignatureThreshold #&& validFeeConfiguration #&& validAction

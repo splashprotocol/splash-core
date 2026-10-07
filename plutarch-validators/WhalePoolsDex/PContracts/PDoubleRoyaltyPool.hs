@@ -33,7 +33,7 @@ import Plutarch.Extra.Maybe         as Maybe
 import PlutusTx.Builtins.Internal
 import PlutusLedgerApi.V2 hiding    (getValue)
 
-import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromData, assetClass, pValueLength)
+import PExtra.API                   (PAssetClass, assetClassValueOf, ptryFromData, assetClass, pPreserveOtherAssets, pDistinctPoolAssets)
 import PExtra.List                  (pelemAt)
 import PExtra.Monadic               (tcon, tlet, tletField, tmatch)
 import PExtra.Ada
@@ -230,11 +230,28 @@ readPoolState = phoistAcyclic $
                     #$ pdcons @"lovelaceToken2Token" @PInteger # pdata lovelaceToken2Token
                         # pdnil
 
+validPoolBacking :: Term s (DoubleRoyaltyPoolConfig :--> PTxOut :--> PBool :--> PBool)
+validPoolBacking = plam $ \conf out allowTerminal -> unTermCont $ do
+    fields <- pletFieldsC @'["treasuryX", "treasuryY", "firstRoyaltyX", "firstRoyaltyY", "secondRoyaltyX", "secondRoyaltyY"] conf
+    state <- tlet $ readPoolState # conf # out
+    rx <- tletField @"reservesX" state
+    ry <- tletField @"reservesY" state
+    lq <- tletField @"liquidity" state
+    pure $ (zero #<= getField @"treasuryX" fields #&&
+            zero #<= getField @"treasuryY" fields #&&
+            zero #<= getField @"firstRoyaltyX" fields #&&
+            zero #<= getField @"firstRoyaltyY" fields #&&
+            zero #<= getField @"secondRoyaltyX" fields #&&
+            zero #<= getField @"secondRoyaltyY" fields) #&&
+           burnLqInitial #<= lq #&& lq #<= maxLqCap #&&
+           zero #<= rx #&& zero #<= ry #&&
+           ((zero #< rx #&& zero #< ry) #|| (allowTerminal #&& lq #== burnLqInitial))
+
 correctSwapConfig :: Term s (DoubleRoyaltyPoolConfig :--> DoubleRoyaltyPoolConfig :--> PInteger :--> PInteger :--> PBool)
 correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
   prevConfig <- pletFieldsC @'["poolNft", "poolX", "poolY", "poolLq", "feeNum", "treasuryFee", "firstRoyaltyFee", "secondRoyaltyFee", "treasuryX", "treasuryY", "firstRoyaltyX", "firstRoyaltyY", "secondRoyaltyX", "secondRoyaltyY", "DAOPolicy", "treasuryAddress", "firstRoyaltyPubKey", "secondRoyaltyPubKey", "nonce"] prevDatum
   newConfig  <- pletFieldsC @'["treasuryX", "treasuryY", "firstRoyaltyX", "firstRoyaltyY", "secondRoyaltyX", "secondRoyaltyY"] newDatum
-  
+
   let
     prevPoolNft = getField @"poolNft" prevConfig
     prevPoolX   = getField @"poolX"   prevConfig
@@ -274,7 +291,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
         (zero #< dx)
         (dx * prevTreasuryFeeNum)
         (dy * prevTreasuryFeeNum)
-        
+
     deltaFirstRoyalty = 
       pif
         (zero #< dx)
@@ -298,7 +315,7 @@ correctSwapConfig = plam $ \prevDatum newDatum dx dy -> unTermCont $ do
         (zero #< dx)
         (dx * prevSecondRoyaltyFeeNum)
         (dy * prevSecondRoyaltyFeeNum)
-        
+
     validTreasuryAndRoyaltyChange = 
         (feeDen * deltaFirstRoyalty #<= c2firstRoyalty) 
         #&& (c2firstRoyalty #< feeDen * (deltaFirstRoyalty + 1))
@@ -395,9 +412,9 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
     let 
         selfInRef    = getField @"outRef" selfIn
         selfIdentity = selfRef #== selfInRef -- self is the output currently validated by this script
-
-        selfInput = getField @"resolved" selfIn
         
+        selfInput = getField @"resolved" selfIn
+
     s0  <- tlet $ readPoolState # conf # selfInput
     lq0 <- tletField @"liquidity" s0
 
@@ -435,11 +452,12 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
             selfValue     <- tletUnwrap $ getField @"value" self
             succesorValue <- tletUnwrap $ getField @"value" successor
 
-            let 
-                selfValueLength     = pValueLength # selfValue
-                succesorValueLength = pValueLength # succesorValue
-
-                noMoreTokens = selfValueLength #== succesorValueLength
+            poolX <- tletField @"poolX" conf
+            poolY <- tletField @"poolY" conf
+            poolLq <- tletField @"poolLq" conf
+            let noMoreTokens = pDistinctPoolAssets # poolX # poolY # poolLq # nft #&&
+                               pPreserveOtherAssets # selfValue # succesorValue # poolX # poolY # poolLq # nft #&&
+                               assetClassValueOf # selfValue # nft #== 1
 
             selfAddr <- tletUnwrap $ getField @"address" self
             succAddr <- tletUnwrap $ getField @"address" successor
@@ -455,16 +473,18 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                         let
                             newConfig     = parseDatum # succD
                             validTreasury = correctSwapConfig # conf # newConfig # dx # dy
+                            validBacking = validPoolBacking # conf # selfInput # pcon PFalse #&& validPoolBacking # newConfig # successorOut # pcon PFalse
 
-                            dxf = dx * (feeNum - tFeeNum - firstRoyaltyFeeNum - secondRoyaltyFeeNum)
-                            dyf = dy * (feeNum - tFeeNum - firstRoyaltyFeeNum - secondRoyaltyFeeNum)
+                            effectiveFee = feeNum - tFeeNum - firstRoyaltyFeeNum - secondRoyaltyFeeNum
+                            dxf = dx * effectiveFee
+                            dyf = dy * effectiveFee
 
                             validSwap =
                                 pif
                                     (zero #< dx)
-                                    (-dy * (rx0 * feeDen' + dxf) #<= ry0 * dxf)
-                                    (-dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
-                        pure $ noMoreTokens #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
+                                    (dy #< zero #&& -dy * (rx0 * feeDen' + dxf) #<= ry0 * dxf)
+                                    (dx #< zero #&& zero #< dy #&& -dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
+                        pure $ noMoreTokens #&& validBacking #&& zero #< effectiveFee #&& effectiveFee #<= feeDen' #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
                     DAOAction -> validDAOAction # conf # txinfo'
                     WithdrawRoyalty -> validRoyaltyWithdrawAction # txinfo'
                     _ -> unTermCont $ do
@@ -473,6 +493,10 @@ poolValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                         let
                             confPreserved      = selfD #== succD -- whole config preserved
                             validDepositRedeem = dlq * rx0 #<= dx * lq0 #&& dlq * ry0 #<= dy * lq0
-                        pure $ noMoreTokens #&& confPreserved #&& scriptPreserved #&& validDepositRedeem -- either deposit or redeem is performed properly                
+                            validLiquidityAction = pmatch action $ \case
+                                Deposit -> zero #< dlq
+                                Redeem -> dlq #< zero
+                                _ -> pcon PFalse
+                        pure $ noMoreTokens #&& validPoolBacking # conf # selfInput # pcon PFalse #&& validPoolBacking # conf # successorOut # pcon PTrue #&& confPreserved #&& scriptPreserved #&& validLiquidityAction #&& validDepositRedeem -- either deposit or redeem is performed properly
             pure $ correctLovelaceToken2TokenValue #&& valid
         )

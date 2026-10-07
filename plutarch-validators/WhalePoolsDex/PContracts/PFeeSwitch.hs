@@ -1,7 +1,7 @@
 module WhalePoolsDex.PContracts.PFeeSwitch where
 
-import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit)
-import PExtra.API (assetClassValueOf, ptryFromData, PAssetClass(..))
+import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit, feeDen, zero)
+import PExtra.API (assetClassValueOf, ptryFromData, PAssetClass(..), pPreserveOtherAssets)
 import PExtra.Monadic
 import Plutarch
 import Plutarch.Api.V2 
@@ -177,7 +177,8 @@ validateTreasuryWithdraw prevConfig newConfig = plam $ \ outputs prevPoolValue n
 
     treasuryAddrIsTheSame = prevTreasuryAddress #== newTreasuryAddress
 
-  pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1) #&& validFinalTreasuryXValue #&& validFinalTreasuryYValue
+  pure $ correctPoolDiff #&& correctTreasuryWithdraw #&& treasuryAddrIsTheSame #&& (nftQtyInPrevValue #== 1) #&& validFinalTreasuryXValue #&& validFinalTreasuryYValue #&&
+         pPreserveOtherAssets # prevPoolValue # newPoolValue # poolX # poolY # poolLq # poolNft
 
 daoMultisigPolicyValidatorT :: Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple3 DAOAction PInteger PAssetClass) :--> PScriptContext :--> PBool)
 daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx' -> unTermCont $ do
@@ -245,6 +246,9 @@ daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer
     updatedTreasuryFeeIsCorrect = pdelay (newTreasuryFee #<= treasuryFeeNumUpperLimit #&& treasuryFeeNumLowerLimit #<= newTreasuryFee)
 
     -- Checks that new pool fee num value satisfy protocol bounds
+    newEffectiveFee = newPoolFeeNum - newTreasuryFee
+    validFeeConfiguration = zero #< newEffectiveFee #&& newEffectiveFee #<= feeDen
+
     updatedPoolFeeNumIsCorrect = pdelay (newPoolFeeNum #<= poolFeeNumUpperLimit #&& poolFeeNumLowerLimit #<= newPoolFeeNum)
     
     -- Checks that correct qty of singers present in transaction
@@ -395,4 +399,4 @@ daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer
         pforce poolValueAndAddressAreTheSame #&&
         pforce updatedPoolFeeNumIsCorrect
 
-  pure $ correctTxInputsQty #&& feeUtxoContainsOnlyAda #&& validCommonFields #&& validThreshold #&& validAction
+  pure $ correctTxInputsQty #&& feeUtxoContainsOnlyAda #&& validCommonFields #&& validThreshold #&& validFeeConfiguration #&& validAction

@@ -124,6 +124,7 @@ library
     WhalePoolsDex.PContracts.PStakingWithPkhLock
     WhalePoolsDex.PContracts.PFeeSwitchBalancePool
     WhalePoolsDex.PContracts.PFeeSwitch
+    WhalePoolsDex.PContracts.PFeeSwitchBFee
     WhalePoolsDex.PContracts.PRoyaltyDAOV1
     WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder
     WhalePoolsDex.PContracts.PRoyaltyWithdrawPool
@@ -180,12 +181,13 @@ test-suite cardano-dex-contracts-test
     Tests.FeeSwitch
     Tests.BalancePool
     Tests.FeeSwitchBFee
-    Tests.DoubleRoyaltyPool
     -- Tests.RoyaltyWithdraw
     Tests.Api
     Eval
   build-depends:
     , base
+    , directory
+    , filepath
     , HUnit
     , text
     , base16-bytestring
@@ -206,3 +208,39 @@ test-suite cardano-dex-contracts-test
     , serialise
     , hw-hedgehog
     , HasBigDecimal
+
+executable export-royalty-dao-v1
+  import:          lang
+  main-is:          ExportRoyaltyDaoV1.hs
+  hs-source-dirs:   app
+  build-depends:
+    , aeson
+    , base
+    , base16-bytestring
+    , bytestring
+    , directory
+    , filepath
+    , plutarch
+    , plutarch-validators
+    , plutus-ledger-api
+    , plutus-tx
+    , serialise
+    , text
+
+executable export-simple-pools
+  import:          lang
+  main-is:          ExportSimplePools.hs
+  hs-source-dirs:   app
+  build-depends:
+    , aeson
+    , base
+    , base16-bytestring
+    , bytestring
+    , directory
+    , filepath
+    , plutarch
+    , plutarch-validators
+    , plutus-ledger-api
+    , plutus-tx
+    , serialise
+    , text
