@@ -8,7 +8,7 @@ import pathlib
 import re
 
 
-EXPECTED = {"pool", "pool-bfee", "pool-dao-policy"}
+EXPECTED = {"pool", "pool-bfee", "pool-dao-policy", "pool-bfee-dao-policy"}
 APPROVED_ADMIN_PKHS = (
     "68aa59a87dbdbf8f78386dc6b83e63149d8c13939a1b0cda39707f9a",
     "518a9c32deedc0b82604972692a2b7eb6c10b020d77c3c72e764b156",
@@ -54,7 +54,7 @@ def verify(directory: pathlib.Path) -> None:
         actual = hashlib.blake2b(b"\x02" + body, digest_size=28).hexdigest()
         if actual != hashes[name]:
             raise ValueError(f"hash mismatch for {name}: listed={hashes[name]}, actual={actual}")
-        if name == "pool-dao-policy":
+        if name in ("pool-dao-policy", "pool-bfee-dao-policy"):
             for pkh in APPROVED_ADMIN_PKHS:
                 if body.count(bytes.fromhex(pkh)) != 1:
                     raise ValueError(f"ordinary DAO CBOR does not contain administrator PKH exactly once: {pkh}")

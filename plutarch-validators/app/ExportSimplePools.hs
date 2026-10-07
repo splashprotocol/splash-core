@@ -20,7 +20,7 @@ import System.Directory (createDirectoryIfMissing, doesDirectoryExist, listDirec
 import System.Environment (getArgs)
 import System.Exit (die)
 import System.FilePath ((</>))
-import WhalePoolsDex.PMintingValidators (daoMintPolicyValidator)
+import WhalePoolsDex.PMintingValidators (daoMintPolicyValidator, daoBFeeMintPolicyValidator)
 import WhalePoolsDex.PValidators (poolValidator, poolBFeeValidator)
 
 data Input = Input
@@ -97,6 +97,7 @@ export inputFile outputDir = do
         | (name, validator) <- validators
         ]
       policy = daoMintPolicyValidator admins (threshold input) (lpFeeIsEditable input)
+      bfeePolicy = daoBFeeMintPolicyValidator admins (threshold input) (lpFeeIsEditable input)
       policyHashHex =
         Text.unpack
           . Text.decodeUtf8
@@ -106,7 +107,9 @@ export inputFile outputDir = do
           . scriptHash
           . unMintingPolicyScript
       scripts = validatorScripts ++
-        [ ("pool-dao-policy", LBS.toStrict $ serialise $ unMintingPolicyScript policy, policyHashHex policy) ]
+        [ ("pool-dao-policy", LBS.toStrict $ serialise $ unMintingPolicyScript policy, policyHashHex policy)
+        , ("pool-bfee-dao-policy", LBS.toStrict $ serialise $ unMintingPolicyScript bfeePolicy, policyHashHex bfeePolicy)
+        ]
   forM_ scripts $ \(name, bytes, _) ->
     BS.writeFile (outputDir </> (name ++ ".uplc")) bytes
   writeFile (outputDir </> "script-hashes.txt") $ unlines

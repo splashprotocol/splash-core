@@ -8,7 +8,9 @@ ordinary pool validators have byte-verified local candidate hashes recorded
 there. A new ordinary DAO policy candidate was also copied locally and its
 CBOR hash verified; see the same export procedure for its exact hash and
 remaining provenance checks. The bidirectional-fee DAO implementation is
-not yet wired for release.
+now wired into the four-script ordinary pool exporter, but has not been
+compiled or behavior-tested on the remote build machine. Do not use its
+hash until those checks pass.
 
 Cross-repository audit on 2026-10-07: `splash-testing-cardano` has a
 Preprod-only royalty reference publisher and no Mainnet publisher for the

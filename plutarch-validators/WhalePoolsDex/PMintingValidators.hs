@@ -4,6 +4,7 @@ module WhalePoolsDex.PMintingValidators (
     poolNftMiningValidator,
     poolLqMiningValidator,
     daoMintPolicyValidator,
+    daoBFeeMintPolicyValidator,
     wrapMintingValidator,
     daoBalanceMintPolicyValidator,
     royaltyPoolDAOV1Validator,
@@ -19,6 +20,7 @@ import Plutarch.Unsafe (punsafeCoerce)
 
 import qualified WhalePoolsDex.PContracts.PAssets as A
 import WhalePoolsDex.PContracts.PFeeSwitch
+import qualified WhalePoolsDex.PContracts.PFeeSwitchBFee as BFeeDao
 import PlutusLedgerApi.V1.Scripts (MintingPolicy(..))
 import PlutusLedgerApi.V1.Value   (TokenName(..), AssetClass(..))
 import PlutusLedgerApi.V1.Crypto  (PubKeyHash)
@@ -59,6 +61,12 @@ daoMintPolicyValidator stakeAdminPkh threshold lpFeeIsEditable =
     mkMintingPolicy cfgForMintingValidator $ 
         wrapMintingValidator $
             daoMultisigPolicyValidatorT (pconstant stakeAdminPkh) (pconstant threshold) (pconstant lpFeeIsEditable)
+
+daoBFeeMintPolicyValidator :: [PubKeyHash] -> Integer -> Bool -> MintingPolicy
+daoBFeeMintPolicyValidator stakeAdminPkh threshold lpFeeIsEditable =
+    mkMintingPolicy cfgForMintingValidator $
+        wrapMintingValidator $
+            BFeeDao.daoMultisigPolicyValidatorT (pconstant stakeAdminPkh) (pconstant threshold) (pconstant lpFeeIsEditable)
 
 daoBalanceMintPolicyValidator :: [PubKeyHash] -> Integer -> Bool -> MintingPolicy
 daoBalanceMintPolicyValidator stakeAdminPkh threshold lpFeeIsEditable = 

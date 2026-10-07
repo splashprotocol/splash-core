@@ -12,11 +12,11 @@ ADMIN_MANIFEST = pathlib.Path(__file__).resolve().parents[2] / "deployments/main
 
 class SimplePoolArtifactTests(unittest.TestCase):
     def make_bundle(self, root):
-        names = ("pool", "pool-bfee", "pool-dao-policy")
+        names = ("pool", "pool-bfee", "pool-dao-policy", "pool-bfee-dao-policy")
         entries = []
         for name in names:
             body = (name + "-cbor").encode()
-            if name == "pool-dao-policy":
+            if name in ("pool-dao-policy", "pool-bfee-dao-policy"):
                 body += b"".join(bytes.fromhex(pkh) for pkh in APPROVED_ADMIN_PKHS)
             (root / f"{name}.uplc").write_bytes(body)
             entries.append(f"{name}={hashlib.blake2b(bytes([2]) + body, digest_size=28).hexdigest()}")
@@ -78,6 +78,23 @@ class SimplePoolArtifactTests(unittest.TestCase):
             lines = [
                 line if not line.startswith("pool-dao-policy=") else
                 "pool-dao-policy=" + hashlib.blake2b(b"\x02" + body, digest_size=28).hexdigest()
+                for line in lines
+            ]
+            (root / "script-hashes.txt").write_text("\n".join(lines) + "\n")
+            with self.assertRaisesRegex(ValueError, "administrator PKH"):
+                verify(root)
+
+    def test_rejects_bfee_policy_without_pinned_admin_hash(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            self.make_bundle(root)
+            policy_path = root / "pool-bfee-dao-policy.uplc"
+            body = policy_path.read_bytes().replace(bytes.fromhex(APPROVED_ADMIN_PKHS[0]), b"x" * 28)
+            policy_path.write_bytes(body)
+            lines = (root / "script-hashes.txt").read_text().splitlines()
+            lines = [
+                line if not line.startswith("pool-bfee-dao-policy=") else
+                "pool-bfee-dao-policy=" + hashlib.blake2b(b"\x02" + body, digest_size=28).hexdigest()
                 for line in lines
             ]
             (root / "script-hashes.txt").write_text("\n".join(lines) + "\n")

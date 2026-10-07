@@ -5,21 +5,21 @@ sources also include `PPool.hs` and `PPoolBFee.hs`. Export their validators
 separately with `export-simple-pools`; do not append them to the existing
 13-entry royalty manifest or substitute old deployed hashes.
 
-The command exports three raw Plutus V2 CBOR files:
+The command exports four raw Plutus V2 CBOR files:
 
 | File | Source symbol |
 | --- | --- |
 | `pool.uplc` | `PValidators.poolValidator` (`PPool.poolValidatorT`) |
 | `pool-bfee.uplc` | `PValidators.poolBFeeValidator` (`PPoolBFee.poolBFeeValidatorT`) |
 | `pool-dao-policy.uplc` | `PMintingValidators.daoMintPolicyValidator` (`PFeeSwitch.daoMultisigPolicyValidatorT`) |
+| `pool-bfee-dao-policy.uplc` | `PMintingValidators.daoBFeeMintPolicyValidator` (`PFeeSwitchBFee.daoMultisigPolicyValidatorT`) |
 
 The ordinary DAO policy is a staking policy for `pool.uplc`. It does not
 embed the pool script hash: `PPool` reads the DAO staking credential from its
-datum. `pool-bfee.uplc` has a different datum layout (`feeNumX`, `feeNumY`).
-The current `PFeeSwitchBFee.hs` is not wired into `PMintingValidators` and
-is not part of this export. Do not configure a new bidirectional-fee pool
-with `pool-dao-policy` until a matching BFee DAO implementation has been
-built and tested.
+datum. `pool-bfee.uplc` has a different datum layout (`feeNumX`, `feeNumY`)
+and must use `pool-bfee-dao-policy`. The BFee policy was wired from a
+previously orphaned source file in this revision. Its remote build and
+behavior evaluation remain mandatory before assigning it to a live pool.
 
 The ordinary DAO policy takes the six 28-byte payment PKHs in the public
 administrator manifest, with threshold 4 and editable LP fee. This is
@@ -36,11 +36,11 @@ git status --porcelain
 ghc --version
 cabal --version
 cd plutarch-validators
-cabal run export-simple-pools -- ../deployments/mainnet/royalty-dao-v1-admins-2026-10-06.json ../artifacts/mainnet-simple-pools-2026-10-07-with-dao/raw-cbor
-python3 ../scripts/verify_mainnet_simple_pool_artifacts.py ../artifacts/mainnet-simple-pools-2026-10-07-with-dao/raw-cbor
+cabal run export-simple-pools -- ../deployments/mainnet/royalty-dao-v1-admins-2026-10-06.json ../artifacts/mainnet-simple-pools-2026-10-07-with-bfee-dao/raw-cbor
+python3 ../scripts/verify_mainnet_simple_pool_artifacts.py ../artifacts/mainnet-simple-pools-2026-10-07-with-bfee-dao/raw-cbor
 ```
 
-The output directory must be empty. Save the command output and all three
+The output directory must be empty. Save the command output and all four
 `.uplc` files, `script-hashes.txt`, and `export-parameters.json` together. The
 verifier recalculates each Plutus V2 hash from the exported bytes and prints
 a SHA-256 digest for each file. It also checks the pinned Mainnet DAO PKHs.
