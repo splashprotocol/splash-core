@@ -2,6 +2,10 @@
 
 This is the starting point for the next agent. Read the [deployment handoff](mainnet-royalty-handoff.md) and [13-script allowlist](mainnet-royalty-script-list.md) for the broader context.
 
+The 13-script list covers royalty pools only. Ordinary `PPool` and `PPoolBFee`
+have a separate [export procedure](mainnet-simple-pool-export.md); their new
+hashes are not yet present in this status record.
+
 ## Current artifacts
 
 - Source branch: `bromel777/fix_swap_path` in splash-core. Exporter and DAO successor-NFT guard are in `f8535269d7373a6ea5ddaefe4ed39c215395c409`. The exact copied CBOR was committed and pushed in `ac458834fb808f2df279c03e35f49a496c4a6d2f`.

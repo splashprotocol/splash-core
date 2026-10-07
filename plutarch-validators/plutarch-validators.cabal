@@ -225,3 +225,20 @@ executable export-royalty-dao-v1
     , plutus-tx
     , serialise
     , text
+
+executable export-simple-pools
+  import:          lang
+  main-is:          ExportSimplePools.hs
+  hs-source-dirs:   app
+  build-depends:
+    , base
+    , base16-bytestring
+    , bytestring
+    , directory
+    , filepath
+    , plutarch
+    , plutarch-validators
+    , plutus-ledger-api
+    , plutus-tx
+    , serialise
+    , text

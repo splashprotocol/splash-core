@@ -1,5 +1,6 @@
 module WhalePoolsDex.PValidators (
     poolValidator,
+    poolBFeeValidator,
     poolBalanceValidator,
     swapValidator,
     depositValidator,
