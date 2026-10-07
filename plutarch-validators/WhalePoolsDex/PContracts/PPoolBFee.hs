@@ -225,9 +225,7 @@ poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
     lq0 <- tletField @"liquidity" s0
 
     pure $
-        selfIdentity #&& (pmatch action $ \case
-            Destroy -> pcon PFalse -- retirement must use the governed DAO action
-            _ -> unTermCont $ do
+        selfIdentity #&& (unTermCont $ do
                 outputs <- tletUnwrap $ getField @"outputs" txInfo
 
                 nft <- tletField @"poolNft" conf
@@ -294,6 +292,7 @@ poolBFeeValidatorT = plam $ \conf redeemer' ctx' -> unTermCont $ do
                                         (dx #< zero #&& zero #< dy #&& -dx * (ry0 * feeDen' + dyf) #<= rx0 * dyf)
                             pure $ noMoreTokens #&& validBacking #&& zero #< feeNumX #&& feeNumX #<= feeDen' #&& zero #< feeNumY #&& feeNumY #<= feeDen' #&& swapAllowed #&& scriptPreserved #&& dlq #== 0 #&& validSwap #&& validTreasury -- liquidity left intact and swap is performed properly
                         DAOAction -> validDAOAction # conf # txinfo'
+                        Destroy -> pcon PFalse -- retirement must use the governed DAO action
                         _ -> unTermCont $ do
                             POutputDatum selfD' <- pmatchC selfDatum
                             selfD               <- tletField @"outputDatum" selfD'

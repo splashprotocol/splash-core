@@ -5,6 +5,13 @@ sources also include `PPool.hs` and `PPoolBFee.hs`. Export their validators
 separately with `export-simple-pools`; do not append them to the existing
 13-entry royalty manifest or substitute old deployed hashes.
 
+The ordinary pool source was changed after the 37,763/38,468-byte export to
+remove an outer action match that duplicated the enlarged validation body.
+The ordinary pool CBOR and hashes recorded below are now stale candidates.
+Rebuild both validators from the updated source and measure the new files
+before planning publication. The size effect has not yet been verified by a
+remote build.
+
 The command exports four raw Plutus V2 CBOR files:
 
 | File | Source symbol |
