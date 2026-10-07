@@ -96,6 +96,24 @@ hashes and UTxOs. Additive off-chain routing and verified new reference UTxOs
 are required before new ordinary pools can be processed without disturbing
 legacy pools.
 
+## Copied candidate with BFee DAO policy
+
+The local folder `/Users/aleksandr/newDeployments/raw-cbor/` contains the
+four-script export. On 2026-10-07 the updated verifier passed all four byte
+hashes and pinned DAO PKHs. The two pool scripts and ordinary DAO policy are
+byte-identical to the previous three-script candidate. The new policy is:
+
+- `pool-bfee-dao-policy`: Plutus V2 hash
+  `f5981b0103830fdd8aed2f6774bb355878448547810ca3b78453500c`,
+  SHA-256 `355318acb0a2cd2b0e7145ef5021ff330975b537f992aacba7be28520b693cee`,
+  5,138 bytes.
+
+This confirms the supplied CBOR and manifest agree. The copied folder does
+not attest the remote source revision or compiler versions. Before assigning
+the BFee DAO credential to a pool, evaluate authorized and unauthorized DAO
+transitions against these exact deployed bytes. The oversized BFee pool script
+remains a separate reference-publication blocker.
+
 The legacy runtime names `constFnPoolV1`, `constFnPoolV2`, and other pool
 variants must be mapped to their exact on-chain bytes before wiring a new
 hash. This export alone does not establish that all ordinary pool families
