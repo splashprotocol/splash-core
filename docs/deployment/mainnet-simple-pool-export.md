@@ -78,6 +78,24 @@ This is a byte-verified candidate. The downloaded folder does not contain
 the remote `git rev-parse HEAD`, clean-tree status, or compiler versions,
 and no deployed-byte behavior evaluation has been recorded for this DAO.
 
+## Release blocker found during cross-repository audit
+
+The ordinary pool CBOR files are 37,763 and 38,468 bytes. The only available
+reference-script batch publisher in `splash-testing-cardano` is hardcoded to
+Preprod and rejects any individual script over 10,000 bytes. The Mainnet
+transaction size limit documented by the [Cardano Developer Portal](https://developers.cardano.org/docs/get-started/infrastructure/cardano-cli/basic-operations/simple-transactions/)
+is currently about 16 KiB;
+confirm the live protocol parameter before a release decision. These two
+CBOR files cannot be published as single reference-script outputs under a
+16 KiB transaction limit. This is a contract-size/build issue, not merely a
+missing Mainnet publisher option.
+
+The copied ordinary DAO policy is 5,004 bytes. It is not present in the
+off-chain Mainnet deployment JSON. That JSON also contains only old pool
+hashes and UTxOs. Additive off-chain routing and verified new reference UTxOs
+are required before new ordinary pools can be processed without disturbing
+legacy pools.
+
 The legacy runtime names `constFnPoolV1`, `constFnPoolV2`, and other pool
 variants must be mapped to their exact on-chain bytes before wiring a new
 hash. This export alone does not establish that all ordinary pool families

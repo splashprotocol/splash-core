@@ -10,6 +10,20 @@ CBOR hash verified; see the same export procedure for its exact hash and
 remaining provenance checks. The bidirectional-fee DAO implementation is
 not yet wired for release.
 
+Cross-repository audit on 2026-10-07: `splash-testing-cardano` has a
+Preprod-only royalty reference publisher and no Mainnet publisher for the
+combined royalty/ordinary release. Its older `src/deploy.ts` actively places
+only one unrelated reference script. The 13 royalty CBOR files remain
+byte-verified, but the ordinary pool CBOR size blocks simple reference-script
+publication (details in the ordinary export procedure). The off-chain
+`mainnet.deployment.json` retains legacy hashes and no new reference UTxOs;
+protected royalty routing exists as an optional profile but no Mainnet
+protected deployment file is present. The inspected off-chain checkout is
+on `develop` with numerous local modifications; its `royalty_profiles.rs`
+and copied royalty artifact directory are not tracked by Git there. Do not
+interpret the old hashes as the newly exported scripts or assume that the
+uncommitted routing is part of a release branch.
+
 ## Current artifacts
 
 - Source branch: `bromel777/fix_swap_path` in splash-core. Exporter and DAO successor-NFT guard are in `f8535269d7373a6ea5ddaefe4ed39c215395c409`. The exact copied CBOR was committed and pushed in `ac458834fb808f2df279c03e35f49a496c4a6d2f`.
