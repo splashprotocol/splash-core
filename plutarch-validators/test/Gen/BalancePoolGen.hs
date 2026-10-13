@@ -43,8 +43,8 @@ import PlutusLedgerApi.V1.Credential
 import PlutusTx.Builtins.Internal
 import WhalePoolsDex.PMintingValidators
 import qualified PlutusLedgerApi.V1 as Plutus
-import Gen.Models (mkAdaValue, mkValues, mkValue, genAssetClass, genPkh, genCSRandom, genSCRandom, genTxId, genTxOutRef, genValidatorHash, mkContext)
-import Gen.DepositGen (unsafeFromEither, mkByteString)
+import Gen.Models (mkAdaValue, mkValues, mkValue, genPkh, genCSRandom, genSCRandom, genTxId, genTxOutRef, genValidatorHash, mkContext)
+import Gen.DepositGen (unsafeFromEither, mkByteString, genRandomAssetClasses)
 import Gen.Utils hiding (Pool(..), TestAction(..), TestGroup(..))
 import System.IO
 
@@ -132,7 +132,7 @@ getDecimalNum toCut =
 
 genBalancePool :: MonadGen f => [PubKeyHash] -> Integer -> Bool -> f BalancePool
 genBalancePool adminsPkhs threshold lpFeeIsEditable = do
-  (x, y, lq, nft) <- tuple4 genAssetClass
+  (x, y, nft, lq) <- genRandomAssetClasses
 
   stakeHash <- genPkh
   
@@ -185,6 +185,7 @@ genBalancePool adminsPkhs threshold lpFeeIsEditable = do
       , treasuryY  = 0
       , daoPolicy  = [daoContract]
       , treasuryAddress = treasuryAddress
+      , nonce = 0
       }
 
     poolValue = mkValues ((\(ac, qty) -> mkValue ac (fromIntegral qty)) `RIO.map` [(x, xQty), (y, yQty), (nft, nftQty), (lq, lqQty)]) mempty
@@ -383,17 +384,20 @@ correctSwap =
         xValue = valueOf value xCS xTN
         yValue = valueOf value yCS yTN
         yToSwap = 70000000
-
-      -- xToSwap <- integral (Range.constant 100 xValue)
-      xToSwap <- calculateX xValue 1 (treasuryX config) yValue 4 (treasuryY config) (yToSwap) (poolFeeNum config) (treasuryFee config)
-      let
-        -- going to withdraw all pool x and y value
         tFee = treasuryFee config
+        treasuryAccrual = (tFee * yToSwap) `div` feeDen
+        prevReserveX = xValue - treasuryX config
+        prevReserveY = yValue - treasuryY config
+        -- validSwap applies the fee to the reserve change after treasury accrual.
+        effectiveY = ((yToSwap - treasuryAccrual) * (poolFeeNum config - tFee)) `div` feeDen
+        newYPart = prevReserveY + effectiveY
+        newYPartFourth = newYPart ^ (4 :: Int)
+        xToSwap = (prevReserveX * (newYPartFourth - prevReserveY ^ (4 :: Int))) `div` newYPartFourth
 
       let
         newPoolConfig = config 
           { treasuryX = (treasuryX config)
-          , treasuryY = (treasuryY config) + ((tFee * yToSwap) `div` feeDen) 
+          , treasuryY = (treasuryY config) + treasuryAccrual
           }
       let
         newPool = prevPool 

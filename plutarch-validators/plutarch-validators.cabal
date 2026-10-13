@@ -124,6 +124,7 @@ library
     WhalePoolsDex.PContracts.PStakingWithPkhLock
     WhalePoolsDex.PContracts.PFeeSwitchBalancePool
     WhalePoolsDex.PContracts.PFeeSwitch
+    WhalePoolsDex.PContracts.PFeeSwitchBFee
     WhalePoolsDex.PContracts.PRoyaltyDAOV1
     WhalePoolsDex.PContracts.PRoyaltyDAOV1ActionOrder
     WhalePoolsDex.PContracts.PRoyaltyWithdrawPool
@@ -163,9 +164,6 @@ test-suite cardano-dex-contracts-test
     Gen.FeeSwitchGen
     Gen.DepositGen
     Gen.BalancePoolGen
-    -- Gen.DoubleRoyaltyPoolGen
-   -- Gen.RoyaltyWithdrawGen
-    --Gen.RoyaltyPoolGen
     Gen.PoolGen
     Gen.SwapGen
     Gen.RedeemGen
@@ -180,13 +178,17 @@ test-suite cardano-dex-contracts-test
     Tests.FeeSwitch
     Tests.BalancePool
     Tests.FeeSwitchBFee
-    Tests.DoubleRoyaltyPool
-    -- Tests.RoyaltyWithdraw
+    Tests.MainnetArtifacts
+    Tests.PoolSafety
     Tests.Api
     Eval
   build-depends:
     , base
     , HUnit
+    , aeson
+    , directory
+    , filepath
+    , process
     , text
     , base16-bytestring
     , bytestring

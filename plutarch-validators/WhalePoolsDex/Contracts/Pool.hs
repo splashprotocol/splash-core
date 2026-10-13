@@ -28,6 +28,7 @@ data PoolConfig = PoolConfig
     , daoPolicy   :: [StakingCredential]
     , lqBound     :: Integer
     , treasuryAddress :: ValidatorHash
+    , nonce :: Integer
     }
     deriving stock (Show)
 

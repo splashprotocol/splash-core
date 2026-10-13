@@ -19,7 +19,9 @@ module PExtra.API (
     --convertBackValue,
     mustPayToPubKey,
     ptryFromData,
-    pValueLength
+    pValueLength,
+    pPreserveOtherAssets,
+    pDistinctPoolAssets
 ) where
 
 import qualified GHC.Generics as GHC
@@ -222,3 +224,41 @@ pValueLength = plam $ \val -> outer #$ pto . pto $ val
       pmatch m $ \case
         PCons x xs -> (plength # (pto . pfromData $ psndBuiltin # x)) + self # xs
         PNil -> pconstant 0
+
+-- Changes to pool values may only affect the two traded assets and pool LQ.
+-- Check both directions so that neither removing nor introducing another asset passes.
+pPreserveOtherAssets :: Term s (PValue _ _ :--> PValue _ _ :--> PAssetClass :--> PAssetClass :--> PAssetClass :--> PAssetClass :--> PBool)
+pPreserveOtherAssets = plam $ \before after poolX poolY poolLq poolNft ->
+    let
+        checkTokenNames = pfix #$ plam $ \self other currency entries ->
+            pmatch entries $ \case
+                PCons entry rest ->
+                    let tokenName = pfromData $ pfstBuiltin # entry
+                        amount = pfromData $ psndBuiltin # entry
+                        ac = assetClass # currency # tokenName
+                        isPoolAsset =
+                            (ac #== poolX) #|| (ac #== poolY) #||
+                            (ac #== poolLq) #|| (ac #== poolNft)
+                        unchanged =
+                            pif isPoolAsset
+                                (pcon PTrue)
+                                (amount #== PlutarchValue.pvalueOf # other # currency # tokenName)
+                     in unchanged #&& self # other # currency # rest
+                PNil -> pcon PTrue
+
+        checkCurrencies = pfix #$ plam $ \self other entries ->
+            pmatch entries $ \case
+                PCons entry rest ->
+                    let currency = pfromData $ pfstBuiltin # entry
+                        tokenNames = pto . pfromData $ psndBuiltin # entry
+                     in checkTokenNames # other # currency # tokenNames #&& self # other # rest
+                PNil -> pcon PTrue
+
+        checkOneWay value other = checkCurrencies # other # (pto . pto $ value)
+     in checkOneWay before after #&& checkOneWay after before
+
+pDistinctPoolAssets :: Term s (PAssetClass :--> PAssetClass :--> PAssetClass :--> PAssetClass :--> PBool)
+pDistinctPoolAssets = plam $ \poolX poolY poolLq poolNft ->
+    (pnot # (poolX #== poolY)) #&& (pnot # (poolX #== poolLq)) #&&
+    (pnot # (poolX #== poolNft)) #&& (pnot # (poolY #== poolLq)) #&&
+    (pnot # (poolY #== poolNft)) #&& (pnot # (poolLq #== poolNft))

@@ -25,6 +25,7 @@ data BalancePoolConfig = BalancePoolConfig
     , treasuryY   :: Integer
     , daoPolicy   :: [StakingCredential]
     , treasuryAddress :: ValidatorHash
+    , nonce :: Integer
     }
     deriving stock (Show)
 

@@ -63,10 +63,14 @@ genFakeToken = mkAssetClass genCS genFakeTokenName
 genRandomAssetClasses :: MonadGen f => f (AssetClass, AssetClass, AssetClass, AssetClass)
 genRandomAssetClasses = do
   cs  <- genCSRandom
-  lq  <- genTNRandom
-  nft <- genTNRandom
-  x   <- genTNRandom
-  y   <- genTNRandom
+  -- Keep the four roles distinct even when Hedgehog shrinks the random
+  -- bytes to identical values. The pool validator requires this invariant.
+  let tagged role (TokenName (BuiltinByteString bytes)) =
+        TokenName (BuiltinByteString (BS.cons role bytes))
+  lq  <- tagged 4 <$> genTNRandom
+  nft <- tagged 3 <$> genTNRandom
+  x   <- tagged 1 <$> genTNRandom
+  y   <- tagged 2 <$> genTNRandom
   pure (mkAssetClass cs x, mkAssetClass cs y, mkAssetClass cs nft, mkAssetClass cs lq)
 
 genDConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> PubKeyHash -> Integer -> (Data, OutputDatum)

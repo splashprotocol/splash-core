@@ -36,7 +36,8 @@ calculateXtoYSwap prevXPool prevYPool xToSwap =
 
 calculateY :: Integer -> Integer -> Integer -> Integer -> Integer -> Integer
 calculateY prevXPool prevYPool xToSwap feeNum treasuryNum =
-  ((prevYPool * xToSwap * (feeNum - treasuryNum)) `div` (prevXPool * 100000 + xToSwap * feeNum))
+  let adjustedIn = xToSwap * (feeNum - treasuryNum)
+  in (prevYPool * adjustedIn) `div` (prevXPool * 100000 + adjustedIn)
 
 calculateTreasury :: Integer -> Integer -> Integer -> Integer
 calculateTreasury token2swap feeNum treasuryFeeNum =

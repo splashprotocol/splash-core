@@ -1,224 +1,180 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
-module Tests.FeeSwitchBFee where
+module Tests.FeeSwitchBFee (feeSwitchBFee) where
 
-import HaskellWorks.Hedgehog.Gen
-
-import qualified WhalePoolsDex.PContracts.PPoolBFee as PPool
-import qualified WhalePoolsDex.Contracts.PoolBFee   as Pool
-import WhalePoolsDex.Contracts.Proxy.FeeSwitch
-import WhalePoolsDex.PValidators
-import WhalePoolsDex.PConstants
-import Data.Either
-
-import Eval
-import Gen.Utils hiding (BalancePool(..))
-
+import Eval (evalWithArgs)
+import qualified Data.ByteString as BS
+import Gen.DepositGen (genAssetClasses, genFakeToken)
+import Gen.Models
+import Gen.Utils (eraseBoth)
+import Hedgehog (Property, forAll, property, withTests, (===))
+import Plutarch
+import Plutarch.Api.V2 (scriptHash, validatorHash)
+import Plutarch.Prelude
+import PlutusLedgerApi.V1.Scripts (getScriptHash, unMintingPolicyScript)
 import PlutusLedgerApi.V2
-import Plutarch.Api.V2 as PV2
-import WhalePoolsDex.PMintingValidators
+import PlutusTx.Builtins.Internal (BuiltinByteString (..))
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.Hedgehog (testProperty)
+import qualified WhalePoolsDex.Contracts.PoolBFee as PoolBFee
+import WhalePoolsDex.Contracts.Proxy.FeeSwitch (DAOAction (..), DAORedeemer (..))
+import WhalePoolsDex.PMintingValidators (daoBFeeMintPolicyValidator, wrapMintingValidator)
+import qualified WhalePoolsDex.PContracts.PFeeSwitchBFee as BFeeDAO
+import WhalePoolsDex.PValidators (poolBFeeValidator)
 
-import Plutarch.Api.V1 ( PValue (..) )
+data Case
+  = ValidAddressChange
+  | ZeroDirectionalFee
+  | MissingSignature
+  | ValidWithdraw
+  | WrongWithdrawAmount
+  | WrongWithdrawDestination
+  | WithdrawLeaksForeignToken
+  | WithdrawMissingInputNft
+  | ValidStakeChange
+  | WrongStakeScript
+  | ValidTreasuryFeeChange
+  | ExcessiveTreasuryFee
+  | ValidAdminChange
+  | AdminChangesPoolValue
+  | ValidPoolFeeChange
+  | ValidPoolFeeYChange
+  | PoolFeeNotEditable
+  | ExcessivePoolFee
+  | ExcessivePoolFeeY
 
-import Hedgehog
-import Hedgehog.Internal.Property
+feeSwitchBFee :: TestTree
+feeSwitchBFee = testGroup "BFee DAO policy"
+  [ testProperty "authorized address change is valid" (check ValidAddressChange (Right ()))
+  , testProperty "unrelated action rejects zero directional fee" (check ZeroDirectionalFee (Left ()))
+  , testProperty "address change requires threshold signatures" (check MissingSignature (Left ()))
+  , testProperty "treasury withdraw transfers exactly the accrued amounts" (check ValidWithdraw (Right ()))
+  , testProperty "treasury withdraw rejects a pool value mismatch" (check WrongWithdrawAmount (Left ()))
+  , testProperty "treasury withdraw rejects another destination" (check WrongWithdrawDestination (Left ()))
+  , testProperty "treasury withdraw preserves unrelated assets" (check WithdrawLeaksForeignToken (Left ()))
+  , testProperty "treasury withdraw requires the input pool NFT" (check WithdrawMissingInputNft (Left ()))
+  , testProperty "staking credential can change" (check ValidStakeChange (Right ()))
+  , testProperty "staking change preserves script credential" (check WrongStakeScript (Left ()))
+  , testProperty "treasury fee can change within bounds" (check ValidTreasuryFeeChange (Right ()))
+  , testProperty "treasury fee above bound is rejected" (check ExcessiveTreasuryFee (Left ()))
+  , testProperty "DAO administrators can change" (check ValidAdminChange (Right ()))
+  , testProperty "administrator change cannot alter pool value" (check AdminChangesPoolValue (Left ()))
+  , testProperty "pool fee can change within bounds" (check ValidPoolFeeChange (Right ()))
+  , testProperty "Y directional fee can change within bounds" (check ValidPoolFeeYChange (Right ()))
+  , testProperty "pool fee cannot change when editing is disabled" (check PoolFeeNotEditable (Left ()))
+  , testProperty "pool fee above bound is rejected" (check ExcessivePoolFee (Left ()))
+  , testProperty "Y directional fee above bound is rejected" (check ExcessivePoolFeeY (Left ()))
+  ]
 
-import Test.Tasty
-import Test.Tasty.HUnit
-import Test.Tasty.Hedgehog as HH
-
-import Gen.FeeSwitchGen
-import Gen.Models (mkAdaValue, genPkh, mkContext)
-import qualified Gen.FeeSwitchGen as TestAction
-import qualified WhalePoolsDex.Contracts.Pool as Config
-import Data.List (intersperse, take)
-import Data.Char
-
-import Debug.Trace
-
-feeSwitchBFee = testGroup "FeeSwitchV1 BFee Pool"
-  ((genTests `map` [daoSwitchTests , treasuryFeeTests,  treasuryAddressTests, stakeAddressTests, treasuryWithdrawTests, poolFeeTests]) ++ [lpFeeEditableTest, incorrectPoolInputTest])
-
-genTests TestGroup{..} =
-  let
-    failedCases  = (constructCase Failed) `map` invalidActions
-    successCases = constructCase Success validAction
-    
-    incorrectThreshold = treasholdCase contractAction $ constructIncorrectSignatureThresholdCase validAction
-  in testGroup name ((testCases contractAction ([successCases] ++ failedCases)) ++ [incorrectThreshold])
-
-testCases action cases =
-   (\(name, propertyName, poolUpdater, testResult) ->
-     HH.testPropertyNamed name propertyName (actionWithValidSignersQty 2 poolUpdater action testResult)
-   ) `map` cases
-
-treasholdCase action (name, propertyName, poolUpdater, testResult) =
-  HH.testPropertyNamed name propertyName (actionWithValidSignersQty 1 poolUpdater action testResult)
-
-daoSwitchTests = TestGroup
-  { name = "DAO Switch tests"
-  , contractAction = ChangeAdminAddress
-  , validAction = changeDAOAdminAddress
-  , invalidActions = 
-    [ changePoolTreasury
-    , changeTreasuryFee
-    , changePoolValue
-    , changePoolTokensInfo
-    , changeTreasuryAddress
-    , changeStakePartOfAddress
-    , withdrawTreasury
-    ]
-  }
-
-treasuryFeeTests = TestGroup
-  { name = "Treasury Fee tests"
-  , contractAction = ChangeTreasuryFee
-  , validAction = changeTreasuryFee
-  , invalidActions = 
-    [ changePoolTreasury
-    , changeDAOAdminAddress
-    , changePoolValue
-    , changePoolTokensInfo
-    , changeTreasuryAddress
-    , changeStakePartOfAddress
-    , withdrawTreasury
-    , incorrectTreasuryFee
-    ]
-  }
-
-treasuryAddressTests = TestGroup
-  { name = "Treasury Address tests"
-  , contractAction = ChangeTreasuryAddress
-  , validAction = changeTreasuryAddress
-  , invalidActions = 
-    [ changePoolTreasury
-    , changeDAOAdminAddress
-    , changePoolValue
-    , changePoolTokensInfo
-    , changeTreasuryFee
-    , changeStakePartOfAddress
-    , withdrawTreasury
-    ]
-  }
-
-stakeAddressTests = TestGroup
-  { name = "Stake Address tests"
-  , contractAction = ChangeStakePart
-  , validAction = changeStakePartOfAddress
-  , invalidActions = 
-    [ changePoolTreasury
-    , changeDAOAdminAddress
-    , changePoolValue
-    , changePoolTokensInfo
-    , changeTreasuryFee
-    , changeTreasuryAddress
-    , withdrawTreasury
-    ]
-  }
-
-treasuryWithdrawTests = TestGroup
-  { name = "Treasury withdraw tests"
-  , contractAction = WithdrawTreasury
-  , validAction = withdrawTreasury
-  , invalidActions = 
-    [ changePoolTreasury
-    , changeStakePartOfAddress
-    , changeDAOAdminAddress
-    , changePoolValue
-    , changePoolTokensInfo
-    , changeTreasuryFee
-    , changeTreasuryAddress
-    , incorrectWithdrawValueTreasury
-    , incorrectWithdrawAddressTreasury
-    ]
-  }
-
-poolFeeTests = TestGroup
-  { name = "Pool fee tests"
-  , contractAction = ChangePoolFee
-  , validAction = changePoolFee
-  , invalidActions = 
-    [ changePoolTreasury
-    , changeStakePartOfAddress
-    , changeDAOAdminAddress
-    , changePoolValue
-    , changePoolTokensInfo
-    , changeTreasuryFee
-    , changeTreasuryAddress
-    , withdrawTreasury
-    , incorrectChangePoolFee
-    ]
-  }
-  
-actionWithValidSignersQty :: Int -> (Pool -> Gen ActionResult) -> DAOAction -> TestResult -> Property
-actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withShrinks 1 $ withTests 1 $ property $ do
-  let
-    threshold = 2
-
-  (pkh1, pkh2, pkh3)  <- forAll $ tuple3 genPkh
-  prevPool            <- forAll $ genPool [pkh1, pkh2, pkh3] threshold True
-  updateResult        <- forAll $ poolUpdater prevPool
-
-  txInInfo <- forAll $ createTxInfo prevPool updateResult (take sigsQty [pkh1, pkh2, pkh3])
-  let
-    purpose  = daoMintingPurpose prevPool
-    context  = toData $ mkContext txInInfo purpose
-    redeemer = toData $ DAORedeemer action 0 (Config.poolNft . config $ prevPool)
-
-    correctResult = 
-      case testResultShouldBe of
-        Success -> Right()
-        Failed  -> Left()
-
-    result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold True) [redeemer, context]
-  
-  result === correctResult
-
-lpFeeEditableTest = HH.testPropertyNamed "Pool fee tests" "fail_if_lpFeeEditable_is_false" lpFeeEditableProperty
-
-lpFeeEditableProperty :: Property
-lpFeeEditableProperty = withShrinks 1 $ withTests 1 $ property $ do
-  let
-    threshold = 2
-
-  (pkh1, pkh2, pkh3)  <- forAll $ tuple3 genPkh
-  prevPool            <- forAll $ genPool [pkh1, pkh2, pkh3] threshold False
-  updateResult        <- forAll $ (Gen.Utils.action changePoolFee) prevPool
-
-  txInInfo <- forAll $ createTxInfo prevPool updateResult (take 2 [pkh1, pkh2, pkh3])
-  let
-    purpose  = daoMintingPurpose prevPool
-    context  = toData $ mkContext txInInfo purpose
-    redeemer = toData $ DAORedeemer ChangePoolFee 0 (Config.poolNft . config $ prevPool)
-
-    result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold False) [redeemer, context]
-  
-  result === Left()
-
-incorrectPoolInputTest = HH.testPropertyNamed "Incorrect pool input tests" "fail_if_pool_nft_is_not_preserved_in_indexed_input" incorrectPoolInputProperty
-
-incorrectPoolInputProperty :: Property
-incorrectPoolInputProperty = withShrinks 1 $ withTests 1 $ property $ do
-  let
-    threshold = 2
-
-  (pkh1, pkh2, pkh3)  <- forAll $ tuple3 genPkh
-  prevPool@Pool{..}   <- forAll $ genPool [pkh1, pkh2, pkh3] threshold False
-  let
-    newPoolValue      = filterAssetClass (Config.poolNft config) value
-    fakePool          = prevPool {
-      value  = newPoolValue
-    }
-  updateResult        <- forAll $ (Gen.Utils.action withdrawTreasury) prevPool
-
-  txInInfo <- forAll $ createTxInfoCustom prevPool [toTxOut fakePool] ([toTxOut (newPool updateResult)] ++ additionalOutputs updateResult) [] (take 2 [pkh1, pkh2, pkh3])
-  let
-    purpose  = daoMintingPurpose prevPool
-    context  = toData $ mkContext txInInfo purpose
-    redeemer = toData $ DAORedeemer WithdrawTreasury 1 (Config.poolNft config)
-
-    result = eraseBoth $ evalWithArgs (daoValidator prevPool [pkh1, pkh2, pkh3] threshold False) [redeemer, context]
-  
-  result === Left()
+check :: Case -> Either () () -> Property
+check scenario expected = withTests 1 $ property $ do
+  poolRef <- forAll genTxOutRef
+  let (x, y, nft, lq) = genAssetClasses
+      feeRef = poolRef { txOutRefIdx = txOutRefIdx poolRef + 1 }
+      keyHash n = PubKeyHash (BuiltinByteString (BS.replicate 28 n))
+      scriptCredentialHash n = ValidatorHash (BuiltinByteString (BS.replicate 28 n))
+      admin1 = keyHash 1
+      admin2 = keyHash 2
+      admin3 = keyHash 3
+      treasuryBefore = scriptCredentialHash 4
+      treasuryAfter = scriptCredentialHash 5
+      admins = [admin1, admin2, admin3]
+      feeEditable = case scenario of
+        PoolFeeNotEditable -> False
+        _ -> True
+      policy = daoBFeeMintPolicyValidator admins 2 feeEditable
+      policyCred = StakingHash . ScriptCredential . ValidatorHash . getScriptHash . scriptHash $ unMintingPolicyScript policy
+      newPolicyCred = StakingHash (ScriptCredential (scriptCredentialHash 7))
+      directionalFee = case scenario of
+        ZeroDirectionalFee -> 0
+        _ -> 90000
+      before = PoolBFee.PoolConfig nft x y lq directionalFee 90000 2 20 10 [policyCred] 0 treasuryBefore
+      after = case scenario of
+        ValidWithdraw -> before { PoolBFee.treasuryX = 5, PoolBFee.treasuryY = 3 }
+        WrongWithdrawAmount -> before { PoolBFee.treasuryX = 5, PoolBFee.treasuryY = 3 }
+        WrongWithdrawDestination -> before { PoolBFee.treasuryX = 5, PoolBFee.treasuryY = 3 }
+        WithdrawLeaksForeignToken -> before { PoolBFee.treasuryX = 5, PoolBFee.treasuryY = 3 }
+        WithdrawMissingInputNft -> before { PoolBFee.treasuryX = 5, PoolBFee.treasuryY = 3 }
+        ValidStakeChange -> before
+        WrongStakeScript -> before
+        ValidTreasuryFeeChange -> before { PoolBFee.treasuryFee = 3 }
+        ExcessiveTreasuryFee -> before { PoolBFee.treasuryFee = 20001 }
+        ValidAdminChange -> before { PoolBFee.daoPolicy = [newPolicyCred] }
+        AdminChangesPoolValue -> before { PoolBFee.daoPolicy = [newPolicyCred] }
+        ValidPoolFeeChange -> before { PoolBFee.poolFeeNumX = 89000 }
+        ValidPoolFeeYChange -> before { PoolBFee.poolFeeNumY = 89000 }
+        PoolFeeNotEditable -> before { PoolBFee.poolFeeNumX = 89000 }
+        ExcessivePoolFee -> before { PoolBFee.poolFeeNumX = 100000 }
+        ExcessivePoolFeeY -> before { PoolBFee.poolFeeNumY = 100000 }
+        _ -> before { PoolBFee.treasuryAddress = treasuryAfter }
+      poolValue xQty yQty nftQty foreignQty = mkValues
+        [ mkValue x xQty, mkValue y yQty, mkValue nft nftQty
+        , mkValue lq (0x7fffffffffffffff - 2000)
+        , mkValue genFakeToken foreignQty, mkAdaValue 3000000
+        ] mempty
+      oldNftQty = case scenario of
+        WithdrawMissingInputNft -> 0
+        _ -> 1
+      oldValue = poolValue 1000 1000 oldNftQty 10
+      (newX, newY, newForeign) = case scenario of
+        ValidWithdraw -> (985, 993, 10)
+        WrongWithdrawAmount -> (986, 993, 10)
+        WrongWithdrawDestination -> (985, 993, 10)
+        WithdrawLeaksForeignToken -> (985, 993, 9)
+        WithdrawMissingInputNft -> (985, 993, 10)
+        AdminChangesPoolValue -> (999, 1000, 10)
+        _ -> (1000, 1000, 10)
+      newValue = poolValue newX newY 1 newForeign
+      action = case scenario of
+        ValidWithdraw -> WithdrawTreasury
+        WrongWithdrawAmount -> WithdrawTreasury
+        WrongWithdrawDestination -> WithdrawTreasury
+        WithdrawLeaksForeignToken -> WithdrawTreasury
+        WithdrawMissingInputNft -> WithdrawTreasury
+        ValidStakeChange -> ChangeStakePart
+        WrongStakeScript -> ChangeStakePart
+        ValidTreasuryFeeChange -> ChangeTreasuryFee
+        ExcessiveTreasuryFee -> ChangeTreasuryFee
+        ValidAdminChange -> ChangeAdminAddress
+        AdminChangesPoolValue -> ChangeAdminAddress
+        ValidPoolFeeChange -> ChangePoolFee
+        ValidPoolFeeYChange -> ChangePoolFee
+        PoolFeeNotEditable -> ChangePoolFee
+        ExcessivePoolFee -> ChangePoolFee
+        ExcessivePoolFeeY -> ChangePoolFee
+        _ -> ChangeTreasuryAddress
+      poolHash = validatorHash poolBFeeValidator
+      oldStake = Just (StakingHash (PubKeyCredential admin3))
+      newStake = case scenario of
+        ValidStakeChange -> Just (StakingHash (PubKeyCredential admin2))
+        _ -> oldStake
+      successorHash = case scenario of
+        WrongStakeScript -> scriptCredentialHash 6
+        _ -> poolHash
+      poolInput = mkTxIn poolRef $ mkTxOutWithSC (OutputDatum $ mkDatum before) oldValue poolHash oldStake
+      feeInput = mkTxIn feeRef $ mkTxOut' NoOutputDatum (mkAdaValue 10000000) admin3
+      successor = mkTxOutWithSC (OutputDatum $ mkDatum after) newValue successorHash newStake
+      isWithdraw = case scenario of
+        ValidWithdraw -> True
+        WrongWithdrawAmount -> True
+        WrongWithdrawDestination -> True
+        WithdrawLeaksForeignToken -> True
+        WithdrawMissingInputNft -> True
+        _ -> False
+      destination = case scenario of
+        WrongWithdrawDestination -> treasuryAfter
+        _ -> treasuryBefore
+      treasuryOutput = mkTxOut NoOutputDatum
+        (mkValues [mkValue x 15, mkValue y 7, mkAdaValue 3000000] mempty) destination
+      outputs = if isWithdraw then [successor, treasuryOutput] else [successor]
+      signers = case scenario of
+        MissingSignature -> [admin1]
+        _ -> [admin1, admin2]
+      txInfo = (mkTxInfoWithSignaturesAndMinting [poolInput, feeInput] successor signers policyCred)
+        { txInfoOutputs = outputs }
+      context = toData $ mkContext txInfo (mkRewardingPurpose policyCred)
+      redeemer = toData $ DAORedeemer action 0 nft
+      result = eraseBoth $ evalWithArgs
+        (wrapMintingValidator $ BFeeDAO.daoMultisigPolicyValidatorT (pconstant admins) (pconstant 2) (pconstant feeEditable))
+        [redeemer, context]
+  result === expected

@@ -1,28 +1,90 @@
-module WhalePoolsDex.PContracts.PFeeSwitch where
+module WhalePoolsDex.PContracts.PFeeSwitchBFee where
 
-import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit)
-import PExtra.API (assetClassValueOf, ptryFromData, PAssetClass(..))
+import WhalePoolsDex.PContracts.PApi (tletUnwrap, containsSignature, treasuryFeeNumLowerLimit, treasuryFeeNumUpperLimit, poolFeeNumUpperLimit, poolFeeNumLowerLimit, feeDen, zero)
+import PExtra.API (assetClassValueOf, ptryFromData, PAssetClass(..), pPreserveOtherAssets)
+import PExtra.List (pelemAt)
+import PExtra.PTriple (PTuple3)
 import PExtra.Monadic
 import Plutarch
 import Plutarch.Api.V2 
-import Plutarch.Api.V1 (PCredential(..))
+import Plutarch.Api.V1.Value (pisAdaOnlyValue)
 import Plutarch.DataRepr
 import Plutarch.Prelude
 import Plutarch.Extra.TermCont
-import Plutarch.Builtin             (pasInt, pforgetData, PIsData(..))
-import Plutarch.Unsafe              (punsafeCoerce)
-import Plutarch.Internal.PlutusType (pcon', pmatch')
-import WhalePoolsDex.PContracts.PPool
-import Plutarch.Api.V1.Scripts (PValidatorHash)
-import Plutarch.Trace
-import Plutarch.Extra.TermCont
+import WhalePoolsDex.PContracts.PPool (findPoolOutput)
+import WhalePoolsDex.PContracts.PPoolBFee (PoolConfig)
+import WhalePoolsDex.PContracts.PFeeSwitch (DAOAction(..), findOutput)
 
-daoMultisigPolicyValidatorT :: Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple DAOAction PInteger PAssetClass) :--> PScriptContext :--> PBool)
+extractPoolConfig :: Term s (PTxOut :--> PoolConfig)
+extractPoolConfig = plam $ \txOut -> unTermCont $ do
+  txOutDatum <- tletField @"datum" txOut
+  POutputDatum txOutOutputDatum <- pmatchC txOutDatum
+  rawDatum <- tletField @"outputDatum" txOutOutputDatum
+  PDatum poolDatum <- pmatchC rawDatum
+  tletUnwrap $ ptryFromData @(PoolConfig) $ poolDatum
+
+validateCommonFields :: PMemberFields PoolConfig '["poolNft", "poolX", "poolY", "poolLq", "lqBound"] s as => HRec as -> HRec as -> Term s PBool
+validateCommonFields prevConfig newConfig =
+  getField @"poolNft" prevConfig #== getField @"poolNft" newConfig #&&
+  getField @"poolX" prevConfig #== getField @"poolX" newConfig #&&
+  getField @"poolY" prevConfig #== getField @"poolY" newConfig #&&
+  getField @"poolLq" prevConfig #== getField @"poolLq" newConfig #&&
+  getField @"lqBound" prevConfig #== getField @"lqBound" newConfig
+
+treasuryIsTheSame :: PMemberFields PoolConfig '["treasuryX", "treasuryY"] s as => HRec as -> HRec as -> Term s PBool
+treasuryIsTheSame prevConfig newConfig =
+  getField @"treasuryX" prevConfig #== getField @"treasuryX" newConfig #&&
+  getField @"treasuryY" prevConfig #== getField @"treasuryY" newConfig
+
+validateTreasuryWithdraw
+  :: PMemberFields PoolConfig '["treasuryX", "treasuryY", "poolX", "poolY", "poolLq", "treasuryAddress"] s as
+  => HRec as
+  -> HRec as
+  -> Term s (PBuiltinList PTxOut :--> PValue _ _ :--> PValue _ _ :--> PAssetClass :--> PBool)
+validateTreasuryWithdraw prevConfig newConfig = plam $ \outputs prevPoolValue newPoolValue poolNft -> unTermCont $ do
+  let poolX = getField @"poolX" prevConfig
+      poolY = getField @"poolY" prevConfig
+      poolLq = getField @"poolLq" prevConfig
+      prevTreasuryX = getField @"treasuryX" prevConfig
+      prevTreasuryY = getField @"treasuryY" prevConfig
+      prevTreasuryAddress = getField @"treasuryAddress" prevConfig
+      newTreasuryX = getField @"treasuryX" newConfig
+      newTreasuryY = getField @"treasuryY" newConfig
+      newTreasuryAddress = getField @"treasuryAddress" newConfig
+  treasuryBox <- tlet $ findOutput # prevTreasuryAddress # outputs
+  treasuryValue <- tletField @"value" treasuryBox
+  let xValueInTreasury = assetClassValueOf # treasuryValue # poolX
+      yValueInTreasury = assetClassValueOf # treasuryValue # poolY
+      prevPoolXValue = assetClassValueOf # prevPoolValue # poolX
+      prevPoolYValue = assetClassValueOf # prevPoolValue # poolY
+      prevPoolLqValue = assetClassValueOf # prevPoolValue # poolLq
+      newPoolXValue = assetClassValueOf # newPoolValue # poolX
+      newPoolYValue = assetClassValueOf # newPoolValue # poolY
+      newPoolLqValue = assetClassValueOf # newPoolValue # poolLq
+      xDiffInValue = newPoolXValue - prevPoolXValue
+      yDiffInValue = newPoolYValue - prevPoolYValue
+      newTreasuryXValue = pfromData newTreasuryX
+      newTreasuryYValue = pfromData newTreasuryY
+      xDiffInDatum = newTreasuryXValue - pfromData prevTreasuryX
+      yDiffInDatum = newTreasuryYValue - pfromData prevTreasuryY
+      correctPoolDiff = prevPoolLqValue #== newPoolLqValue #&&
+                        xDiffInValue #== xDiffInDatum #&&
+                        yDiffInValue #== yDiffInDatum
+      correctTreasuryWithdraw = xValueInTreasury #== negate xDiffInDatum #&&
+                                yValueInTreasury #== negate yDiffInDatum
+  pure $ correctPoolDiff #&& correctTreasuryWithdraw #&&
+         prevTreasuryAddress #== newTreasuryAddress #&&
+         assetClassValueOf # prevPoolValue # poolNft #== 1 #&&
+         zero #<= newTreasuryXValue #&& zero #<= newTreasuryYValue #&&
+         pPreserveOtherAssets # prevPoolValue # newPoolValue # poolX # poolY # poolLq # poolNft
+
+daoMultisigPolicyValidatorT :: Term s (PBuiltinList PPubKeyHash) -> Term s PInteger -> Term s PBool -> Term s ((PTuple3 DAOAction PInteger PAssetClass) :--> PScriptContext :--> PBool)
 daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer ctx' -> unTermCont $ do
   let  
     action     = pfromData $ pfield @"_0" # redeemer
     poolInIdx  = pfromData $ pfield @"_1" # redeemer
     poolNft    = pfromData $ pfield @"_2" # redeemer
+    feeUtxoIdx = 1 - poolInIdx
 
   ctx <- pletFieldsC @'["txInfo", "purpose"] ctx'
 
@@ -42,6 +104,10 @@ daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer
 
   poolInputValue <- tletField @"value" poolInputResolved
   poolInputDatum <- tlet $ extractPoolConfig # poolInputResolved
+
+  feeInput <- tlet $ pelemAt # feeUtxoIdx # inputs
+  let feeInputResolved = pfromData $ pfield @"resolved" # feeInput
+  feeInputValue <- tletField @"value" feeInputResolved
 
   successor       <- tlet $ findPoolOutput # poolNft # outputs
   poolOutputDatum <- tlet $ extractPoolConfig # successor
@@ -78,6 +144,8 @@ daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer
     updatedTreasuryFeeIsCorrect = pdelay (newTreasuryFee #<= treasuryFeeNumUpperLimit #&& treasuryFeeNumLowerLimit #<= newTreasuryFee)
 
     -- Checks that new pool fee num value satisfy protocol bounds
+    validFeeConfiguration = zero #< newPoolFeeNumX #&& newPoolFeeNumX #<= feeDen #&& zero #< newPoolFeeNumY #&& newPoolFeeNumY #<= feeDen
+
     updatedPoolFeeNumIsCorrect = 
       pdelay (
         (newPoolFeeNumX #<= poolFeeNumUpperLimit #&& poolFeeNumLowerLimit #<= newPoolFeeNumX) #&&
@@ -127,7 +195,7 @@ daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer
         pforce daoPolicyIsTheSame #&&
         pforce treasuryAddressIsTheSame #&&
         (poolInputAddr #== poolOutputAddr) #&&
-        (validateTreasuryWithdraw prevConf newConf poolNft) # outputs # poolInputValue # poolOutputValue # poolNft #&&
+        (validateTreasuryWithdraw prevConf newConf) # outputs # poolInputValue # poolOutputValue # poolNft #&&
         pforce poolFeeIsTheSame
 
       -- In case of changing pool staking part we should verify next conditions:
@@ -227,4 +295,6 @@ daoMultisigPolicyValidatorT daoPkhs threshold lpFeeIsEditable = plam $ \redeemer
         pforce poolValueAndAddressAreTheSame #&&
         pforce updatedPoolFeeNumIsCorrect
 
-  pure $ validCommonFields #&& validThreshold #&& validAction
+  pure $ (plength # inputs) #== 2 #&&
+         pisAdaOnlyValue # feeInputValue #&&
+         validCommonFields #&& validThreshold #&& validFeeConfiguration #&& validAction
