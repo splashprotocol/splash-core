@@ -39,7 +39,10 @@ import Data.Char
 import Debug.Trace
 
 feeSwitch = testGroup "FeeSwitchV1"
-  ((genTests `map` [daoSwitchTests , treasuryFeeTests,  treasuryAddressTests, stakeAddressTests, treasuryWithdrawTests, poolFeeTests]) ++ [lpFeeEditableTest, incorrectPoolInputTest])
+  ((genTests `map` [daoSwitchTests , treasuryFeeTests,  treasuryAddressTests, stakeAddressTests, treasuryWithdrawTests, poolFeeTests]) ++
+   [lpFeeEditableTest, incorrectPoolInputTest,
+    HH.testProperty "reject zero effective fee on unrelated DAO action" (invalidExistingFee 2),
+    HH.testProperty "reject effective fee above denominator on unrelated DAO action" (invalidExistingFee 100003)])
 
 genTests TestGroup{..} = 
   let
@@ -151,6 +154,25 @@ poolFeeTests = TestGroup
     , incorrectChangePoolFee
     ]
   }
+
+-- ChangeTreasuryAddress previously did not inspect the existing fee pair.
+-- Keep every other field and the transaction shape valid to exercise the
+-- configuration guard common to all DAO actions.
+invalidExistingFee :: Integer -> Property
+invalidExistingFee badFee = withTests 1 $ property $ do
+  let threshold = 2
+  (pkh1, pkh2, pkh3) <- forAll $ tuple3 genPkh
+  initialPool <- forAll $ genPool [pkh1, pkh2, pkh3] threshold True
+  let prevPool = initialPool
+        { config = (config initialPool) { Pool.poolFeeNum = badFee } }
+  updateResult <- forAll $ (Gen.Utils.action changeTreasuryAddress) prevPool
+  txInInfo <- forAll $ createTxInfo prevPool updateResult [pkh1, pkh2]
+  let purpose = daoMintingPurpose prevPool
+      context = toData $ mkContext txInInfo purpose
+      redeemer = toData $ DAORedeemer ChangeTreasuryAddress 0 (Pool.poolNft $ config prevPool)
+      result = eraseBoth $ evalWithArgs
+        (daoValidator prevPool [pkh1, pkh2, pkh3] threshold True) [redeemer, context]
+  result === Left ()
   
 actionWithValidSignersQty :: Int -> (Pool -> Gen ActionResult) -> DAOAction -> TestResult -> Property
 actionWithValidSignersQty sigsQty poolUpdater action testResultShouldBe = withShrinks 1 $ withTests 1 $ property $ do

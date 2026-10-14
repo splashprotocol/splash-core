@@ -35,7 +35,7 @@ import PlutusTx.Builtins.Internal
 import WhalePoolsDex.PMintingValidators
 import qualified PlutusLedgerApi.V1 as Plutus
 import Gen.Models (mkAdaValue, mkValues, mkValue, genAssetClass, genPkh, genCSRandom, genSCRandom, genTxId, genTxOutRef, genValidatorHash, mkContext)
-import Gen.DepositGen (unsafeFromEither, mkByteString)
+import Gen.DepositGen (unsafeFromEither, mkByteString, genRandomAssetClasses)
 import Gen.Utils hiding (BalancePool(..))
 
 import WhalePoolsDex.Contracts.Pool
@@ -95,14 +95,14 @@ feeDen = 100000
 
 genPool :: MonadGen f => [PubKeyHash] -> Integer -> Bool -> f Pool
 genPool adminsPkhs threshold lpFeeIsEditable = do
-  (x, y, lq, nft) <- tuple4 genAssetClass
+  (x, y, nft, lq) <- genRandomAssetClasses
 
   stakeHash <- genPkh
   
   xQty <- int (Range.constant 1000 1000000)
   yQty <- int (Range.constant 1000 1000000)
 
-  poolFee <- integral (Range.constant 0 1000)
+  poolFee <- integral (Range.constant poolFeeNumLowerLimit poolFeeNumUpperLimit)
 
   startXTreasuty <- integral (Range.constant 100 500)
   startYTreasuty <- integral (Range.constant 100 500)
@@ -128,6 +128,7 @@ genPool adminsPkhs threshold lpFeeIsEditable = do
       , daoPolicy  = [daoContract]
       , lqBound    = 0  -- todo: remove?
       , treasuryAddress = treasuryAddress
+      , nonce = 0
       }
 
     poolValue = mkValues ((\(ac, qty) -> mkValue ac (fromIntegral qty)) `RIO.map` [(x, xQty), (y, yQty), (nft, nftQty), (lq, lqQty)]) mempty

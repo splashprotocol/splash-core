@@ -192,7 +192,6 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
                 (pconstant 0)
                 (assetClassValueOf # prevPoolValue # pAdaAssetClass)
 
-        prevPoolValueLength = pValueLength # prevPoolValue
 
         -- Input pool address
         prevPoolAddr = getField @"address" parsedPoolInput
@@ -227,7 +226,6 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
                 (pconstant 0)
                 (assetClassValueOf # newPoolValue # pAdaAssetClass)
 
-        newPoolValueLength = pValueLength # newPoolValue
 
         -- Output pool address
         newPoolAddr = getField @"address" parsedPoolOutput
@@ -237,8 +235,10 @@ royaltyWithdrawPoolValidatorT = plam $ \redeemer' ctx' -> unTermCont $ do
         -- Pool address is the same
         correctFinalPoolAddress = prevPoolAddr #== newPoolAddr
 
-        -- Pool value length (tokens qty) is the same
-        correctTokensQtyInPool = prevPoolValueLength #== newPoolValueLength
+        -- Royalty withdrawal may change only the two pool assets.
+        correctTokensQtyInPool = pDistinctPoolAssets # prevPoolX # prevPoolY # prevPoolLq # prevPoolNft #&&
+                                 pPreserveOtherAssets # prevPoolValue # newPoolValue # prevPoolX # prevPoolY # prevPoolLq # prevPoolNft #&&
+                                 assetClassValueOf # prevPoolValue # prevPoolNft #== 1
 
         -- Pool output should contains poolNft 
         poolIdentity = (assetClassValueOf # outputPoolValue # prevPoolNft) #== 1

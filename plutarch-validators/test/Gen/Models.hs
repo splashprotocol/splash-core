@@ -142,7 +142,7 @@ mkValues [] acc = acc
 -- fee will be used as feeX and feeY
 mkPoolConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> [StakingCredential] -> Integer -> ValidatorHash -> P.PoolConfig
 mkPoolConfig nft x y lq fee treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress = 
-  P.PoolConfig nft x y lq fee treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress
+  P.PoolConfig nft x y lq fee treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress 0
 
 mkPoolBFeeConfig :: AssetClass -> AssetClass -> AssetClass -> AssetClass -> Integer -> Integer -> Integer -> Integer -> Integer -> [StakingCredential] -> Integer -> ValidatorHash -> PBFee.PoolConfig
 mkPoolBFeeConfig nft x y lq feeX feeY treausuryFee treasuryX treasuryY daoPolicy lqBound treasuryAddress = 
